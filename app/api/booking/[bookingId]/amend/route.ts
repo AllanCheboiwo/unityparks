@@ -39,6 +39,13 @@ export async function POST(
     const { arrival, departure } = parsed.data;
 
     // Our rules first — Apaleo would allow a Wednesday.
+    const today = new Date().toISOString().slice(0, 10);
+    if (arrival < today) {
+      return NextResponse.json(
+        { refused: true, reason: "That arrival date has already passed — pick an upcoming Friday or Monday." },
+        { status: 422 },
+      );
+    }
     const stay = validateStay(arrival, departure);
     if (!stay.ok) {
       return NextResponse.json({ refused: true, reason: stay.reason }, { status: 422 });

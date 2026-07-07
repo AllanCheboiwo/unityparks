@@ -16,6 +16,10 @@ const BREAKS = [
   { nights: 7, label: "Full week", sub: "7 nights" },
 ] as const;
 
+// Breaks are on sale roughly this far ahead (the sandbox price/restriction
+// calendar covers ~120 days; keep the picker inside it).
+const BOOKING_HORIZON_DAYS = 100;
+
 function addDays(iso: string, days: number): string {
   const d = new Date(`${iso}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() + days);
@@ -83,6 +87,7 @@ export function SearchWidget() {
               type="date"
               value={arrival}
               min={new Date().toISOString().slice(0, 10)}
+              max={addDays(new Date().toISOString().slice(0, 10), BOOKING_HORIZON_DAYS)}
               onChange={(e) => {
                 setArrival(e.target.value);
                 setRefusal(null);
@@ -147,6 +152,8 @@ export function SearchWidget() {
             <button
               onClick={() => {
                 setArrival(nextWeekday(5));
+                // A Friday start pairs with 3 or 7 nights, never 4.
+                if (nights === 4) setNights(3);
                 setRefusal(null);
               }}
               className="rounded-md bg-white border border-amber-300 px-3 py-1 text-xs font-medium hover:bg-amber-100"
@@ -156,6 +163,8 @@ export function SearchWidget() {
             <button
               onClick={() => {
                 setArrival(nextWeekday(1));
+                // A Monday start pairs with 4 or 7 nights, never 3.
+                if (nights === 3) setNights(4);
                 setRefusal(null);
               }}
               className="rounded-md bg-white border border-amber-300 px-3 py-1 text-xs font-medium hover:bg-amber-100"

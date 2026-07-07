@@ -133,6 +133,7 @@ export function ManageClient({ bookingId }: { bookingId: string }) {
               type="date"
               value={newArrival}
               min={new Date().toISOString().slice(0, 10)}
+              max={addDays(new Date().toISOString().slice(0, 10), 100)}
               onChange={(e) => {
                 setNewArrival(e.target.value);
                 setRefusal(null);

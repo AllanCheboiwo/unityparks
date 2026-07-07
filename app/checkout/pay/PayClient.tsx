@@ -42,7 +42,23 @@ export function PayClient() {
     );
   }
 
-  const lodge = session.lodge ? LODGES[session.lodge.unitGroupCode] : null;
+  // Guests can land here by URL without a lodge in the basket.
+  if (!session.lodge) {
+    return (
+      <div className="mx-auto max-w-lg text-center py-20 px-5">
+        <p className="font-display text-2xl text-forest">Your basket is empty</p>
+        <p className="mt-2 text-sm text-foreground/60">Choose a lodge first, then come back to pay.</p>
+        <a
+          href={`/lodges?session=${sessionId}`}
+          className="inline-block mt-6 rounded-lg bg-forest text-white px-6 py-2.5 text-sm font-semibold hover:bg-forest-light"
+        >
+          Choose a lodge
+        </a>
+      </div>
+    );
+  }
+
+  const lodge = LODGES[session.lodge.unitGroupCode];
 
   async function buyNow() {
     setBusy(true);

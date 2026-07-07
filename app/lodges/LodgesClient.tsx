@@ -86,6 +86,13 @@ export function LodgesClient() {
         {session.adults === 1 ? "guest" : "guests"}
       </p>
 
+      {offers.length === 0 && (
+        <div className="mt-6 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-900">
+          Nothing is on sale for these dates — breaks are released about three
+          months ahead. Try dates a little closer to today.
+        </div>
+      )}
+
       <div className="mt-8 grid gap-6">
         {TIER_ORDER.map((code) => {
           const lodge = LODGES[code];
@@ -107,7 +114,7 @@ export function LodgesClient() {
                 <div className="flex-1">
                   <div className="flex items-center gap-3">
                     <h2 className="font-display text-xl text-forest">{lodge.name}</h2>
-                    {offer && offer.availableUnits <= 2 && (
+                    {offer && offer.availableUnits > 0 && offer.availableUnits <= 2 && (
                       <span className="rounded-full bg-amber-100 text-amber-900 text-[11px] font-semibold px-2.5 py-0.5">
                         Only {offer.availableUnits} left
                       </span>

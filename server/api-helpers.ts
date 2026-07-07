@@ -3,9 +3,24 @@ import { NextResponse } from "next/server";
 import { ApaleoError } from "./apaleo/client";
 
 /**
- * Wraps a route handler body: known failures become clean JSON errors,
- * Apaleo availability rejections (422) surface as sold-out, and anything
- * unexpected is logged and returned as a 502 without leaking internals.
+ * An error whose message is written for the guest, carrying its HTTP status.
+ * Anything else that escapes a route is treated as internal: logged in full,
+ * returned as a generic message.
+ */
+export class PublicError extends Error {
+  constructor(
+    public readonly status: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = "PublicError";
+  }
+}
+
+/**
+ * Wraps a route handler body. Apaleo 422s surface as the sold-out race —
+ * routes where a 422 means something else (e.g. payment recording) catch it
+ * at the call site and rethrow a PublicError with the right story.
  */
 export async function handleRoute(
   fn: () => Promise<NextResponse>,
@@ -13,24 +28,24 @@ export async function handleRoute(
   try {
     return await fn();
   } catch (err) {
+    if (err instanceof PublicError) {
+      return NextResponse.json({ error: err.message }, { status: err.status });
+    }
     if (err instanceof ApaleoError) {
+      console.error("Apaleo error", err.status, JSON.stringify(err.body)?.slice(0, 600));
       if (err.status === 422) {
         return NextResponse.json(
           { error: "That lodge is no longer available for these dates.", soldOut: true },
           { status: 409 },
         );
       }
-      console.error("Apaleo error", err.status, err.body);
       return NextResponse.json(
         { error: "The booking system couldn't process that request." },
         { status: 502 },
       );
     }
-    if (err instanceof Error) {
-      return NextResponse.json({ error: err.message }, { status: 400 });
-    }
-    console.error("Unexpected error", err);
-    return NextResponse.json({ error: "Something went wrong." }, { status: 500 });
+    console.error("Unexpected error in route:", err);
+    return NextResponse.json({ error: "Something went wrong on our side." }, { status: 500 });
   }
 }
 

@@ -17,12 +17,16 @@ export async function POST(
 ) {
   return handleRoute(async () => {
     const { id } = await params;
-    if (!(await getSession(id))) return jsonError(410, "Session expired.");
+    const session = await getSession(id);
+    if (!session) return jsonError(410, "Session expired.");
+    if (session.state === "completed") {
+      return jsonError(409, "This booking is already confirmed — start a new search to book another break.");
+    }
 
     const parsed = LodgeBody.safeParse(await req.json());
     if (!parsed.success) return jsonError(400, "Invalid lodge selection.");
 
-    const session = await chooseLodge(id, parsed.data);
-    return NextResponse.json({ ok: true, sessionId: session.id });
+    const updated = await chooseLodge(id, parsed.data);
+    return NextResponse.json({ ok: true, sessionId: updated.id });
   });
 }
