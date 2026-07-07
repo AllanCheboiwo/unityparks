@@ -1,26 +1,36 @@
 @import "tailwindcss";
 
+/* Unity Parks brand — calm, premium, forest-and-lake. No discount stripes. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #faf8f3; /* warm cream */
+  --foreground: #1f2a20; /* deep forest ink */
+  --forest: #1e3a29;
+  --forest-light: #2e5540;
+  --moss: #4d7c0f;
+  --lake: #0e7490;
+  --sand: #f1ead9;
+  --gold: #a16207;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-forest: var(--forest);
+  --color-forest-light: var(--forest-light);
+  --color-moss: var(--moss);
+  --color-lake: var(--lake);
+  --color-sand: var(--sand);
+  --color-gold: var(--gold);
+  --font-sans: var(--font-body);
+  --font-display: var(--font-display);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-body), Georgia, serif;
+}
+
+.font-display {
+  font-family: var(--font-display), Georgia, serif;
 }
