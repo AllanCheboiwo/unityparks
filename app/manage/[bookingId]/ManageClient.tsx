@@ -6,6 +6,7 @@ import { apiFetch } from "@/lib/api";
 import { formatDate, formatKes, nightsLabel } from "@/lib/format";
 import { LODGES } from "@/content/lodges";
 import type { BookingConfirmation } from "@/lib/types";
+import { TurnoverCalendar } from "@/components/TurnoverCalendar";
 
 type AmendResponse = {
   ok: boolean;
@@ -124,23 +125,18 @@ export function ManageClient({ bookingId }: { bookingId: string }) {
           still start on a Friday or Monday — the same rule as booking.
         </p>
 
-        <div className="mt-4 flex flex-wrap items-end gap-3">
-          <label className="block">
-            <span className="text-xs font-medium text-foreground/60 uppercase tracking-wide">
-              New arrival
-            </span>
-            <input
-              type="date"
-              value={newArrival}
-              min={new Date().toISOString().slice(0, 10)}
-              max={addDays(new Date().toISOString().slice(0, 10), 100)}
-              onChange={(e) => {
-                setNewArrival(e.target.value);
-                setRefusal(null);
-              }}
-              className="mt-1 rounded-lg border border-forest/20 px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-forest/40"
-            />
-          </label>
+        <div className="mt-4 flex flex-wrap items-start gap-4">
+          <TurnoverCalendar
+            value={newArrival || null}
+            onChange={(iso) => {
+              setNewArrival(iso);
+              setRefusal(null);
+            }}
+            nights={nights}
+            minDate={new Date().toISOString().slice(0, 10)}
+            maxDate={addDays(new Date().toISOString().slice(0, 10), 100)}
+            onDisabledPick={(reason) => setRefusal(reason)}
+          />
           <button
             type="submit"
             disabled={busy || !newArrival}

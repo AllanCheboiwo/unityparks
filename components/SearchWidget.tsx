@@ -3,11 +3,16 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
+import { formatDate } from "@/lib/format";
+import { TurnoverCalendar, validArrivalDows } from "@/components/TurnoverCalendar";
 
 /**
- * The persistent "Book your break" widget. Deliberately lets the guest pick
- * ANY arrival date — the refusal of a non-turnover day (from the server, and
- * ultimately from Apaleo's restriction calendar) is the point of the demo.
+ * The persistent "Book your break" widget. The calendar is the first layer
+ * of turnover enforcement: only valid break-start days are selectable, and
+ * clicking a greyed day explains the rule. Our API re-validates every search
+ * (layer two) and Apaleo's restriction calendar enforces underneath (layer
+ * three) — so nothing non-conformant can ever be sold, even if the UI is
+ * bypassed.
  */
 
 const BREAKS = [
@@ -26,14 +31,6 @@ function addDays(iso: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-/** Next occurrence of a weekday (1=Mon, 5=Fri), starting tomorrow. */
-function nextWeekday(dow: number): string {
-  const d = new Date();
-  d.setUTCDate(d.getUTCDate() + 1);
-  while (d.getUTCDay() !== dow) d.setUTCDate(d.getUTCDate() + 1);
-  return d.toISOString().slice(0, 10);
-}
-
 type SearchResponse = { sessionId: string };
 
 export function SearchWidget() {
@@ -41,17 +38,34 @@ export function SearchWidget() {
   const [arrival, setArrival] = useState("");
   const [nights, setNights] = useState<number>(3);
   const [adults, setAdults] = useState(2);
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  const today = new Date().toISOString().slice(0, 10);
   const departure = useMemo(
     () => (arrival ? addDays(arrival, nights) : ""),
     [arrival, nights],
   );
 
+  function changeBreak(newNights: number) {
+    setNights(newNights);
+    setRefusal(null);
+    // A Friday start can't survive a switch to midweek (and vice versa) —
+    // clear the date and reopen the calendar rather than search invalidly.
+    if (arrival) {
+      const dow = new Date(`${arrival}T00:00:00Z`).getUTCDay();
+      if (!validArrivalDows(newNights).includes(dow)) {
+        setArrival("");
+        setCalendarOpen(true);
+      }
+    }
+  }
+
   async function search() {
     if (!arrival) {
+      setCalendarOpen(true);
       setError("Pick an arrival date to get started.");
       return;
     }
@@ -79,22 +93,18 @@ export function SearchWidget() {
 
       <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
         <div className="grid gap-4 sm:grid-cols-3">
-          <label className="block">
+          <div>
             <span className="text-xs font-medium text-foreground/60 uppercase tracking-wide">
               Arrival
             </span>
-            <input
-              type="date"
-              value={arrival}
-              min={new Date().toISOString().slice(0, 10)}
-              max={addDays(new Date().toISOString().slice(0, 10), BOOKING_HORIZON_DAYS)}
-              onChange={(e) => {
-                setArrival(e.target.value);
-                setRefusal(null);
-              }}
-              className="mt-1 w-full rounded-lg border border-forest/20 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-forest/40 bg-white"
-            />
-          </label>
+            <button
+              type="button"
+              onClick={() => setCalendarOpen((open) => !open)}
+              className="mt-1 w-full rounded-lg border border-forest/20 px-3 py-2.5 text-sm text-left bg-white hover:border-forest/40 focus:outline-none focus:ring-2 focus:ring-forest/40"
+            >
+              {arrival ? formatDate(arrival) : <span className="text-foreground/45">Choose a date…</span>}
+            </button>
+          </div>
 
           <label className="block">
             <span className="text-xs font-medium text-foreground/60 uppercase tracking-wide">
@@ -102,7 +112,7 @@ export function SearchWidget() {
             </span>
             <select
               value={nights}
-              onChange={(e) => setNights(Number(e.target.value))}
+              onChange={(e) => changeBreak(Number(e.target.value))}
               className="mt-1 w-full rounded-lg border border-forest/20 px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-forest/40"
             >
               {BREAKS.map((b) => (
@@ -140,38 +150,37 @@ export function SearchWidget() {
         </button>
       </div>
 
-      <p className="mt-3 text-xs text-foreground/55">
+      {calendarOpen && (
+        <div className="mt-4">
+          <TurnoverCalendar
+            value={arrival || null}
+            onChange={(iso) => {
+              setArrival(iso);
+              setCalendarOpen(false);
+              setRefusal(null);
+              setError(null);
+            }}
+            nights={nights}
+            minDate={today}
+            maxDate={addDays(today, BOOKING_HORIZON_DAYS)}
+            onDisabledPick={(reason) => setRefusal(reason)}
+          />
+        </div>
+      )}
+
+      {arrival && (
+        <p className="mt-3 text-xs text-foreground/55">
+          {formatDate(arrival)} → {formatDate(departure)}
+        </p>
+      )}
+      <p className="mt-1 text-xs text-foreground/55">
         Breaks start and end on a <strong>Friday or Monday</strong> — our lodges
         turn over on staff changeover days.
       </p>
 
       {refusal && (
         <div className="mt-4 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-900">
-          <p className="font-medium">{refusal}</p>
-          <div className="mt-2 flex gap-2">
-            <button
-              onClick={() => {
-                setArrival(nextWeekday(5));
-                // A Friday start pairs with 3 or 7 nights, never 4.
-                if (nights === 4) setNights(3);
-                setRefusal(null);
-              }}
-              className="rounded-md bg-white border border-amber-300 px-3 py-1 text-xs font-medium hover:bg-amber-100"
-            >
-              Next Friday
-            </button>
-            <button
-              onClick={() => {
-                setArrival(nextWeekday(1));
-                // A Monday start pairs with 4 or 7 nights, never 3.
-                if (nights === 3) setNights(4);
-                setRefusal(null);
-              }}
-              className="rounded-md bg-white border border-amber-300 px-3 py-1 text-xs font-medium hover:bg-amber-100"
-            >
-              Next Monday
-            </button>
-          </div>
+          {refusal}
         </div>
       )}
 
