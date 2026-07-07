@@ -1,0 +1,65 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// One row per guest walking the funnel: everything captured between search
+// and payment, so any step can be refreshed or revisited without loss.
+// Prices are snapshots of what Apaleo returned — never computed locally.
+model BookingSession {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  expiresAt DateTime
+  state     String   @default("selecting") // selecting | checkout | completed | expired
+
+  // Stay — ISO dates (YYYY-MM-DD), validated to land on Fri/Mon turnover days
+  arrival      String
+  departure    String
+  adults       Int
+  childrenAges String @default("[]") // JSON int array
+
+  // Chosen lodge offer (snapshot from Apaleo offers)
+  unitGroupCode   String?
+  ratePlanId      String?
+  stayGrossAmount Float?
+  currency        String  @default("KES")
+
+  // Chosen extras: JSON [{ serviceId, code, name, count, grossAmount }]
+  extras String @default("[]")
+
+  // Lead guest + vehicle (for the ANPR gate story)
+  guestFirstName String?
+  guestLastName  String?
+  guestEmail     String?
+  guestPhone     String?
+  vehiclePlate   String?
+
+  booking BookingRecord?
+}
+
+// Written once the booking exists in Apaleo. `status` flips to paid only
+// after the folio payment is confirmed — the confirmation page reads this,
+// never a redirect.
+model BookingRecord {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  sessionId String         @unique
+  session   BookingSession @relation(fields: [sessionId], references: [id])
+
+  apaleoBookingId     String
+  apaleoReservationId String
+  folioId             String?
+
+  totalGrossAmount Float // demo: JS number is fine; production would use integer minor units
+  currency         String
+
+  status    String    @default("created") // created | paid | failed
+  paidAt    DateTime?
+  paymentId String? // Apaleo payment id returned by the folio post
+}
