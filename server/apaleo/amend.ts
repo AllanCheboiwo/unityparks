@@ -17,6 +17,7 @@ type ReservationDetail = {
   arrival: string;
   departure: string;
   adults: number;
+  childrenAges?: number[];
   unitGroup: { code: string };
   ratePlan: { id: string };
 };
@@ -76,6 +77,7 @@ export async function amendReservationDates(params: {
   arrival: string;
   departure: string;
   adults: number;
+  childrenAges?: number[];
   ratePlanId: string;
 }): Promise<void> {
   const nights = nightsBetween(params.arrival, params.departure);
@@ -84,6 +86,7 @@ export async function amendReservationDates(params: {
       arrival: params.arrival,
       departure: params.departure,
       adults: params.adults,
+      childrenAges: params.childrenAges?.length ? params.childrenAges : undefined,
       timeSlices: Array.from({ length: nights }, () => ({
         ratePlanId: params.ratePlanId,
       })),

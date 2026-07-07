@@ -24,6 +24,7 @@ export async function createSession(input: {
   arrival: string;
   departure: string;
   adults: number;
+  childrenAges?: number[];
 }): Promise<BookingSession> {
   const check = validateStay(input.arrival, input.departure);
   if (!check.ok) throw new Error(check.reason);
@@ -33,9 +34,14 @@ export async function createSession(input: {
       arrival: input.arrival,
       departure: input.departure,
       adults: input.adults,
+      childrenAges: JSON.stringify(input.childrenAges ?? []),
       expiresAt: freshExpiry(),
     },
   });
+}
+
+export function parseChildrenAges(session: BookingSession): number[] {
+  return JSON.parse(session.childrenAges) as number[];
 }
 
 /** Returns null for unknown or expired sessions — callers send those back to search. */

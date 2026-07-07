@@ -28,6 +28,7 @@ export async function getStayOffers(params: {
   arrival: string;
   departure: string;
   adults: number;
+  childrenAges?: number[];
 }): Promise<StayOffer[]> {
   const query = new URLSearchParams({
     propertyId: PROPERTY_ID,
@@ -36,6 +37,9 @@ export async function getStayOffers(params: {
     adults: String(params.adults),
     channelCode: CHANNEL_CODE,
   });
+  if (params.childrenAges?.length) {
+    query.set("childrenAges", params.childrenAges.join(","));
+  }
   const data = await apaleo<ApaleoOffersResponse>("GET", `/booking/v1/offers?${query}`);
   if (!data?.offers) return []; // 204 = nothing bookable for these dates
 
@@ -85,6 +89,7 @@ export async function getExtraOffers(params: {
   arrival: string;
   departure: string;
   adults: number;
+  childrenAges?: number[];
 }): Promise<ExtraOffer[]> {
   const query = new URLSearchParams({
     ratePlanId: params.ratePlanId,
@@ -93,6 +98,9 @@ export async function getExtraOffers(params: {
     adults: String(params.adults),
     channelCode: CHANNEL_CODE,
   });
+  if (params.childrenAges?.length) {
+    query.set("childrenAges", params.childrenAges.join(","));
+  }
   const data = await apaleo<ApaleoServiceOffersResponse>(
     "GET",
     `/booking/v1/service-offers?${query}`,

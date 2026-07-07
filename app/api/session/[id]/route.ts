@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession, parseExtras } from "@/server/booking/session";
+import { getSession, parseChildrenAges, parseExtras } from "@/server/booking/session";
 import { computeTotal, nightsBetween } from "@/server/booking/rules";
+import { partyLabel } from "@/server/booking/party";
 import { handleRoute, jsonError } from "@/server/api-helpers";
 
 /** Everything a funnel page needs to render this session's basket. */
@@ -26,6 +27,7 @@ export async function GET(
       departure: session.departure,
       nights: nightsBetween(session.arrival, session.departure),
       adults: session.adults,
+      partyLabel: partyLabel(session.adults, parseChildrenAges(session)),
       lodge: session.unitGroupCode
         ? {
             unitGroupCode: session.unitGroupCode,

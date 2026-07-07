@@ -38,6 +38,7 @@ export type SessionSummary = {
   departure: string;
   nights: number;
   adults: number;
+  partyLabel?: string;
   lodge: {
     unitGroupCode: string;
     ratePlanId: string | null;

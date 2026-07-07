@@ -80,6 +80,7 @@ export async function POST(
       arrival,
       departure,
       adults: reservation.adults,
+      childrenAges: reservation.childrenAges,
       ratePlanId: reservation.ratePlan.id,
     });
 

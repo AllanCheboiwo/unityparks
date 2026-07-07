@@ -6,6 +6,7 @@ export type CreateBookingInput = {
   arrival: string;
   departure: string;
   adults: number;
+  childrenAges?: number[];
   ratePlanId: string;
   /** Apaleo service ids for the chosen extras. */
   serviceIds: string[];
@@ -31,6 +32,7 @@ export async function createBooking(input: CreateBookingInput): Promise<{
         arrival: input.arrival,
         departure: input.departure,
         adults: input.adults,
+        childrenAges: input.childrenAges?.length ? input.childrenAges : undefined,
         channelCode: CHANNEL_CODE,
         guaranteeType: "Prepayment",
         primaryGuest: input.guest,

@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { SearchWidget } from "@/components/SearchWidget";
+import { BookingBar } from "@/components/BookingBar";
 import { LODGES, TIER_ORDER } from "@/content/lodges";
 
 export default function HomePage() {
@@ -29,9 +29,9 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* The persistent booking widget, overlapping the hero */}
-        <div className="mx-auto max-w-5xl px-5 -mt-12 relative z-10">
-          <SearchWidget />
+        {/* The persistent booking bar, overlapping the hero */}
+        <div className="mx-auto max-w-5xl px-5 -mt-10 relative z-10">
+          <BookingBar />
         </div>
       </section>
 

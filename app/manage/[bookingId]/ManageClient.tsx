@@ -126,17 +126,19 @@ export function ManageClient({ bookingId }: { bookingId: string }) {
         </p>
 
         <div className="mt-4 flex flex-wrap items-start gap-4">
-          <TurnoverCalendar
-            value={newArrival || null}
-            onChange={(iso) => {
-              setNewArrival(iso);
-              setRefusal(null);
-            }}
-            nights={nights}
-            minDate={new Date().toISOString().slice(0, 10)}
-            maxDate={addDays(new Date().toISOString().slice(0, 10), 100)}
-            onDisabledPick={(reason) => setRefusal(reason)}
-          />
+          <div className="rounded-xl border border-forest/15 bg-white p-3 w-full max-w-xs">
+            <TurnoverCalendar
+              value={newArrival || null}
+              onChange={(iso) => {
+                setNewArrival(iso);
+                setRefusal(null);
+              }}
+              nights={nights}
+              minDate={new Date().toISOString().slice(0, 10)}
+              maxDate={addDays(new Date().toISOString().slice(0, 10), 100)}
+              onDisabledPick={(reason) => setRefusal(reason)}
+            />
+          </div>
           <button
             type="submit"
             disabled={busy || !newArrival}

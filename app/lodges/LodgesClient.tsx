@@ -12,7 +12,10 @@ import { ExpiredNotice } from "@/components/ExpiredNotice";
 
 export function LodgesClient() {
   const router = useRouter();
-  const sessionId = useSearchParams().get("session");
+  const searchParams = useSearchParams();
+  const sessionId = searchParams.get("session");
+  // Bedrooms preference filters but never blocks (0 = no preference).
+  const bedroomsPref = Number(searchParams.get("bedrooms") ?? 0);
   const [session, setSession] = useState<SessionSummary | null>(null);
   const [offers, setOffers] = useState<StayOfferDto[] | null>(null);
   const [expired, setExpired] = useState(false);
@@ -82,8 +85,9 @@ export function LodgesClient() {
       </div>
       <p className="mt-1 text-sm text-foreground/60">
         {formatDate(session.arrival)} → {formatDate(session.departure)} ·{" "}
-        {nightsLabel(session.nights)} · {session.adults}{" "}
-        {session.adults === 1 ? "guest" : "guests"}
+        {nightsLabel(session.nights)} ·{" "}
+        {session.partyLabel ?? `${session.adults} ${session.adults === 1 ? "guest" : "guests"}`}
+        {bedroomsPref > 0 && ` · ${bedroomsPref}+ bedrooms preferred`}
       </p>
 
       {offers.length === 0 && (
@@ -98,6 +102,7 @@ export function LodgesClient() {
           const lodge = LODGES[code];
           const offer = offersByCode.get(code);
           const tooSmall = !offer && session.adults > lodge.sleeps;
+          const belowBedroomsPref = bedroomsPref > 0 && lodge.bedrooms < bedroomsPref;
 
           return (
             <div
@@ -126,6 +131,11 @@ export function LodgesClient() {
                     <li className="rounded-full bg-sand px-2.5 py-0.5 text-[11px] text-forest font-medium">
                       {lodge.bedrooms} bedrooms · sleeps {lodge.sleeps}
                     </li>
+                    {belowBedroomsPref && (
+                      <li className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] text-amber-900">
+                        Fewer bedrooms than you asked for
+                      </li>
+                    )}
                     {lodge.features.map((f) => (
                       <li key={f} className="rounded-full bg-sand px-2.5 py-0.5 text-[11px] text-forest">
                         {f}

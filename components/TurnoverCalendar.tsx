@@ -12,6 +12,9 @@ import { useMemo, useState } from "react";
  * can only start on a Friday (Fri→Mon), a 4-night midweek only on a Monday
  * (Mon→Fri), and a 7-night week on either. Invalid days stay visible but
  * disabled — clicking one explains the rule instead of silently ignoring it.
+ *
+ * `monthsToShow={2}` renders the Center Parcs-style two-month spread with
+ * shared navigation.
  */
 
 const FRIDAY = 5;
@@ -53,6 +56,8 @@ type Props = {
   maxDate: string; // ISO, inclusive
   /** Called when the guest clicks a day that can't start this break. */
   onDisabledPick?: (reason: string) => void;
+  monthsToShow?: 1 | 2;
+  showLegend?: boolean;
 };
 
 export function TurnoverCalendar({
@@ -62,6 +67,8 @@ export function TurnoverCalendar({
   minDate,
   maxDate,
   onDisabledPick,
+  monthsToShow = 1,
+  showLegend = true,
 }: Props) {
   const initial = value ?? minDate;
   const [viewYear, setViewYear] = useState(Number(initial.slice(0, 4)));
@@ -69,28 +76,24 @@ export function TurnoverCalendar({
 
   const validDows = useMemo(() => validArrivalDows(nights), [nights]);
 
-  const weeks = useMemo(() => {
-    const first = new Date(Date.UTC(viewYear, viewMonth, 1));
-    const daysInMonth = new Date(Date.UTC(viewYear, viewMonth + 1, 0)).getUTCDate();
+  function monthCells(year: number, month: number) {
+    const first = new Date(Date.UTC(year, month, 1));
+    const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
     const leadingBlanks = (first.getUTCDay() + 6) % 7; // Monday-first grid
 
     const cells: Array<{ iso: string; day: number; dow: number } | null> = [];
     for (let i = 0; i < leadingBlanks; i++) cells.push(null);
     for (let day = 1; day <= daysInMonth; day++) {
-      const d = new Date(Date.UTC(viewYear, viewMonth, day));
+      const d = new Date(Date.UTC(year, month, day));
       cells.push({ iso: toIso(d), day, dow: d.getUTCDay() });
     }
     while (cells.length % 7 !== 0) cells.push(null);
+    return cells;
+  }
 
-    const rows = [];
-    for (let i = 0; i < cells.length; i += 7) rows.push(cells.slice(i, i + 7));
-    return rows;
-  }, [viewYear, viewMonth]);
-
-  const monthStartIso = toIso(new Date(Date.UTC(viewYear, viewMonth, 1)));
-  const monthEndIso = toIso(new Date(Date.UTC(viewYear, viewMonth + 1, 0)));
-  const canGoBack = monthStartIso > minDate;
-  const canGoForward = monthEndIso < maxDate;
+  const lastVisible = new Date(Date.UTC(viewYear, viewMonth + monthsToShow, 0));
+  const canGoBack = toIso(new Date(Date.UTC(viewYear, viewMonth, 1))) > minDate;
+  const canGoForward = toIso(lastVisible) < maxDate;
 
   function shiftMonth(delta: number) {
     const d = new Date(Date.UTC(viewYear, viewMonth + delta, 1));
@@ -98,41 +101,54 @@ export function TurnoverCalendar({
     setViewMonth(d.getUTCMonth());
   }
 
-  return (
-    <div className="rounded-xl border border-forest/15 bg-white p-3 w-full max-w-xs select-none">
-      <div className="flex items-center justify-between mb-2">
-        <button
-          type="button"
-          onClick={() => shiftMonth(-1)}
-          disabled={!canGoBack}
-          aria-label="Previous month"
-          className="rounded-md px-2 py-1 text-forest hover:bg-sand disabled:opacity-25"
-        >
-          ←
-        </button>
-        <p className="text-sm font-semibold text-forest">
-          {MONTH_NAMES[viewMonth]} {viewYear}
-        </p>
-        <button
-          type="button"
-          onClick={() => shiftMonth(1)}
-          disabled={!canGoForward}
-          aria-label="Next month"
-          className="rounded-md px-2 py-1 text-forest hover:bg-sand disabled:opacity-25"
-        >
-          →
-        </button>
-      </div>
+  function renderMonth(offset: number, navLeft: boolean, navRight: boolean) {
+    const base = new Date(Date.UTC(viewYear, viewMonth + offset, 1));
+    const year = base.getUTCFullYear();
+    const month = base.getUTCMonth();
+    const cells = monthCells(year, month);
 
-      <div className="grid grid-cols-7 text-center text-[10px] font-medium text-foreground/45 uppercase tracking-wide mb-1">
-        {["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"].map((d) => (
-          <span key={d}>{d}</span>
-        ))}
-      </div>
+    return (
+      <div className="flex-1 min-w-[240px]" key={`${year}-${month}`}>
+        <div className="flex items-center justify-between mb-2">
+          {navLeft ? (
+            <button
+              type="button"
+              onClick={() => shiftMonth(-1)}
+              disabled={!canGoBack}
+              aria-label="Previous month"
+              className="rounded-md px-2 py-1 text-forest hover:bg-sand disabled:opacity-25"
+            >
+              ←
+            </button>
+          ) : (
+            <span className="w-7" />
+          )}
+          <p className="text-sm font-semibold text-forest">
+            {MONTH_NAMES[month]} {year}
+          </p>
+          {navRight ? (
+            <button
+              type="button"
+              onClick={() => shiftMonth(1)}
+              disabled={!canGoForward}
+              aria-label="Next month"
+              className="rounded-md px-2 py-1 text-forest hover:bg-sand disabled:opacity-25"
+            >
+              →
+            </button>
+          ) : (
+            <span className="w-7" />
+          )}
+        </div>
 
-      {weeks.map((week, i) => (
-        <div key={i} className="grid grid-cols-7 gap-y-0.5">
-          {week.map((cell, j) => {
+        <div className="grid grid-cols-7 text-center text-[10px] font-medium text-foreground/45 uppercase tracking-wide mb-1">
+          {["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"].map((d) => (
+            <span key={d}>{d}</span>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-7 gap-y-0.5">
+          {cells.map((cell, j) => {
             if (!cell) return <span key={j} />;
             const inRange = cell.iso >= minDate && cell.iso <= maxDate;
             const validDay = validDows.includes(cell.dow);
@@ -159,15 +175,32 @@ export function TurnoverCalendar({
             );
           })}
         </div>
-      ))}
+      </div>
+    );
+  }
 
-      <p className="mt-2 text-[11px] text-foreground/50 text-center">
-        {validDows.length === 2
-          ? "Breaks start on Fridays and Mondays"
-          : validDows[0] === FRIDAY
-            ? "Weekend breaks start on a Friday"
-            : "Midweek breaks start on a Monday"}
-      </p>
+  return (
+    <div className="select-none">
+      <div className="flex flex-wrap gap-x-8 gap-y-4">
+        {monthsToShow === 2 ? (
+          <>
+            {renderMonth(0, true, false)}
+            {renderMonth(1, false, true)}
+          </>
+        ) : (
+          renderMonth(0, true, true)
+        )}
+      </div>
+
+      {showLegend && (
+        <p className="mt-2 text-[11px] text-foreground/50 text-center">
+          {validDows.length === 2
+            ? "Breaks start on Fridays and Mondays"
+            : validDows[0] === FRIDAY
+              ? "Weekend breaks start on a Friday"
+              : "Midweek breaks start on a Monday"}
+        </p>
+      )}
     </div>
   );
 }

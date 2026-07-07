@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getExtraOffers } from "@/server/apaleo/offers";
-import { getSession, setExtras } from "@/server/booking/session";
+import { getSession, parseChildrenAges, setExtras } from "@/server/booking/session";
 import { handleRoute, jsonError } from "@/server/api-helpers";
 
 /** Live extras (Apaleo service offers) priced for this session's stay. */
@@ -20,6 +20,7 @@ export async function GET(
       arrival: session.arrival,
       departure: session.departure,
       adults: session.adults,
+      childrenAges: parseChildrenAges(session),
     });
     return NextResponse.json({ extras });
   });

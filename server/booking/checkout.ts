@@ -5,7 +5,7 @@ import { createBooking, getFolioForReservation } from "../apaleo/bookings";
 import { payFolio } from "../apaleo/payments";
 import { ApaleoError } from "../apaleo/client";
 import { PublicError } from "../api-helpers";
-import { getSession, parseExtras } from "./session";
+import { getSession, parseChildrenAges, parseExtras } from "./session";
 
 /**
  * The "Buy now" moment, in three steps that mirror the real build:
@@ -48,6 +48,7 @@ export async function completeCheckout(sessionId: string): Promise<BookingRecord
       arrival: session.arrival,
       departure: session.departure,
       adults: session.adults,
+      childrenAges: parseChildrenAges(session),
       ratePlanId: session.ratePlanId,
       serviceIds: extras.map((e) => e.serviceId),
       guest: {
