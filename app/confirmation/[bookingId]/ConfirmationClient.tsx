@@ -140,7 +140,13 @@ export function ConfirmationClient({ bookingId }: { bookingId: string }) {
         </div>
       </div>
 
-      <div className="mt-8 text-center">
+      <div className="mt-8 text-center flex justify-center gap-6">
+        <Link
+          href={`/manage/${booking.bookingId}`}
+          className="text-sm text-lake underline underline-offset-2"
+        >
+          Manage this booking
+        </Link>
         <Link href="/" className="text-sm text-lake underline underline-offset-2">
           Back to Unity Parks
         </Link>
