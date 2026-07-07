@@ -5,7 +5,7 @@ import { nightsBetween } from "../booking/rules";
 /**
  * Post-booking date changes. Two facts drive the shape of this file:
  *   - Apaleo validates AVAILABILITY on amendment, but not our business
- *     rules — it would happily move a stay to a Wednesday. The turnover
+ *     rules - it would happily move a stay to a Wednesday. The turnover
  *     re-validation therefore lives in our route, before this is called.
  *   - The amendment offer's total includes the booking's services, so the
  *     quote we show is the guest's real new total.
@@ -49,7 +49,7 @@ export async function getAmendmentQuote(params: {
     departure: params.departure,
     channelCode: CHANNEL_CODE,
   });
-  // Amendment offers carry no top-level unitGroup — the identifiers sit
+  // Amendment offers carry no top-level unitGroup - the identifiers sit
   // inside each time slice (verified against the live response).
   const data = await apaleo<{
     offers: Array<{

@@ -9,7 +9,7 @@ import { TurnoverCalendar, validArrivalDows } from "@/components/TurnoverCalenda
  * The Center Parcs-style booking bar: four chips (village → dates → lodges →
  * guests), each opening a panel, then Search. Options the demo backend can't
  * honour yet (multi-lodge, dogs, adapted stock, whole-month search) are shown
- * greyed with a "real build" tag rather than hidden — the funnel shape is the
+ * greyed with a "real build" tag rather than hidden - the funnel shape is the
  * product story.
  *
  * The dates panel is the first layer of turnover enforcement: only valid
@@ -28,7 +28,7 @@ function addDays(iso: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-/** "Fri 10 Jul" — the chip-sized date format. */
+/** "Fri 10 Jul" - the chip-sized date format. */
 function shortDate(iso: string): string {
   return new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", {
     weekday: "short",
@@ -116,7 +116,7 @@ export function BookingBar() {
     }
     if (totalGuests > MAX_LODGE_SLEEPS) {
       setOpen("guests");
-      setError(`Our largest lodge sleeps ${MAX_LODGE_SLEEPS} — for bigger parties, call our team.`);
+      setError(`Our largest lodge sleeps ${MAX_LODGE_SLEEPS}. For bigger parties, call our team.`);
       return;
     }
     setBusy(true);
@@ -357,14 +357,14 @@ export function BookingBar() {
           <div className="flex items-center justify-between py-2">
             <div>
               <p className="text-sm font-semibold text-forest">Children</p>
-              <p className="text-xs text-foreground/55">6 – 17 years</p>
+              <p className="text-xs text-foreground/55">6 - 17 years</p>
             </div>
             <Stepper value={children} min={0} max={7} onChange={setChildren} />
           </div>
           <div className="flex items-center justify-between py-2">
             <div>
               <p className="text-sm font-semibold text-forest">Toddlers</p>
-              <p className="text-xs text-foreground/55">2 – 5 years</p>
+              <p className="text-xs text-foreground/55">2 - 5 years</p>
             </div>
             <Stepper value={toddlers} min={0} max={7} onChange={setToddlers} />
           </div>

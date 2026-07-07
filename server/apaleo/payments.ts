@@ -4,7 +4,7 @@ import { apaleo } from "./client";
 /**
  * The demo's simulated payment: post the amount owed onto the folio as a
  * manual "Other" payment. Apaleo records the money as received and the folio
- * settles — no processor involved. In the real build this is replaced by the
+ * settles - no processor involved. In the real build this is replaced by the
  * Pesapal collect -> confirm -> record sequence; the call shape stays the same.
  */
 export async function payFolio(params: {

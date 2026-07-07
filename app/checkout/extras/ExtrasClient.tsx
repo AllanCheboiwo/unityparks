@@ -104,7 +104,7 @@ export function ExtrasClient() {
         Make it <em>effortless</em>
       </h1>
       <p className="mt-1 text-sm text-foreground/60">
-        A few things guests wish they&apos;d added — all priced live for your stay.
+        A few things guests wish they&apos;d added - all priced live for your stay.
         This step is optional.
       </p>
 

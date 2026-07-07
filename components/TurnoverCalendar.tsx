@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 
 /**
- * A month calendar that only lets the guest pick a valid break start day —
+ * A month calendar that only lets the guest pick a valid break start day -
  * the UI layer of turnover enforcement (our API re-validates, and Apaleo's
  * restriction calendar enforces underneath).
  *
@@ -11,7 +11,7 @@ import { useMemo, useState } from "react";
  * START and END on a turnover day (Friday or Monday). So a 3-night weekend
  * can only start on a Friday (Fri→Mon), a 4-night midweek only on a Monday
  * (Mon→Fri), and a 7-night week on either. Invalid days stay visible but
- * disabled — clicking one explains the rule instead of silently ignoring it.
+ * disabled - clicking one explains the rule instead of silently ignoring it.
  *
  * `monthsToShow={2}` renders the Center Parcs-style two-month spread with
  * shared navigation.
@@ -40,12 +40,12 @@ export function validArrivalDows(nights: number): number[] {
 function explainDisabled(dow: number, nights: number): string {
   const valid = validArrivalDows(nights);
   if (dow !== FRIDAY && dow !== MONDAY) {
-    return `Breaks start on a Friday or Monday — ${DAY_NAMES[dow]} arrivals aren't available.`;
+    return `Breaks start on a Friday or Monday. ${DAY_NAMES[dow]} arrivals aren't available.`;
   }
   if (valid.length === 1 && valid[0] === FRIDAY) {
-    return "A 3-night weekend break runs Friday to Monday — pick a Friday.";
+    return "A 3-night weekend break runs Friday to Monday. Pick a Friday.";
   }
-  return "A 4-night midweek break runs Monday to Friday — pick a Monday.";
+  return "A 4-night midweek break runs Monday to Friday. Pick a Monday.";
 }
 
 type Props = {

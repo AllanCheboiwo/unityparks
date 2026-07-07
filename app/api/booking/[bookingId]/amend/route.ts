@@ -17,7 +17,7 @@ const AmendBody = z.object({
 });
 
 /**
- * Move a booked break to new dates. Apaleo only checks availability here —
+ * Move a booked break to new dates. Apaleo only checks availability here -
  * the Friday/Monday turnover rule is OURS to re-apply, which is exactly what
  * this route demonstrates. The break keeps its length; resizing a stay (with
  * refunds) is real-build territory.
@@ -38,11 +38,11 @@ export async function POST(
     if (!parsed.success) return jsonError(400, "Please choose new dates.");
     const { arrival, departure } = parsed.data;
 
-    // Our rules first — Apaleo would allow a Wednesday.
+    // Our rules first - Apaleo would allow a Wednesday.
     const today = new Date().toISOString().slice(0, 10);
     if (arrival < today) {
       return NextResponse.json(
-        { refused: true, reason: "That arrival date has already passed — pick an upcoming Friday or Monday." },
+        { refused: true, reason: "That arrival date has already passed. Pick an upcoming Friday or Monday." },
         { status: 422 },
       );
     }
@@ -55,7 +55,7 @@ export async function POST(
       return NextResponse.json(
         {
           refused: true,
-          reason: `Your break is ${currentNights} nights — pick a new start date and it moves as a whole. To change its length, call our team.`,
+          reason: `Your break is ${currentNights} nights. Pick a new start date and it moves as a whole. To change its length, call our team.`,
         },
         { status: 422 },
       );
@@ -85,7 +85,7 @@ export async function POST(
     });
 
     // Same length + flat pricing usually means the folio stays settled, but a
-    // seasonal price difference would leave a balance — settle it the demo way.
+    // seasonal price difference would leave a balance - settle it the demo way.
     const folio = await getFolioForReservation(record.apaleoReservationId);
     if (folio.balance < 0) {
       await payFolio({

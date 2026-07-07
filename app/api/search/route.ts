@@ -18,7 +18,7 @@ const SearchBody = z.object({
 /**
  * The funnel's front door: validate the stay against the turnover rule,
  * fetch live offers, and open a booking session (the basket).
- * A 422 here is the demo's star moment — a Tuesday being refused.
+ * A 422 here is the demo's star moment - a Tuesday being refused.
  */
 export async function POST(req: NextRequest) {
   return handleRoute(async () => {
@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
     const today = new Date().toISOString().slice(0, 10);
     if (arrival < today) {
       return NextResponse.json(
-        { refused: true, reason: "That arrival date has already passed — pick an upcoming Friday or Monday." },
+        { refused: true, reason: "That arrival date has already passed. Pick an upcoming Friday or Monday." },
         { status: 422 },
       );
     }

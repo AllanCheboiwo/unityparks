@@ -1,5 +1,5 @@
 /**
- * Unity Parks business rules — pure functions, no I/O.
+ * Unity Parks business rules - pure functions, no I/O.
  *
  * The one rule that defines the product: stays may only START and END on a
  * turnover day (Friday or Monday), because those are the days staff flip the
@@ -62,20 +62,20 @@ export function validateStay(arrival: string, departure: string): StayValidation
   if (!isTurnoverDay(arrival)) {
     return {
       ok: false,
-      reason: `Breaks start on a Friday or Monday — ${dayName(arrival)} arrivals aren't available.`,
+      reason: `Breaks start on a Friday or Monday. ${dayName(arrival)} arrivals aren't available.`,
     };
   }
   if (!isTurnoverDay(departure)) {
     return {
       ok: false,
-      reason: `Breaks end on a Friday or Monday — ${dayName(departure)} departures aren't available.`,
+      reason: `Breaks end on a Friday or Monday. ${dayName(departure)} departures aren't available.`,
     };
   }
   return { ok: true, nights };
 }
 
 /**
- * The checkout total is the sum of the Apaleo amounts we snapshotted —
+ * The checkout total is the sum of the Apaleo amounts we snapshotted -
  * the engine never computes a price of its own.
  */
 export function computeTotal(

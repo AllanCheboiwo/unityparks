@@ -4,7 +4,7 @@ import { handleRoute } from "@/server/api-helpers";
 
 /**
  * "Buy now": creates the booking in Apaleo, reads the folio, settles it with
- * the simulated payment, and records the paid state. Idempotent — a retry or
+ * the simulated payment, and records the paid state. Idempotent - a retry or
  * double-click returns the same paid booking.
  */
 export async function POST(

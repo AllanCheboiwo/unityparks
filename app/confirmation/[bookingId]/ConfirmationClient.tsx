@@ -70,7 +70,7 @@ export function ConfirmationClient({ bookingId }: { bookingId: string }) {
             }`}
           >
             {settled
-              ? "Folio settled — balance KES 0"
+              ? "Folio settled · balance KES 0"
               : `Folio balance ${formatKes(booking.folioBalance)}`}
           </span>
         </div>
@@ -122,7 +122,7 @@ export function ConfirmationClient({ bookingId }: { bookingId: string }) {
           </p>
           {booking.guest.vehiclePlate && (
             <p className="mt-1">
-              Vehicle {booking.guest.vehiclePlate.toUpperCase()} — registered for
+              Vehicle {booking.guest.vehiclePlate.toUpperCase()} is registered for
               automatic gate entry.
             </p>
           )}
@@ -134,7 +134,7 @@ export function ConfirmationClient({ bookingId }: { bookingId: string }) {
           </p>
           <p>
             A confirmation email lands shortly. Twelve weeks before you arrive,
-            we&apos;ll open your pre-arrival window — book activities, hire cycles
+            we&apos;ll open your pre-arrival window to book activities, hire cycles
             and stock your lodge before you get here.
           </p>
         </div>

@@ -92,7 +92,7 @@ export function LodgesClient() {
 
       {offers.length === 0 && (
         <div className="mt-6 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-900">
-          Nothing is on sale for these dates — breaks are released about three
+          Nothing is on sale for these dates. Breaks are released about three
           months ahead. Try dates a little closer to today.
         </div>
       )}
@@ -167,7 +167,7 @@ export function LodgesClient() {
                   ) : (
                     <p className="text-sm font-medium text-foreground/50 max-w-[160px]">
                       {tooSmall
-                        ? `Sleeps up to ${lodge.sleeps} — too small for your party`
+                        ? `Sleeps up to ${lodge.sleeps}, too small for your party`
                         : "Sold out for these dates"}
                     </p>
                   )}

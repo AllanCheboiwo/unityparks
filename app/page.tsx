@@ -41,7 +41,7 @@ export default function HomePage() {
           Four lodges, one <em>forest</em>
         </h2>
         <p className="mt-1 text-sm text-foreground/60">
-          Every lodge is yours alone for the whole break — one price per lodge,
+          Every lodge is yours alone for the whole break. One price per lodge,
           however many of you come.
         </p>
         <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">

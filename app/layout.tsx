@@ -15,7 +15,7 @@ const body = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Unity Parks — Forest & Lake Breaks",
+  title: "Unity Parks | Forest & Lake Breaks",
   description:
     "Self-contained lodges in a lakeside forest village near Naivasha. Breaks start on a Friday or Monday.",
 };
@@ -52,7 +52,7 @@ export default function RootLayout({
         <main className="flex-1">{children}</main>
         <footer className="border-t border-forest/10 mt-16">
           <div className="mx-auto max-w-5xl px-5 py-8 text-xs text-foreground/50 flex flex-wrap gap-x-6 gap-y-2 justify-between">
-            <span>© {new Date().getFullYear()} Unity Parks Ltd — demo environment, no real payments.</span>
+            <span>© {new Date().getFullYear()} Unity Parks Ltd · demo environment, no real payments.</span>
             <span>Powered by the Unity Parks booking engine on Apaleo.</span>
           </div>
         </footer>

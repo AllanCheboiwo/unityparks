@@ -20,7 +20,7 @@ export async function POST(
     const session = await getSession(id);
     if (!session) return jsonError(410, "Session expired.");
     if (session.state === "completed") {
-      return jsonError(409, "This booking is already confirmed — start a new search to book another break.");
+      return jsonError(409, "This booking is already confirmed. Start a new search to book another break.");
     }
 
     const parsed = LodgeBody.safeParse(await req.json());

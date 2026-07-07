@@ -44,7 +44,7 @@ export function parseChildrenAges(session: BookingSession): number[] {
   return JSON.parse(session.childrenAges) as number[];
 }
 
-/** Returns null for unknown or expired sessions — callers send those back to search. */
+/** Returns null for unknown or expired sessions - callers send those back to search. */
 export async function getSession(id: string): Promise<BookingSession | null> {
   const session = await prisma.bookingSession.findUnique({ where: { id } });
   if (!session) return null;
@@ -65,7 +65,7 @@ export async function chooseLodge(
     where: { id },
     data: {
       ...lodge,
-      // Changing lodge resets extras — they were priced for the old rate plan.
+      // Changing lodge resets extras - they were priced for the old rate plan.
       extras: "[]",
       expiresAt: freshExpiry(),
     },

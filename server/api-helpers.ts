@@ -18,7 +18,7 @@ export class PublicError extends Error {
 }
 
 /**
- * Wraps a route handler body. Apaleo 422s surface as the sold-out race —
+ * Wraps a route handler body. Apaleo 422s surface as the sold-out race -
  * routes where a 422 means something else (e.g. payment recording) catch it
  * at the call site and rethrow a PublicError with the right story.
  */

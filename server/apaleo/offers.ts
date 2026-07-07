@@ -1,7 +1,7 @@
 import "server-only";
 import { apaleo, CHANNEL_CODE, PROPERTY_ID } from "./client";
 
-/** A lodge tier priced for the whole break — one card on the results page. */
+/** A lodge tier priced for the whole break - one card on the results page. */
 export type StayOffer = {
   unitGroupCode: string;
   unitGroupName: string;
@@ -58,7 +58,7 @@ export async function getStayOffers(params: {
     .sort((a, b) => a.totalGrossAmount - b.totalGrossAmount);
 }
 
-/** An add-on priced for this specific stay — one card on the extras page. */
+/** An add-on priced for this specific stay - one card on the extras page. */
 export type ExtraOffer = {
   serviceId: string;
   code: string;

@@ -118,7 +118,7 @@ export function DetailsClient() {
           />
           <span className="mt-1 block text-xs text-foreground/50">
             Register your plate and the gate opens automatically when you
-            arrive — no queuing.
+            arrive. No queuing.
           </span>
         </label>
 

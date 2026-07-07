@@ -1,6 +1,6 @@
 /**
- * Party age bands — matching the search widget (and Center Parcs'):
- * children 6–17, toddlers 2–5, infants under 2. The funnel captures counts
+ * Party age bands - matching the search widget (and Center Parcs'):
+ * children 6-17, toddlers 2-5, infants under 2. The funnel captures counts
  * per band; Apaleo prices and enforces occupancy by concrete ages, so each
  * band maps to a representative age. Real dates of birth arrive at the
  * guest-details step in the real build.
@@ -22,7 +22,7 @@ export function bandsToAges(counts: {
   ];
 }
 
-/** "2 adults · 1 child · 2 toddlers" — derived back from the stored ages. */
+/** "2 adults · 1 child · 2 toddlers" - derived back from the stored ages. */
 export function partyLabel(adults: number, childrenAges: number[]): string {
   const count = (age: number) => childrenAges.filter((a) => a === age).length;
   const parts = [`${adults} ${adults === 1 ? "adult" : "adults"}`];

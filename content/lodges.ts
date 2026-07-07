@@ -1,7 +1,7 @@
 /**
  * Marketing content for each lodge tier, keyed by Apaleo unit-group code.
  * Apaleo owns inventory and prices; this file owns words and pictures.
- * Swap the image paths for real photography when it exists — nothing else
+ * Swap the image paths for real photography when it exists - nothing else
  * needs to change.
  */
 
@@ -60,7 +60,7 @@ export const LODGES: Record<string, LodgeContent> = {
     name: "Exclusive Lodge",
     tagline: "Luxury as standard",
     blurb:
-      "Our flagship lodge. Four bedrooms, a private outdoor hot tub, cedar sauna, and a games and cinema room — set apart from the village for complete privacy.",
+      "Our flagship lodge. Four bedrooms, a private outdoor hot tub, cedar sauna, and a games and cinema room, set apart from the village for complete privacy.",
     sleeps: 8,
     bedrooms: 4,
     features: ["Private hot tub", "Cedar sauna", "Cinema room", "Set apart for privacy"],
@@ -69,5 +69,5 @@ export const LODGES: Record<string, LodgeContent> = {
   },
 };
 
-/** Cheapest first — the Center Parcs price ladder. */
+/** Cheapest first - the Center Parcs price ladder. */
 export const TIER_ORDER = ["WDL", "FST", "LKV", "EXC"] as const;

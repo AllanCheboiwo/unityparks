@@ -85,7 +85,7 @@ export function PayClient() {
         </p>
         <p className="mt-2 text-sm text-foreground/60">
           It was booked while you were checking out. Your dates are still
-          good — pick another lodge.
+          good. Pick another lodge.
         </p>
         <a
           href={`/lodges?session=${sessionId}`}
@@ -169,7 +169,7 @@ export function PayClient() {
         disabled={busy}
         className="mt-6 w-full rounded-lg bg-forest text-white px-6 py-3.5 text-base font-semibold hover:bg-forest-light disabled:opacity-60"
       >
-        {busy ? "Confirming your booking…" : `Buy now — ${formatKes(session.total ?? 0)}`}
+        {busy ? "Confirming your booking…" : `Buy now · ${formatKes(session.total ?? 0)}`}
       </button>
       <p className="mt-3 text-center text-xs text-foreground/50">
         Demo environment: your booking is real in our reservation system, but

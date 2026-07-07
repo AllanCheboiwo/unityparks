@@ -122,7 +122,7 @@ export function ManageClient({ bookingId }: { bookingId: string }) {
         <p className="font-display text-lg text-forest">Move your break</p>
         <p className="mt-1 text-sm text-foreground/60">
           Your whole {nights}-night break moves to a new start date. New dates
-          still start on a Friday or Monday — the same rule as booking.
+          still start on a Friday or Monday, the same rule as booking.
         </p>
 
         <div className="mt-4 flex flex-wrap items-start gap-4">

@@ -10,12 +10,12 @@ import { getSession, parseChildrenAges, parseExtras } from "./session";
 /**
  * The "Buy now" moment, in three steps that mirror the real build:
  *   1. create the booking in Apaleo (reservation + folio come into existence)
- *   2. read the folio — Apaleo's number for what is owed, not ours
+ *   2. read the folio - Apaleo's number for what is owed, not ours
  *   3. pay that amount onto the folio (demo: manual "Other" payment)
  *
  * Ordering rules that keep money truthful:
  *   - The BookingRecord lookup comes BEFORE the session-expiry gate. Once a
- *     real reservation exists, a retry must resume it — telling the guest to
+ *     real reservation exists, a retry must resume it - telling the guest to
  *     "search again" would orphan the reservation and invite a double booking.
  *   - The record is created carrying the folio's real total, so a crash
  *     between payment and the final update can never leave a paid booking
@@ -78,7 +78,7 @@ export async function completeCheckout(sessionId: string): Promise<BookingRecord
   const owed = Math.abs(folio.balance);
 
   // 3. Settle it (owed is 0 if a previous attempt paid but crashed before
-  // the record update — then we just record the paid state).
+  // the record update - then we just record the paid state).
   let paymentId: string | null = record.paymentId;
   if (owed > 0) {
     try {
@@ -91,7 +91,7 @@ export async function completeCheckout(sessionId: string): Promise<BookingRecord
       });
       paymentId = payment.paymentId;
     } catch (err) {
-      // A payment-stage Apaleo rejection is NOT a sold-out race — the
+      // A payment-stage Apaleo rejection is NOT a sold-out race - the
       // reservation is held. Tell the guest to simply retry.
       if (err instanceof ApaleoError) {
         console.error("Folio payment failed", err.status, JSON.stringify(err.body)?.slice(0, 600));

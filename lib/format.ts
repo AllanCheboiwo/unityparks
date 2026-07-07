@@ -4,7 +4,7 @@ export function formatKes(amount: number): string {
   return `KES ${Math.round(amount).toLocaleString("en-KE")}`;
 }
 
-/** "Friday 10 July 2026" — long form used across the funnel. */
+/** "Friday 10 July 2026" - long form used across the funnel. */
 export function formatDate(iso: string): string {
   const d = new Date(`${iso}T00:00:00Z`);
   return d.toLocaleDateString("en-GB", {

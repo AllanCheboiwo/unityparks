@@ -1,6 +1,6 @@
 "use client";
 
-/** Tiny client for our own API routes — the storefront's only data source. */
+/** Tiny client for our own API routes - the storefront's only data source. */
 
 export type ApiResult<T> =
   | { ok: true; data: T }
