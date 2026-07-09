@@ -142,74 +142,120 @@ function RealBuildTag() {
   );
 }
 
-/** The age-band and bedroom steppers for a single lodge's party. Bedrooms
- * follow the party (one per two adults or children) and can be raised to the
- * max; toddlers ride along up to two per bedroom; infants cap at two. */
+/**
+ * The age-band and bedroom steppers for one lodge's party. Bedrooms follow
+ * the party (one per two adults or children) and can be raised to the max;
+ * toddlers ride along up to two per bedroom; infants cap at two.
+ *
+ * layout "stack" is the narrow single-lodge dropdown (each field a row).
+ * layout "row" is the Center Parcs multi-lodge shape: the fields spread
+ * horizontally across a wide panel, one lodge per row.
+ */
 function LodgeParty({
   party,
   onChange,
+  layout = "stack",
 }: {
   party: Party;
   onChange: (patch: Partial<Party>) => void;
+  layout?: "stack" | "row";
 }) {
   const requiredBed = requiredBedrooms(party.adults, party.children);
   const toddlerCap = maxToddlers(party.bedrooms);
+
+  const fields = [
+    {
+      key: "adults",
+      label: "Adults",
+      sub: "18+ years",
+      value: party.adults,
+      min: 1,
+      max: 8,
+      onStep: (n: number) =>
+        onChange({ adults: n, bedrooms: Math.max(party.bedrooms, requiredBedrooms(n, party.children)) }),
+    },
+    {
+      key: "children",
+      label: "Children",
+      sub: "6 - 17 years",
+      value: party.children,
+      min: 0,
+      max: 7,
+      onStep: (n: number) =>
+        onChange({ children: n, bedrooms: Math.max(party.bedrooms, requiredBedrooms(party.adults, n)) }),
+    },
+    {
+      key: "toddlers",
+      label: "Toddlers",
+      sub: layout === "row" ? "2 - 5 years" : "2 - 5 years · up to 2 share a room",
+      value: party.toddlers,
+      min: 0,
+      max: toddlerCap,
+      onStep: (n: number) => onChange({ toddlers: n }),
+    },
+    {
+      key: "infants",
+      label: "Infants",
+      sub: layout === "row" ? `Under 2 · up to ${MAX_INFANTS}` : `Under 2 years · up to ${MAX_INFANTS}`,
+      value: party.infants,
+      min: 0,
+      max: MAX_INFANTS,
+      onStep: (n: number) => onChange({ infants: n }),
+    },
+    {
+      key: "bedrooms",
+      label: "Bedrooms",
+      sub: layout === "row" ? "1 per 2 adults or children" : "One per two adults or children",
+      value: party.bedrooms,
+      min: requiredBed,
+      max: MAX_BEDROOMS,
+      onStep: (n: number) => onChange({ bedrooms: n, toddlers: Math.min(party.toddlers, maxToddlers(n)) }),
+    },
+  ];
+
+  if (layout === "row") {
+    return (
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-x-5 gap-y-4">
+        {fields.map((f) => (
+          <div key={f.key}>
+            <p className="text-sm font-semibold text-forest">{f.label}</p>
+            <p className="text-[11px] text-foreground/55">{f.sub}</p>
+            <div className="mt-2">
+              <Stepper value={f.value} min={f.min} max={f.max} onChange={f.onStep} />
+            </div>
+          </div>
+        ))}
+        {/* Dogs sits in the row of columns, greyed, mirroring Center Parcs. */}
+        <div className="opacity-50">
+          <p className="text-sm font-semibold text-forest">
+            Dogs
+            <RealBuildTag />
+          </p>
+          <p className="text-[11px] text-foreground/55">Max 2, real build</p>
+          <div className="mt-2 h-8 flex items-center text-sm font-semibold text-forest/50">0</div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
-      <div className="flex items-center justify-between py-2">
-        <div>
-          <p className="text-sm font-semibold text-forest">Adults</p>
-          <p className="text-xs text-foreground/55">18+ years</p>
+      {fields.slice(0, 4).map((f) => (
+        <div key={f.key} className="flex items-center justify-between py-2">
+          <div>
+            <p className="text-sm font-semibold text-forest">{f.label}</p>
+            <p className="text-xs text-foreground/55">{f.sub}</p>
+          </div>
+          <Stepper value={f.value} min={f.min} max={f.max} onChange={f.onStep} />
         </div>
-        <Stepper
-          value={party.adults}
-          min={1}
-          max={8}
-          onChange={(n) =>
-            onChange({ adults: n, bedrooms: Math.max(party.bedrooms, requiredBedrooms(n, party.children)) })
-          }
-        />
-      </div>
-      <div className="flex items-center justify-between py-2">
-        <div>
-          <p className="text-sm font-semibold text-forest">Children</p>
-          <p className="text-xs text-foreground/55">6 - 17 years</p>
-        </div>
-        <Stepper
-          value={party.children}
-          min={0}
-          max={7}
-          onChange={(n) =>
-            onChange({ children: n, bedrooms: Math.max(party.bedrooms, requiredBedrooms(party.adults, n)) })
-          }
-        />
-      </div>
-      <div className="flex items-center justify-between py-2">
-        <div>
-          <p className="text-sm font-semibold text-forest">Toddlers</p>
-          <p className="text-xs text-foreground/55">2 - 5 years · up to 2 share a room</p>
-        </div>
-        <Stepper value={party.toddlers} min={0} max={toddlerCap} onChange={(n) => onChange({ toddlers: n })} />
-      </div>
-      <div className="flex items-center justify-between py-2">
-        <div>
-          <p className="text-sm font-semibold text-forest">Infants</p>
-          <p className="text-xs text-foreground/55">Under 2 years · up to {MAX_INFANTS}</p>
-        </div>
-        <Stepper value={party.infants} min={0} max={MAX_INFANTS} onChange={(n) => onChange({ infants: n })} />
-      </div>
+      ))}
       <p className="text-xs font-medium text-foreground/60 mt-1 mb-1">Number of bedrooms</p>
       <div className="flex items-center justify-between py-2">
         <div>
           <p className="text-sm font-semibold text-forest">Bedrooms</p>
-          <p className="text-xs text-foreground/55">One per two adults or children</p>
+          <p className="text-xs text-foreground/55">{fields[4].sub}</p>
         </div>
-        <Stepper
-          value={party.bedrooms}
-          min={requiredBed}
-          max={MAX_BEDROOMS}
-          onChange={(n) => onChange({ bedrooms: n, toddlers: Math.min(party.toddlers, maxToddlers(n)) })}
-        />
+        <Stepper value={fields[4].value} min={fields[4].min} max={fields[4].max} onChange={fields[4].onStep} />
       </div>
     </>
   );
@@ -802,29 +848,52 @@ export function BookingBar() {
             <Chevron />
           </button>
           {open === "guests" && (
-            <div className={`${panelCard} left-0 w-[min(92vw,24rem)] max-h-[72vh] overflow-y-auto`}>
+            <div
+              className={`${panelCard} max-h-[72vh] overflow-y-auto ${
+                lodgeCount > 1
+                  ? "right-0 w-[min(94vw,62rem)]"
+                  : "left-0 w-[min(92vw,24rem)]"
+              }`}
+            >
               <p className="text-xs text-foreground/55 mb-2">Please enter age at time of arrival</p>
 
               {parties.map((party, i) => (
-                <div key={i} className={i > 0 ? "mt-3 pt-3 border-t border-forest/10" : ""}>
+                <div
+                  key={i}
+                  className={
+                    i > 0
+                      ? "mt-4 pt-4 border-t border-forest/10"
+                      : lodgeCount > 1
+                        ? "mt-1"
+                        : ""
+                  }
+                >
                   {lodgeCount > 1 && (
-                    <p className="text-sm font-bold text-forest mb-1">Lodge {i + 1}</p>
+                    <p className="font-display text-lg text-forest mb-3">Lodge {i + 1}</p>
                   )}
-                  <LodgeParty party={party} onChange={(patch) => updateParty(i, patch)} />
+                  <LodgeParty
+                    party={party}
+                    onChange={(patch) => updateParty(i, patch)}
+                    layout={lodgeCount > 1 ? "row" : "stack"}
+                  />
                 </div>
               ))}
 
+              {/* Dogs (single lodge only - multi shows it per lodge) and the
+                  adapted-lodge affordance, both real-build for now. */}
               <div className="mt-3 pt-3 border-t border-forest/10">
-                <div className="flex items-center justify-between py-2 opacity-50">
-                  <div>
-                    <p className="text-sm font-semibold text-forest">
-                      Dogs
-                      <RealBuildTag />
-                    </p>
-                    <p className="text-xs text-foreground/55">Dog-friendly lodges arrive with the real build</p>
+                {lodgeCount === 1 && (
+                  <div className="flex items-center justify-between py-2 opacity-50">
+                    <div>
+                      <p className="text-sm font-semibold text-forest">
+                        Dogs
+                        <RealBuildTag />
+                      </p>
+                      <p className="text-xs text-foreground/55">Dog-friendly lodges arrive with the real build</p>
+                    </div>
+                    <span className="text-sm font-semibold text-forest/50 pr-1">0</span>
                   </div>
-                  <span className="text-sm font-semibold text-forest/50 pr-1">0</span>
-                </div>
+                )}
                 <div className="flex items-center justify-between py-2 opacity-50">
                   <p className="text-sm font-semibold text-forest">
                     Adapted lodge required?
