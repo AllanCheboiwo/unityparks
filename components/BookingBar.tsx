@@ -15,17 +15,18 @@ import { TurnoverCalendar, validArrivalDows } from "@/components/TurnoverCalenda
 /**
  * The Center Parcs-style booking bar: four fields (village, dates, lodges,
  * guests), each opening a panel that hugs the bar directly beneath it, then
- * Search. Options the demo backend can't honour yet (multi-lodge, dogs,
- * adapted stock) are shown greyed with a "real build" tag rather than hidden.
+ * Search. Book one, two or three lodges; each lodge has its own party, and
+ * the guests panel splits into a section per lodge. Options the backend can't
+ * honour yet (dogs, adapted stock) stay greyed with a "real build" tag.
  *
  * Dates have two modes, both enforcing turnover: pick a specific start day, or
- * search a whole month for the start dates that are open (see the
- * /api/month-availability route). Bedrooms are derived from the party (see
- * lib/occupancy).
+ * search a whole month for the start dates that are open. Bedrooms are derived
+ * from each lodge's party (see lib/occupancy).
  */
 
 const BOOKING_HORIZON_DAYS = 100;
 const MAX_LODGE_SLEEPS = 8;
+const MAX_LODGES = 3;
 const VILLAGE_NAME = "Unity Parks Naivasha";
 
 const NIGHT_OPTIONS = [3, 4, 7] as const;
@@ -51,6 +52,21 @@ type MonthDate = {
   fromPrice: number | null;
   currency: string;
 };
+
+/** One lodge's party. Bedrooms are derived but overridable up to the max. */
+type Party = {
+  adults: number;
+  children: number;
+  toddlers: number;
+  infants: number;
+  bedrooms: number;
+};
+
+const DEFAULT_PARTY: Party = { adults: 2, children: 0, toddlers: 0, infants: 0, bedrooms: 1 };
+
+function partySize(p: Party): number {
+  return p.adults + p.children + p.toddlers + p.infants;
+}
 
 function addDays(iso: string, days: number): string {
   const d = new Date(`${iso}T00:00:00Z`);
@@ -126,6 +142,79 @@ function RealBuildTag() {
   );
 }
 
+/** The age-band and bedroom steppers for a single lodge's party. Bedrooms
+ * follow the party (one per two adults or children) and can be raised to the
+ * max; toddlers ride along up to two per bedroom; infants cap at two. */
+function LodgeParty({
+  party,
+  onChange,
+}: {
+  party: Party;
+  onChange: (patch: Partial<Party>) => void;
+}) {
+  const requiredBed = requiredBedrooms(party.adults, party.children);
+  const toddlerCap = maxToddlers(party.bedrooms);
+  return (
+    <>
+      <div className="flex items-center justify-between py-2">
+        <div>
+          <p className="text-sm font-semibold text-forest">Adults</p>
+          <p className="text-xs text-foreground/55">18+ years</p>
+        </div>
+        <Stepper
+          value={party.adults}
+          min={1}
+          max={8}
+          onChange={(n) =>
+            onChange({ adults: n, bedrooms: Math.max(party.bedrooms, requiredBedrooms(n, party.children)) })
+          }
+        />
+      </div>
+      <div className="flex items-center justify-between py-2">
+        <div>
+          <p className="text-sm font-semibold text-forest">Children</p>
+          <p className="text-xs text-foreground/55">6 - 17 years</p>
+        </div>
+        <Stepper
+          value={party.children}
+          min={0}
+          max={7}
+          onChange={(n) =>
+            onChange({ children: n, bedrooms: Math.max(party.bedrooms, requiredBedrooms(party.adults, n)) })
+          }
+        />
+      </div>
+      <div className="flex items-center justify-between py-2">
+        <div>
+          <p className="text-sm font-semibold text-forest">Toddlers</p>
+          <p className="text-xs text-foreground/55">2 - 5 years · up to 2 share a room</p>
+        </div>
+        <Stepper value={party.toddlers} min={0} max={toddlerCap} onChange={(n) => onChange({ toddlers: n })} />
+      </div>
+      <div className="flex items-center justify-between py-2">
+        <div>
+          <p className="text-sm font-semibold text-forest">Infants</p>
+          <p className="text-xs text-foreground/55">Under 2 years · up to {MAX_INFANTS}</p>
+        </div>
+        <Stepper value={party.infants} min={0} max={MAX_INFANTS} onChange={(n) => onChange({ infants: n })} />
+      </div>
+      <p className="text-xs font-medium text-foreground/60 mt-1 mb-1">Number of bedrooms</p>
+      <div className="flex items-center justify-between py-2">
+        <div>
+          <p className="text-sm font-semibold text-forest">Bedrooms</p>
+          <p className="text-xs text-foreground/55">One per two adults or children</p>
+        </div>
+        <Stepper
+          value={party.bedrooms}
+          min={requiredBed}
+          max={MAX_BEDROOMS}
+          onChange={(n) => onChange({ bedrooms: n, toddlers: Math.min(party.toddlers, maxToddlers(n)) })}
+        />
+      </div>
+    </>
+  );
+}
+
 export function BookingBar() {
   const router = useRouter();
   const [open, setOpen] = useState<PanelName | null>(null);
@@ -143,35 +232,39 @@ export function BookingBar() {
   const [monthBusy, setMonthBusy] = useState(false);
   const [monthError, setMonthError] = useState<string | null>(null);
 
-  const [adults, setAdults] = useState(2);
-  const [children, setChildren] = useState(0);
-  const [toddlers, setToddlers] = useState(0);
-  const [infants, setInfants] = useState(0);
-  const [bedrooms, setBedrooms] = useState(() => requiredBedrooms(2, 0));
+  // One party per lodge; a single-lodge break has one entry.
+  const [parties, setParties] = useState<Party[]>([{ ...DEFAULT_PARTY }]);
   const [refusal, setRefusal] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  const lodgeCount = parties.length;
   const today = new Date().toISOString().slice(0, 10);
   const horizonEnd = addDays(today, BOOKING_HORIZON_DAYS);
   const departure = arrival ? addDays(arrival, nights) : "";
-  const totalGuests = adults + children + toddlers + infants;
+  const totalGuests = parties.reduce((sum, p) => sum + partySize(p), 0);
 
   // Two year columns: this year and next, Center Parcs style.
   const thisYear = Number(today.slice(0, 4));
   const gridYears = [thisYear, thisYear + 1];
-
-  // Bedrooms follow the party: one per two adults, one per two children.
-  const requiredBed = requiredBedrooms(adults, children);
-  const toddlerCap = maxToddlers(bedrooms);
 
   function toggle(panel: PanelName) {
     setOpen((current) => (current === panel ? null : panel));
     setError(null);
   }
 
-  function raiseBedrooms(nextAdults: number, nextChildren: number) {
-    setBedrooms((b) => Math.max(b, requiredBedrooms(nextAdults, nextChildren)));
+  function setLodgeCount(n: number) {
+    setParties((prev) => {
+      const next = prev.slice(0, n);
+      while (next.length < n) next.push({ ...DEFAULT_PARTY });
+      return next;
+    });
+    setMonthResults(null);
+  }
+
+  function updateParty(index: number, patch: Partial<Party>) {
+    setParties((prev) => prev.map((p, i) => (i === index ? { ...p, ...patch } : p)));
+    setMonthResults(null);
   }
 
   function changeNights(n: number) {
@@ -200,14 +293,16 @@ export function BookingBar() {
     }
     const pattern = MONTH_PATTERNS.find((p) => p.key === monthPattern)!;
     setMonthBusy(true);
+    // Availability is priced on the first lodge's party (a discovery view).
+    const lead = parties[0];
     const query = new URLSearchParams({
       month: monthValue,
       nights: String(pattern.nights),
       dow: pattern.dow,
-      adults: String(adults),
-      children: String(children),
-      toddlers: String(toddlers),
-      infants: String(infants),
+      adults: String(lead.adults),
+      children: String(lead.children),
+      toddlers: String(lead.toddlers),
+      infants: String(lead.infants),
     });
     const result = await apiFetch<{ dates: MonthDate[] }>(`/api/month-availability?${query}`);
     setMonthBusy(false);
@@ -238,30 +333,45 @@ export function BookingBar() {
       setError("Choose your dates to get started.");
       return;
     }
-    if (totalGuests > MAX_LODGE_SLEEPS) {
+    const oversized = parties.findIndex((p) => partySize(p) > MAX_LODGE_SLEEPS);
+    if (oversized !== -1) {
       setOpen("guests");
-      setError(`Our largest lodge sleeps ${MAX_LODGE_SLEEPS}. For bigger parties, call our team.`);
+      const label = lodgeCount > 1 ? `Lodge ${oversized + 1}` : "Your party";
+      setError(`Our largest lodge sleeps ${MAX_LODGE_SLEEPS}. ${label} has ${partySize(parties[oversized])} guests.`);
       return;
     }
     setBusy(true);
     setError(null);
     setRefusal(null);
 
+    const lead = parties[0];
     const result = await apiFetch<SearchResponse>("/api/search", {
       method: "POST",
       body: JSON.stringify({
         arrival: arr,
         departure: addDays(arr, nts),
-        adults,
-        children,
-        toddlers,
-        infants,
+        adults: lead.adults,
+        children: lead.children,
+        toddlers: lead.toddlers,
+        infants: lead.infants,
+        ...(lodgeCount > 1
+          ? {
+              lodges: parties.map((p) => ({
+                adults: p.adults,
+                children: p.children,
+                toddlers: p.toddlers,
+                infants: p.infants,
+              })),
+            }
+          : {}),
       }),
     });
 
     if (result.ok) {
-      // Only a preference above the party's own minimum is worth passing on.
-      const bedroomsParam = bedrooms > 1 ? `&bedrooms=${bedrooms}` : "";
+      // Single-lodge bedroom preference only; multi-lodge slots filter by
+      // their own party on the basket page.
+      const bedroomsParam =
+        lodgeCount === 1 && lead.bedrooms > 1 ? `&bedrooms=${lead.bedrooms}` : "";
       router.push(`/lodges?session=${result.data.sessionId}${bedroomsParam}`);
       return;
     }
@@ -278,9 +388,10 @@ export function BookingBar() {
   }
 
   const guestsLabel =
-    totalGuests === adults
-      ? `${adults} ${adults === 1 ? "adult" : "adults"}`
+    lodgeCount === 1 && totalGuests === parties[0].adults
+      ? `${parties[0].adults} ${parties[0].adults === 1 ? "adult" : "adults"}`
       : `${totalGuests} guests`;
+  const lodgesLabel = `${lodgeCount} ${lodgeCount === 1 ? "lodge" : "lodges"}`;
 
   const field = "relative flex-1 min-w-[160px]";
   const chip =
@@ -594,7 +705,9 @@ export function BookingBar() {
                             {shortDate(d.arrival)} → {shortDate(d.departure)}
                           </p>
                           <p className="text-xs text-foreground/55">
-                            {d.available ? `from ${formatKes(d.fromPrice!)}` : "Sold out"}
+                            {d.available
+                              ? `${lodgeCount > 1 ? "lodge 1 " : ""}from ${formatKes(d.fromPrice!)}`
+                              : "Sold out"}
                           </p>
                         </div>
                         {d.available && (
@@ -625,32 +738,42 @@ export function BookingBar() {
             className={chip}
           >
             <span className={chipLabel}>Lodges</span>
-            <span className={chipValue}>1 lodge</span>
+            <span className={chipValue}>{lodgesLabel}</span>
             <Chevron />
           </button>
           {open === "lodges" && (
             <div className={`${panelCard} left-0 w-[min(92vw,22rem)]`}>
-              <div className="flex items-center justify-between py-2">
-                <div>
-                  <p className="text-sm font-semibold text-forest">1 lodge</p>
-                  <p className="text-xs text-foreground/55">Select 1 lodge</p>
-                </div>
-                <span className="w-5 h-5 rounded-full bg-forest flex items-center justify-center text-white text-[10px]">✓</span>
-              </div>
-              {[2, 3].map((n) => (
-                <div key={n} className="flex items-center justify-between py-2 opacity-50">
+              <p className="text-xs font-medium text-foreground/60 mb-1">How many lodges?</p>
+              {[1, 2, 3].map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => setLodgeCount(n)}
+                  className="w-full flex items-center justify-between rounded-lg px-2 -mx-2 py-2 text-left hover:bg-sand/50"
+                >
                   <div>
                     <p className="text-sm font-semibold text-forest">
-                      {n} lodges
-                      <RealBuildTag />
+                      {n} {n === 1 ? "lodge" : "lodges"}
                     </p>
-                    <p className="text-xs text-foreground/55">Group bookings arrive with the real build</p>
+                    <p className="text-xs text-foreground/55">
+                      {n === 1
+                        ? "One lodge for your party"
+                        : `${n} lodges, each with its own guests`}
+                    </p>
                   </div>
-                  <span className="w-5 h-5 rounded-full ring-1 ring-forest/25" />
-                </div>
+                  <span
+                    className={
+                      lodgeCount === n
+                        ? "w-5 h-5 rounded-full bg-forest flex items-center justify-center text-white text-[10px]"
+                        : "w-5 h-5 rounded-full ring-1 ring-forest/25"
+                    }
+                  >
+                    {lodgeCount === n ? "✓" : ""}
+                  </span>
+                </button>
               ))}
               <div className="rounded-lg bg-sand px-3 py-2.5 mt-2 text-xs text-forest">
-                If you require more than 3 lodges, call our team on{" "}
+                If you require more than {MAX_LODGES} lodges, call our team on{" "}
                 <span className="font-semibold whitespace-nowrap">+254 700 000 000</span>
               </div>
               <div className="flex justify-end mt-3">
@@ -679,92 +802,36 @@ export function BookingBar() {
             <Chevron />
           </button>
           {open === "guests" && (
-            <div className={`${panelCard} left-0 w-[min(92vw,24rem)]`}>
+            <div className={`${panelCard} left-0 w-[min(92vw,24rem)] max-h-[72vh] overflow-y-auto`}>
               <p className="text-xs text-foreground/55 mb-2">Please enter age at time of arrival</p>
 
-              <div className="flex items-center justify-between py-2">
-                <div>
-                  <p className="text-sm font-semibold text-forest">Adults</p>
-                  <p className="text-xs text-foreground/55">18+ years</p>
+              {parties.map((party, i) => (
+                <div key={i} className={i > 0 ? "mt-3 pt-3 border-t border-forest/10" : ""}>
+                  {lodgeCount > 1 && (
+                    <p className="text-sm font-bold text-forest mb-1">Lodge {i + 1}</p>
+                  )}
+                  <LodgeParty party={party} onChange={(patch) => updateParty(i, patch)} />
                 </div>
-                <Stepper
-                  value={adults}
-                  min={1}
-                  max={8}
-                  onChange={(n) => {
-                    setAdults(n);
-                    raiseBedrooms(n, children);
-                    setMonthResults(null);
-                  }}
-                />
-              </div>
-              <div className="flex items-center justify-between py-2">
-                <div>
-                  <p className="text-sm font-semibold text-forest">Children</p>
-                  <p className="text-xs text-foreground/55">6 - 17 years</p>
-                </div>
-                <Stepper
-                  value={children}
-                  min={0}
-                  max={7}
-                  onChange={(n) => {
-                    setChildren(n);
-                    raiseBedrooms(adults, n);
-                    setMonthResults(null);
-                  }}
-                />
-              </div>
-              <div className="flex items-center justify-between py-2">
-                <div>
-                  <p className="text-sm font-semibold text-forest">Toddlers</p>
-                  <p className="text-xs text-foreground/55">2 - 5 years · up to 2 share a room</p>
-                </div>
-                <Stepper value={toddlers} min={0} max={toddlerCap} onChange={setToddlers} />
-              </div>
-              <div className="flex items-center justify-between py-2">
-                <div>
-                  <p className="text-sm font-semibold text-forest">Infants</p>
-                  <p className="text-xs text-foreground/55">Under 2 years · up to {MAX_INFANTS}</p>
-                </div>
-                <Stepper value={infants} min={0} max={MAX_INFANTS} onChange={setInfants} />
-              </div>
+              ))}
 
-              <div className="flex items-center justify-between py-2 opacity-50">
-                <div>
+              <div className="mt-3 pt-3 border-t border-forest/10">
+                <div className="flex items-center justify-between py-2 opacity-50">
+                  <div>
+                    <p className="text-sm font-semibold text-forest">
+                      Dogs
+                      <RealBuildTag />
+                    </p>
+                    <p className="text-xs text-foreground/55">Dog-friendly lodges arrive with the real build</p>
+                  </div>
+                  <span className="text-sm font-semibold text-forest/50 pr-1">0</span>
+                </div>
+                <div className="flex items-center justify-between py-2 opacity-50">
                   <p className="text-sm font-semibold text-forest">
-                    Dogs
+                    Adapted lodge required?
                     <RealBuildTag />
                   </p>
-                  <p className="text-xs text-foreground/55">Dog-friendly lodges arrive with the real build</p>
+                  <span className="w-9 h-5 rounded-full ring-1 ring-forest/25" />
                 </div>
-                <span className="text-sm font-semibold text-forest/50 pr-1">0</span>
-              </div>
-
-              <p className="text-xs font-medium text-foreground/60 border-t border-forest/10 pt-3 mt-1 mb-1">
-                Number of bedrooms
-              </p>
-              <div className="flex items-center justify-between py-2">
-                <div>
-                  <p className="text-sm font-semibold text-forest">Bedrooms</p>
-                  <p className="text-xs text-foreground/55">One per two adults or children</p>
-                </div>
-                <Stepper
-                  value={bedrooms}
-                  min={requiredBed}
-                  max={MAX_BEDROOMS}
-                  onChange={(n) => {
-                    setBedrooms(n);
-                    setToddlers((t) => Math.min(t, maxToddlers(n)));
-                  }}
-                />
-              </div>
-
-              <div className="flex items-center justify-between py-2 opacity-50">
-                <p className="text-sm font-semibold text-forest">
-                  Adapted lodge required?
-                  <RealBuildTag />
-                </p>
-                <span className="w-9 h-5 rounded-full ring-1 ring-forest/25" />
               </div>
 
               <div className="flex justify-end mt-2">

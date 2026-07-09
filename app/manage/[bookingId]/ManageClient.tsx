@@ -112,10 +112,10 @@ export function ManageClient({ bookingId }: { bookingId: string }) {
     );
   }
 
-  const lodge = booking.stay.unitGroupCode ? LODGES[booking.stay.unitGroupCode] : null;
   const nights = Math.round(
     (Date.parse(booking.stay.departure) - Date.parse(booking.stay.arrival)) / 86_400_000,
   );
+  const multi = booking.lodges.length > 1;
 
   function addDays(iso: string, days: number): string {
     const d = new Date(`${iso}T00:00:00Z`);
@@ -161,15 +161,27 @@ export function ManageClient({ bookingId }: { bookingId: string }) {
       </p>
 
       <div className="mt-6 rounded-2xl bg-white ring-1 ring-forest/10 shadow-sm p-5">
-        <p className="text-xs uppercase tracking-wide text-foreground/50">Current stay</p>
-        <p className="mt-1 font-medium text-forest">{lodge?.name ?? "Lodge"}</p>
-        <p className="text-sm text-foreground/60">
-          {formatDate(booking.stay.arrival)} → {formatDate(booking.stay.departure)}
+        <p className="text-xs uppercase tracking-wide text-foreground/50">
+          {multi ? `Current break · ${booking.lodges.length} lodges` : "Current stay"}
         </p>
-        <p className="text-sm text-foreground/60">
-          {nightsLabel(nights)} · {booking.stay.adults}{" "}
-          {booking.stay.adults === 1 ? "guest" : "guests"}
+        <p className="text-sm text-foreground/60 mt-1">
+          {formatDate(booking.stay.arrival)} → {formatDate(booking.stay.departure)} ·{" "}
+          {nightsLabel(nights)}
         </p>
+        <div className="mt-2 grid gap-1">
+          {booking.lodges.map((l) => {
+            const lodge = l.unitGroupCode ? LODGES[l.unitGroupCode] : null;
+            return (
+              <p key={l.slot} className="text-sm text-forest">
+                <span className="font-medium">
+                  {multi ? `Lodge ${l.slot + 1}: ` : ""}
+                  {lodge?.name ?? "Lodge"}
+                </span>
+                <span className="text-foreground/55"> · {l.partyLabel}</span>
+              </p>
+            );
+          })}
+        </div>
         <div className="mt-3 flex gap-2">
           <span
             className={`rounded-full px-3 py-1 text-xs font-semibold ${
@@ -185,6 +197,17 @@ export function ManageClient({ bookingId }: { bookingId: string }) {
         </div>
       </div>
 
+      {multi ? (
+        <div className="mt-8 rounded-2xl bg-white ring-1 ring-forest/10 shadow-sm p-5">
+          <p className="font-display text-lg text-forest">Move your break</p>
+          <p className="mt-1 text-sm text-foreground/60">
+            To change the dates on a multi-lodge break, call our team on{" "}
+            <span className="font-semibold whitespace-nowrap">+254 700 000 000</span>.
+            Online date changes for a single lodge are available on single-lodge
+            bookings.
+          </p>
+        </div>
+      ) : (
       <form onSubmit={move} className="mt-8 rounded-2xl bg-white ring-1 ring-forest/10 shadow-sm p-5">
         <p className="font-display text-lg text-forest">Move your break</p>
         <p className="mt-1 text-sm text-foreground/60">
@@ -238,6 +261,7 @@ export function ManageClient({ bookingId }: { bookingId: string }) {
           </div>
         )}
       </form>
+      )}
 
       {guestRows && (
         <div className="mt-8 rounded-2xl bg-white ring-1 ring-forest/10 shadow-sm p-5">

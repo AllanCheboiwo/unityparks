@@ -70,11 +70,11 @@ export function ConfirmationClient({ bookingId }: { bookingId: string }) {
     );
   }
 
-  const lodge = booking.stay.unitGroupCode ? LODGES[booking.stay.unitGroupCode] : null;
   const nights = Math.round(
     (Date.parse(booking.stay.departure) - Date.parse(booking.stay.arrival)) / 86_400_000,
   );
   const settled = booking.folioBalance === 0;
+  const multi = booking.lodges.length > 1;
 
   return (
     <div className="mx-auto max-w-xl px-5 py-10">
@@ -118,33 +118,40 @@ export function ConfirmationClient({ bookingId }: { bookingId: string }) {
 
       <div className="mt-8 rounded-2xl bg-white ring-1 ring-forest/10 shadow-sm divide-y divide-forest/10">
         <div className="p-5">
-          <p className="text-xs uppercase tracking-wide text-foreground/50">Your stay</p>
-          <p className="mt-1 font-medium text-forest">{lodge?.name ?? "Lodge"}</p>
-          <p className="text-sm text-foreground/60">
-            {formatDate(booking.stay.arrival)} → {formatDate(booking.stay.departure)}
+          <p className="text-xs uppercase tracking-wide text-foreground/50">
+            {multi ? `Your break · ${booking.lodges.length} lodges` : "Your stay"}
           </p>
-          <p className="text-sm text-foreground/60">
-            {nightsLabel(nights)} · {booking.stay.adults}{" "}
-            {booking.stay.adults === 1 ? "guest" : "guests"}
+          <p className="text-sm text-foreground/60 mt-1">
+            {formatDate(booking.stay.arrival)} → {formatDate(booking.stay.departure)} ·{" "}
+            {nightsLabel(nights)}
           </p>
         </div>
 
         <div className="p-5">
-          <div className="flex justify-between text-sm">
-            <span>Lodge, whole break</span>
-            <span className="font-medium">
-              {formatKes(booking.stay.stayGrossAmount ?? 0)}
-            </span>
-          </div>
-          {booking.extras.map((extra) => (
-            <div key={extra.serviceId} className="flex justify-between text-sm mt-2">
-              <span>
-                {extra.name}
-                {extra.count > 1 ? ` ×${extra.count}` : ""}
-              </span>
-              <span className="font-medium">{formatKes(extra.grossAmount)}</span>
-            </div>
-          ))}
+          {booking.lodges.map((l) => {
+            const lodge = l.unitGroupCode ? LODGES[l.unitGroupCode] : null;
+            return (
+              <div key={l.slot} className="mt-3 first:mt-0">
+                <div className="flex justify-between text-sm">
+                  <span className="font-medium text-forest">
+                    {multi ? `Lodge ${l.slot + 1}: ` : ""}
+                    {lodge?.name ?? "Lodge"}
+                    <span className="font-normal text-foreground/55"> · {l.partyLabel}</span>
+                  </span>
+                  <span className="font-medium">{formatKes(l.stayGrossAmount ?? 0)}</span>
+                </div>
+                {l.extras.map((extra) => (
+                  <div key={extra.serviceId} className="flex justify-between text-sm mt-1 pl-3 text-foreground/70">
+                    <span>
+                      {extra.name}
+                      {extra.count > 1 ? ` ×${extra.count}` : ""}
+                    </span>
+                    <span>{formatKes(extra.grossAmount)}</span>
+                  </div>
+                ))}
+              </div>
+            );
+          })}
           <div className="flex justify-between mt-4 pt-4 border-t border-forest/10">
             <span className="font-display text-forest">Paid</span>
             <span className="font-display text-forest">

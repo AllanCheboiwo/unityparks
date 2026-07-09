@@ -43,23 +43,36 @@ export function PayClient() {
     );
   }
 
-  // Guests can land here by URL without a lodge in the basket.
-  if (!session.lodge) {
+  const multi = session.lodges.length > 1;
+  const allChosen = session.lodges.every((l) => l.lodge);
+
+  // Guests can land here by URL before every lodge has been chosen.
+  if (!allChosen) {
     return (
       <div className="mx-auto max-w-lg text-center py-20 px-5">
-        <p className="font-display text-2xl text-forest">Your basket is empty</p>
-        <p className="mt-2 text-sm text-foreground/60">Choose a lodge first, then come back to pay.</p>
+        <p className="font-display text-2xl text-forest">
+          {multi ? "Finish choosing your lodges" : "Your basket is empty"}
+        </p>
+        <p className="mt-2 text-sm text-foreground/60">
+          Choose {multi ? "every lodge" : "a lodge"} first, then come back to pay.
+        </p>
         <a
           href={`/lodges?session=${sessionId}`}
           className="inline-block mt-6 rounded-lg bg-forest text-white px-6 py-2.5 text-sm font-semibold hover:bg-forest-light"
         >
-          Choose a lodge
+          {multi ? "Back to lodges" : "Choose a lodge"}
         </a>
       </div>
     );
   }
 
-  const lodge = LODGES[session.lodge.unitGroupCode];
+  const bookingTotal = session.lodges.reduce(
+    (sum, l) =>
+      sum +
+      (l.lodge?.stayGrossAmount ?? 0) +
+      l.extras.reduce((a, e) => a + e.grossAmount, 0),
+    0,
+  );
 
   async function buyNow() {
     setBusy(true);
@@ -118,18 +131,38 @@ export function PayClient() {
         <div className="mt-6 lg:mt-0 lg:order-1 max-w-xl">
           <div className="rounded-2xl bg-white ring-1 ring-forest/10 shadow-sm divide-y divide-forest/10">
             <div className="p-5">
-              <p className="text-xs uppercase tracking-wide text-foreground/50">Stay</p>
-              <p className="mt-1 font-medium text-forest">
-                {lodge?.name ?? session.lodge?.unitGroupCode}
+              <p className="text-xs uppercase tracking-wide text-foreground/50">
+                {multi ? `Your break · ${session.lodges.length} lodges` : "Your stay"}
               </p>
-              <p className="text-sm text-foreground/60">
-                {formatDate(session.arrival)} → {formatDate(session.departure)}
-              </p>
-              <p className="text-sm text-foreground/60">
-                {nightsLabel(session.nights)} · {session.adults}{" "}
-                {session.adults === 1 ? "guest" : "guests"} · whole lodge
+              <p className="text-sm text-foreground/60 mt-1">
+                {formatDate(session.arrival)} → {formatDate(session.departure)} ·{" "}
+                {nightsLabel(session.nights)}
               </p>
             </div>
+
+            {session.lodges.map((l) => {
+              const lodge = l.lodge ? LODGES[l.lodge.unitGroupCode] : null;
+              return (
+                <div key={l.slot} className="p-5">
+                  {multi && (
+                    <p className="text-xs uppercase tracking-wide text-foreground/50">
+                      Lodge {l.slot + 1}
+                    </p>
+                  )}
+                  <p className="mt-0.5 font-medium text-forest">
+                    {lodge?.name ?? l.lodge?.unitGroupCode}
+                  </p>
+                  <p className="text-sm text-foreground/60">
+                    {l.partyLabel} · whole lodge
+                  </p>
+                  {l.extras.length > 0 && (
+                    <p className="text-xs text-foreground/50 mt-1">
+                      Extras: {l.extras.map((e) => e.name).join(", ")}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
 
             {session.guest && (
               <div className="p-5 text-sm text-foreground/60">
@@ -156,7 +189,7 @@ export function PayClient() {
             disabled={busy}
             className="mt-6 w-full rounded-lg bg-forest text-white px-6 py-3.5 text-base font-semibold hover:bg-forest-light disabled:opacity-60"
           >
-            {busy ? "Confirming your booking…" : `Buy now · ${formatKes(session.total ?? 0)}`}
+            {busy ? "Confirming your booking…" : `Buy now · ${formatKes(bookingTotal)}`}
           </button>
           <p className="mt-3 text-center text-xs text-foreground/50">
             Demo environment: your booking is real in our reservation system, but

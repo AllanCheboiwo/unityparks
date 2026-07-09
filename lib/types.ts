@@ -92,6 +92,14 @@ export type BookingConfirmation = {
   currency: string;
   folioBalance: number;
   account: { status: "ownedByYou" | "existingAccount" | "none" };
+  /** One entry per lodge in the booking. */
+  lodges: {
+    slot: number;
+    unitGroupCode: string | null;
+    stayGrossAmount: number | null;
+    partyLabel: string;
+    extras: ExtraSnapshotDto[];
+  }[];
   stay: {
     arrival: string;
     departure: string;

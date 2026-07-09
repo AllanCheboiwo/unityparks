@@ -19,7 +19,7 @@ export default async function AccountPage() {
 
   const records = await prisma.bookingRecord.findMany({
     where: { userId: user.id },
-    include: { session: true },
+    include: { session: { include: { lodges: { orderBy: { slot: "asc" } } } } },
     orderBy: { createdAt: "desc" },
   });
 
@@ -48,7 +48,11 @@ export default async function AccountPage() {
       <div className="mt-6 grid gap-4">
         {records.map((record) => {
           const s = record.session;
-          const lodge = s.unitGroupCode ? LODGES[s.unitGroupCode] : null;
+          const multi = s.lodges.length > 1;
+          const lodgeNames = s.lodges
+            .map((l) => (l.unitGroupCode ? LODGES[l.unitGroupCode]?.name : null))
+            .filter(Boolean)
+            .join(", ");
           const nights = nightsBetween(s.arrival, s.departure);
           return (
             <Link
@@ -58,12 +62,15 @@ export default async function AccountPage() {
             >
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="font-medium text-forest">{lodge?.name ?? "Lodge"}</p>
+                  <p className="font-medium text-forest">
+                    {multi ? `${s.lodges.length} lodges` : (lodgeNames || "Lodge")}
+                  </p>
                   <p className="mt-0.5 text-sm text-foreground/60">
                     {formatDate(s.arrival)} → {formatDate(s.departure)}
                   </p>
                   <p className="text-sm text-foreground/60">
-                    {nightsLabel(nights)} · {partyLabel(s.adults, parseChildrenAges(s))}
+                    {nightsLabel(nights)} ·{" "}
+                    {multi ? lodgeNames : partyLabel(s.adults, parseChildrenAges(s))}
                   </p>
                   <p className="mt-2 text-xs text-foreground/50">
                     Reference{" "}

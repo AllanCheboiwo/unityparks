@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/server/db";
 import { getFolioForReservation } from "@/server/apaleo/bookings";
-import { parseExtras } from "@/server/booking/session";
+import { parseChildrenAges, parseExtras } from "@/server/booking/session";
+import { partyLabel } from "@/server/booking/party";
 import { guestRowDto, loadGuests, partyBands } from "@/server/booking/guests";
 import { assertBookingAccess } from "@/server/booking/access";
 import { getCurrentUser } from "@/server/auth/session";
@@ -21,7 +22,10 @@ export async function GET(
     const { bookingId } = await params;
     const record = await prisma.bookingRecord.findFirst({
       where: { apaleoBookingId: bookingId },
-      include: { session: true },
+      include: {
+        session: { include: { lodges: { orderBy: { slot: "asc" } } } },
+        reservations: { orderBy: { slot: "asc" } },
+      },
     });
     if (!record) return jsonError(404, "Booking not found.");
 
@@ -51,7 +55,25 @@ export async function GET(
       accountStatus = "none";
     }
 
-    const folio = await getFolioForReservation(record.apaleoReservationId);
+    // One live folio read per reservation, summed - "settled" is the whole
+    // booking's word. Reads only, so no write budget spent.
+    const reservationIds =
+      record.reservations.length > 0
+        ? record.reservations.map((r) => r.apaleoReservationId)
+        : [record.apaleoReservationId];
+    let folioBalance = 0;
+    for (const reservationId of reservationIds) {
+      const folio = await getFolioForReservation(reservationId);
+      folioBalance += folio.balance;
+    }
+
+    const lodges = record.session.lodges.map((l) => ({
+      slot: l.slot,
+      unitGroupCode: l.unitGroupCode,
+      stayGrossAmount: l.stayGrossAmount,
+      partyLabel: partyLabel(l.adults, parseChildrenAges(l)),
+      extras: parseExtras(l),
+    }));
 
     return NextResponse.json({
       bookingId: record.apaleoBookingId,
@@ -60,7 +82,7 @@ export async function GET(
       paidAt: record.paidAt,
       totalGrossAmount: record.totalGrossAmount,
       currency: record.currency,
-      folioBalance: folio.balance,
+      folioBalance,
       account: { status: accountStatus },
       stay: {
         arrival: record.session.arrival,
@@ -69,6 +91,7 @@ export async function GET(
         unitGroupCode: record.session.unitGroupCode,
         stayGrossAmount: record.session.stayGrossAmount,
       },
+      lodges,
       extras: parseExtras(record.session),
       guest: {
         firstName: record.session.guestFirstName,
