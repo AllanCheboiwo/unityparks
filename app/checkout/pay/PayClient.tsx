@@ -7,6 +7,7 @@ import { formatDate, formatKes, nightsLabel } from "@/lib/format";
 import { LODGES } from "@/content/lodges";
 import type { SessionSummary } from "@/lib/types";
 import { Stepper } from "@/components/Stepper";
+import { BookingSummary } from "@/components/BookingSummary";
 import { ExpiredNotice } from "@/components/ExpiredNotice";
 
 type CheckoutResponse = { bookingId: string; status: string };
@@ -74,7 +75,9 @@ export function PayClient() {
       setBusy(false);
       return;
     }
-    router.push(`/confirmation/${result.data.bookingId}`);
+    // Carry the session id: it is the fresh-from-checkout proof of access,
+    // so the confirmation page never greets the buyer with a challenge.
+    router.push(`/confirmation/${result.data.bookingId}?session=${sessionId}`);
   }
 
   if (soldOut) {
@@ -98,83 +101,69 @@ export function PayClient() {
   }
 
   return (
-    <div className="mx-auto max-w-xl px-5 py-8">
+    <div className="mx-auto max-w-5xl px-5 py-8">
       <Stepper current="Pay" />
 
       <h1 className="font-display text-3xl text-forest">
         Your <em>break</em>
       </h1>
 
-      <div className="mt-6 rounded-2xl bg-white ring-1 ring-forest/10 shadow-sm divide-y divide-forest/10">
-        <div className="p-5">
-          <p className="text-xs uppercase tracking-wide text-foreground/50">Stay</p>
-          <p className="mt-1 font-medium text-forest">
-            {lodge?.name ?? session.lodge?.unitGroupCode}
-          </p>
-          <p className="text-sm text-foreground/60">
-            {formatDate(session.arrival)} → {formatDate(session.departure)}
-          </p>
-          <p className="text-sm text-foreground/60">
-            {nightsLabel(session.nights)} · {session.adults}{" "}
-            {session.adults === 1 ? "guest" : "guests"} · whole lodge
-          </p>
-        </div>
+      <div className="mt-6 lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-8 lg:items-start">
+        {/* On mobile the summary sits above the button - nobody should press
+            Buy now without the total in view. */}
+        <aside className="lg:order-2 lg:sticky lg:top-20">
+          <BookingSummary summary={session} />
+        </aside>
 
-        <div className="p-5">
-          <div className="flex justify-between text-sm">
-            <span>Lodge, whole break</span>
-            <span className="font-medium">
-              {formatKes(session.lodge?.stayGrossAmount ?? 0)}
-            </span>
-          </div>
-          {session.extras.map((extra) => (
-            <div key={extra.serviceId} className="flex justify-between text-sm mt-2">
-              <span>
-                {extra.name}
-                {extra.count > 1 ? ` ×${extra.count}` : ""}
-              </span>
-              <span className="font-medium">{formatKes(extra.grossAmount)}</span>
+        <div className="mt-6 lg:mt-0 lg:order-1 max-w-xl">
+          <div className="rounded-2xl bg-white ring-1 ring-forest/10 shadow-sm divide-y divide-forest/10">
+            <div className="p-5">
+              <p className="text-xs uppercase tracking-wide text-foreground/50">Stay</p>
+              <p className="mt-1 font-medium text-forest">
+                {lodge?.name ?? session.lodge?.unitGroupCode}
+              </p>
+              <p className="text-sm text-foreground/60">
+                {formatDate(session.arrival)} → {formatDate(session.departure)}
+              </p>
+              <p className="text-sm text-foreground/60">
+                {nightsLabel(session.nights)} · {session.adults}{" "}
+                {session.adults === 1 ? "guest" : "guests"} · whole lodge
+              </p>
             </div>
-          ))}
-          <div className="flex justify-between mt-4 pt-4 border-t border-forest/10">
-            <span className="font-display text-lg text-forest">Total</span>
-            <span className="font-display text-lg text-forest">
-              {formatKes(session.total ?? 0)}
-            </span>
-          </div>
-        </div>
 
-        {session.guest && (
-          <div className="p-5 text-sm text-foreground/60">
-            <p className="text-xs uppercase tracking-wide text-foreground/50 mb-1">
-              Lead guest
-            </p>
-            {session.guest.firstName} {session.guest.lastName} ·{" "}
-            {session.guest.email}
-            {session.guest.vehiclePlate && (
-              <> · plate {session.guest.vehiclePlate.toUpperCase()}</>
+            {session.guest && (
+              <div className="p-5 text-sm text-foreground/60">
+                <p className="text-xs uppercase tracking-wide text-foreground/50 mb-1">
+                  Lead guest
+                </p>
+                {session.guest.firstName} {session.guest.lastName} ·{" "}
+                {session.guest.email}
+                {session.guest.vehiclePlate && (
+                  <> · plate {session.guest.vehiclePlate.toUpperCase()}</>
+                )}
+              </div>
             )}
           </div>
-        )}
-      </div>
 
-      {error && (
-        <div className="mt-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">
-          {error}
+          {error && (
+            <div className="mt-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">
+              {error}
+            </div>
+          )}
+
+          <button
+            onClick={buyNow}
+            disabled={busy}
+            className="mt-6 w-full rounded-lg bg-forest text-white px-6 py-3.5 text-base font-semibold hover:bg-forest-light disabled:opacity-60"
+          >
+            {busy ? "Confirming your booking…" : `Buy now · ${formatKes(session.total ?? 0)}`}
+          </button>
+          <p className="mt-3 text-center text-xs text-foreground/50">
+            Demo environment: your booking is real in our reservation system, but
+            no money moves.
+          </p>
         </div>
-      )}
-
-      <button
-        onClick={buyNow}
-        disabled={busy}
-        className="mt-6 w-full rounded-lg bg-forest text-white px-6 py-3.5 text-base font-semibold hover:bg-forest-light disabled:opacity-60"
-      >
-        {busy ? "Confirming your booking…" : `Buy now · ${formatKes(session.total ?? 0)}`}
-      </button>
-      <p className="mt-3 text-center text-xs text-foreground/50">
-        Demo environment: your booking is real in our reservation system, but
-        no money moves.
-      </p>
+      </div>
     </div>
   );
 }

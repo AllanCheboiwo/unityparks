@@ -9,6 +9,8 @@ import {
 import { getFolioForReservation } from "@/server/apaleo/bookings";
 import { payFolio } from "@/server/apaleo/payments";
 import { nightsBetween, validateStay } from "@/server/booking/rules";
+import { assertBookingAccess } from "@/server/booking/access";
+import { getCurrentUser } from "@/server/auth/session";
 import { handleRoute, jsonError } from "@/server/api-helpers";
 
 const AmendBody = z.object({
@@ -33,6 +35,14 @@ export async function POST(
       include: { session: true },
     });
     if (!record) return jsonError(404, "Booking not found.");
+
+    // Before anything Apaleo: this route moves sandbox money, and failed
+    // probes must not burn the tight write budget.
+    assertBookingAccess(record, {
+      user: await getCurrentUser(),
+      sessionId: req.nextUrl.searchParams.get("session"),
+      email: req.nextUrl.searchParams.get("email"),
+    });
 
     const parsed = AmendBody.safeParse(await req.json());
     if (!parsed.success) return jsonError(400, "Please choose new dates.");

@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { ManageClient } from "./ManageClient";
 
 export default async function ManagePage({
@@ -6,5 +7,9 @@ export default async function ManagePage({
   params: Promise<{ bookingId: string }>;
 }) {
   const { bookingId } = await params;
-  return <ManageClient bookingId={bookingId} />;
+  return (
+    <Suspense>
+      <ManageClient bookingId={bookingId} />
+    </Suspense>
+  );
 }

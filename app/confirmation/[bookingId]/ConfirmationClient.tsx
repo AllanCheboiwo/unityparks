@@ -2,23 +2,63 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { formatDate, formatKes, nightsLabel } from "@/lib/format";
 import { LODGES } from "@/content/lodges";
 import type { BookingConfirmation } from "@/lib/types";
 
 export function ConfirmationClient({ bookingId }: { bookingId: string }) {
+  // Proof of access rides the URL: ?session= fresh from checkout, ?email=
+  // when arriving from the find-my-booking challenge via the manage page.
+  const searchParams = useSearchParams();
+  const proofPairs = new URLSearchParams();
+  const proofSession = searchParams.get("session");
+  const proofEmail = searchParams.get("email");
+  if (proofSession) proofPairs.set("session", proofSession);
+  if (proofEmail) proofPairs.set("email", proofEmail);
+  const proofQuery = proofPairs.size > 0 ? `?${proofPairs.toString()}` : "";
+
   const [booking, setBooking] = useState<BookingConfirmation | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [needsProof, setNeedsProof] = useState(false);
 
   useEffect(() => {
     (async () => {
-      const result = await apiFetch<BookingConfirmation>(`/api/booking/${bookingId}`);
-      if (!result.ok) return setError(result.error);
+      const result = await apiFetch<BookingConfirmation>(`/api/booking/${bookingId}${proofQuery}`);
+      if (!result.ok) {
+        if (result.status === 401) return setNeedsProof(true);
+        return setError(result.error);
+      }
       setBooking(result.data);
     })();
-  }, [bookingId]);
+  }, [bookingId, proofQuery]);
 
+  if (needsProof) {
+    return (
+      <div className="mx-auto max-w-lg text-center py-20 px-5">
+        <p className="font-display text-2xl text-forest">This booking is private</p>
+        <p className="mt-2 text-sm text-foreground/60">
+          Sign in to your account, or find the booking with its reference and
+          the lead guest&apos;s email.
+        </p>
+        <div className="mt-6 flex justify-center gap-3">
+          <Link
+            href={`/login?next=/confirmation/${bookingId}`}
+            className="rounded-lg bg-forest text-white px-6 py-2.5 text-sm font-semibold hover:bg-forest-light"
+          >
+            Sign in
+          </Link>
+          <Link
+            href="/manage"
+            className="rounded-lg border border-forest/25 px-6 py-2.5 text-sm font-semibold text-forest hover:bg-forest/5"
+          >
+            Find my booking
+          </Link>
+        </div>
+      </div>
+    );
+  }
   if (error) {
     return <p className="mx-auto max-w-2xl px-5 py-20 text-center text-red-700">{error}</p>;
   }
@@ -138,11 +178,39 @@ export function ConfirmationClient({ bookingId }: { bookingId: string }) {
             and stock your lodge before you get here.
           </p>
         </div>
+
+        {booking.account.status === "ownedByYou" && (
+          <div className="p-5 text-sm text-forest bg-forest/5">
+            Saved to your account.{" "}
+            <Link href="/account" className="underline underline-offset-2">
+              See all your breaks
+            </Link>
+          </div>
+        )}
+        {booking.account.status === "existingAccount" && (
+          <div className="p-5 text-sm text-forest bg-forest/5">
+            This email has a Unity Parks account.{" "}
+            <Link
+              href={`/login?email=${encodeURIComponent(booking.guest.email ?? "")}&next=/account`}
+              className="underline underline-offset-2"
+            >
+              Sign in to see all your breaks
+            </Link>
+          </div>
+        )}
+        {booking.account.status === "none" && (
+          <div className="p-5 text-sm text-forest bg-forest/5">
+            <Link href="/register" className="underline underline-offset-2">
+              Create a Unity Parks account
+            </Link>{" "}
+            with this email to see and manage your breaks any time.
+          </div>
+        )}
       </div>
 
       <div className="mt-8 text-center flex justify-center gap-6">
         <Link
-          href={`/manage/${booking.bookingId}`}
+          href={`/manage/${booking.bookingId}${proofQuery}`}
           className="text-sm text-lake underline underline-offset-2"
         >
           Manage this booking

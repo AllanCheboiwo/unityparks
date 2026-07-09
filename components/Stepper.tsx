@@ -1,4 +1,4 @@
-const STEPS = ["Search", "Lodge", "Extras", "Details", "Pay"] as const;
+const STEPS = ["Search", "Lodge", "Extras", "Details", "Guests", "Pay"] as const;
 
 export type StepName = (typeof STEPS)[number];
 

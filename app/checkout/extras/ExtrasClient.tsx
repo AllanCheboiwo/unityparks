@@ -6,6 +6,7 @@ import { apiFetch, isExpired } from "@/lib/api";
 import { formatKes } from "@/lib/format";
 import type { ExtraOfferDto, SessionSummary } from "@/lib/types";
 import { Stepper } from "@/components/Stepper";
+import { BookingSummary } from "@/components/BookingSummary";
 import { ExpiredNotice } from "@/components/ExpiredNotice";
 
 const PRICING_LABELS: Record<string, string> = {
@@ -43,12 +44,24 @@ export function ExtrasClient() {
   }, [sessionId]);
 
   const stayAmount = session?.lodge?.stayGrossAmount ?? 0;
-  const extrasTotal = useMemo(
+  // The in-progress selection, in snapshot shape: drives both the bottom
+  // bar and the live sidebar, and is exactly what gets saved on continue.
+  const chosenSnapshots = useMemo(
     () =>
       (extras ?? [])
         .filter((e) => chosen.has(e.serviceId))
-        .reduce((sum, e) => sum + e.totalGrossAmount, 0),
+        .map((e) => ({
+          serviceId: e.serviceId,
+          code: e.code,
+          name: e.name,
+          count: e.count,
+          grossAmount: e.totalGrossAmount,
+        })),
     [extras, chosen],
+  );
+  const extrasTotal = useMemo(
+    () => chosenSnapshots.reduce((sum, e) => sum + e.grossAmount, 0),
+    [chosenSnapshots],
   );
 
   if (!sessionId || expired) return <ExpiredNotice />;
@@ -74,18 +87,9 @@ export function ExtrasClient() {
 
   async function continueToDetails() {
     setBusy(true);
-    const snapshots = extras!
-      .filter((e) => chosen.has(e.serviceId))
-      .map((e) => ({
-        serviceId: e.serviceId,
-        code: e.code,
-        name: e.name,
-        count: e.count,
-        grossAmount: e.totalGrossAmount,
-      }));
     const result = await apiFetch(`/api/session/${sessionId}/extras`, {
       method: "POST",
-      body: JSON.stringify({ extras: snapshots }),
+      body: JSON.stringify({ extras: chosenSnapshots }),
     });
     if (isExpired(result)) return setExpired(true);
     if (!result.ok) {
@@ -97,19 +101,21 @@ export function ExtrasClient() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl px-5 py-8 pb-32">
+    <div className="mx-auto max-w-5xl px-5 py-8 pb-32">
       <Stepper current="Extras" />
 
-      <h1 className="font-display text-3xl text-forest">
-        Make it <em>effortless</em>
-      </h1>
-      <p className="mt-1 text-sm text-foreground/60">
-        A few things guests wish they&apos;d added - all priced live for your stay.
-        This step is optional.
-      </p>
+      <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-8 lg:items-start">
+        <div>
+          <h1 className="font-display text-3xl text-forest">
+            Make it <em>effortless</em>
+          </h1>
+          <p className="mt-1 text-sm text-foreground/60">
+            A few things guests wish they&apos;d added - all priced live for your stay.
+            This step is optional.
+          </p>
 
-      <div className="mt-8 grid gap-4">
-        {extras.map((extra) => {
+          <div className="mt-8 grid gap-4">
+            {extras.map((extra) => {
           const added = chosen.has(extra.serviceId);
           return (
             <div
@@ -149,11 +155,17 @@ export function ExtrasClient() {
             </div>
           );
         })}
+          </div>
+        </div>
+
+        <aside className="mt-8 lg:mt-0 lg:sticky lg:top-20">
+          <BookingSummary summary={session} extrasOverride={chosenSnapshots} />
+        </aside>
       </div>
 
       {/* Running total bar */}
       <div className="fixed bottom-0 inset-x-0 bg-white/95 backdrop-blur border-t border-forest/10 z-10">
-        <div className="mx-auto max-w-3xl px-5 py-3.5 flex items-center justify-between gap-4">
+        <div className="mx-auto max-w-5xl px-5 py-3.5 flex items-center justify-between gap-4">
           <div className="text-sm">
             <span className="text-foreground/60">
               Lodge {formatKes(stayAmount)}

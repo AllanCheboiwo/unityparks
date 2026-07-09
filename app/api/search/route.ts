@@ -4,6 +4,7 @@ import { getStayOffers } from "@/server/apaleo/offers";
 import { validateStay } from "@/server/booking/rules";
 import { bandsToAges } from "@/server/booking/party";
 import { createSession } from "@/server/booking/session";
+import { getCurrentUser } from "@/server/auth/session";
 import { handleRoute, jsonError } from "@/server/api-helpers";
 
 const SearchBody = z.object({
@@ -39,8 +40,15 @@ export async function POST(req: NextRequest) {
     }
 
     const childrenAges = bandsToAges({ children, toddlers, infants });
+    const user = await getCurrentUser();
     const offers = await getStayOffers({ arrival, departure, adults, childrenAges });
-    const session = await createSession({ arrival, departure, adults, childrenAges });
+    const session = await createSession({
+      arrival,
+      departure,
+      adults,
+      childrenAges,
+      userId: user?.id ?? null,
+    });
 
     return NextResponse.json({
       sessionId: session.id,

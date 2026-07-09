@@ -1,6 +1,7 @@
 import "server-only";
 import type { BookingSession } from "@prisma/client";
 import { prisma } from "../db";
+import { normalizeEmail } from "../auth/normalize";
 import { validateStay } from "./rules";
 
 // Generous for a demo walk-through; refreshed on every step so a session
@@ -25,6 +26,10 @@ export async function createSession(input: {
   departure: string;
   adults: number;
   childrenAges?: number[];
+  // The signed-in user, when there is one. Checkout copies this onto the
+  // BookingRecord, so it must be stamped here rather than read from the
+  // cookie later - checkout retries can arrive logged-out.
+  userId?: string | null;
 }): Promise<BookingSession> {
   const check = validateStay(input.arrival, input.departure);
   if (!check.ok) throw new Error(check.reason);
@@ -35,6 +40,7 @@ export async function createSession(input: {
       departure: input.departure,
       adults: input.adults,
       childrenAges: JSON.stringify(input.childrenAges ?? []),
+      userId: input.userId ?? null,
       expiresAt: freshExpiry(),
     },
   });
@@ -85,24 +91,50 @@ export async function setExtras(
 export async function setGuestDetails(
   id: string,
   guest: {
+    title?: string;
     firstName: string;
     lastName: string;
     email: string;
     phone: string;
+    dateOfBirth?: string;
     vehiclePlate?: string;
+    marketingEmail?: boolean;
+    marketingSms?: boolean;
   },
+  // Identity snapshot: whoever is signed in NOW owns this walk (null when
+  // signed out). Written unconditionally so a sign-out mid-funnel on a
+  // shared machine cannot leave the previous user's stamp behind.
+  userId: string | null = null,
 ): Promise<BookingSession> {
   return prisma.bookingSession.update({
     where: { id },
     data: {
+      guestTitle: guest.title ?? null,
       guestFirstName: guest.firstName,
       guestLastName: guest.lastName,
-      guestEmail: guest.email,
+      guestEmail: normalizeEmail(guest.email),
       guestPhone: guest.phone,
+      guestDateOfBirth: guest.dateOfBirth ?? null,
       vehiclePlate: guest.vehiclePlate ?? null,
+      marketingEmail: guest.marketingEmail ?? false,
+      marketingSms: guest.marketingSms ?? false,
+      userId,
       state: "checkout",
       expiresAt: freshExpiry(),
     },
+  });
+}
+
+/**
+ * Inline sign-in mid-funnel: the walk now belongs to this user, overwriting
+ * any earlier stamp (shared-machine sign-out safety). Refreshes the TTL so
+ * the sign-in interruption never costs the guest their basket. Completed
+ * sessions are never touched - their ownership is settled.
+ */
+export async function stampSessionUser(id: string, userId: string): Promise<void> {
+  await prisma.bookingSession.updateMany({
+    where: { id, state: { not: "completed" } },
+    data: { userId, expiresAt: freshExpiry() },
   });
 }
 

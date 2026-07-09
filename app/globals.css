@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* Unity Parks brand — calm, premium, forest-and-lake. No discount stripes. */
+/* Unity Parks brand: calm, premium, forest-and-lake. No discount stripes. */
 :root {
   --background: #faf8f3; /* warm cream */
   --foreground: #1f2a20; /* deep forest ink */

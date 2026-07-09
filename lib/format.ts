@@ -16,6 +16,14 @@ export function formatDate(iso: string): string {
   });
 }
 
+/** Age-band display names, matching the search widget's bands. */
+export const BAND_LABELS: Record<string, string> = {
+  adult: "Adult",
+  child: "Child (6-17)",
+  toddler: "Toddler (2-5)",
+  infant: "Infant (under 2)",
+};
+
 export function nightsLabel(nights: number): string {
   if (nights === 3) return "3-night weekend break";
   if (nights === 4) return "4-night midweek break";

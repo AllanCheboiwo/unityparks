@@ -4,7 +4,14 @@
 
 export type ApiResult<T> =
   | { ok: true; data: T }
-  | { ok: false; status: number; error: string; refused?: boolean; soldOut?: boolean };
+  | {
+      ok: false;
+      status: number;
+      error: string;
+      refused?: boolean;
+      soldOut?: boolean;
+      emailTaken?: boolean;
+    };
 
 export async function apiFetch<T>(
   path: string,
@@ -23,6 +30,7 @@ export async function apiFetch<T>(
         error: body.reason ?? body.error ?? "Something went wrong.",
         refused: body.refused === true,
         soldOut: body.soldOut === true,
+        emailTaken: body.emailTaken === true,
       };
     }
     return { ok: true, data: body as T };

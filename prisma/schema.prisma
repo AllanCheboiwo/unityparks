@@ -7,9 +7,39 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// A guest with a Unity Parks account. Email is always stored lowercase -
+// SQLite has no case-insensitive filter, so normalize-on-write is what makes
+// every email comparison in the app correct.
+model User {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  email        String @unique // always lowercase
+  passwordHash String // "saltHex:hashHex" from node:crypto scrypt
+  firstName    String
+  lastName     String
+  phone        String?
+
+  authSessions    AuthSession[]
+  bookingSessions BookingSession[]
+  bookingRecords  BookingRecord[]
+}
+
+// A login session. The row id IS the bearer token carried by the up_session
+// cookie (256 random bits). Fixed expiry, no sliding refresh, so reads never
+// write. Not to be confused with BookingSession, the shopping funnel state.
+model AuthSession {
+  id        String   @id
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
 // One row per guest walking the funnel: everything captured between search
 // and payment, so any step can be refreshed or revisited without loss.
-// Prices are snapshots of what Apaleo returned — never computed locally.
+// Prices are snapshots of what Apaleo returned, never computed locally.
 model BookingSession {
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())
@@ -17,7 +47,13 @@ model BookingSession {
   expiresAt DateTime
   state     String   @default("selecting") // selecting | checkout | completed | expired
 
-  // Stay — ISO dates (YYYY-MM-DD), validated to land on Fri/Mon turnover days
+  // Who was signed in when this funnel walk happened. Stamped at creation
+  // (and refreshed on details submit), copied onto the BookingRecord at
+  // checkout. Null means an anonymous guest walk - always allowed.
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id])
+
+  // Stay: ISO dates (YYYY-MM-DD), validated to land on Fri/Mon turnover days
   arrival      String
   departure    String
   adults       Int
@@ -32,18 +68,51 @@ model BookingSession {
   // Chosen extras: JSON [{ serviceId, code, name, count, grossAmount }]
   extras String @default("[]")
 
-  // Lead guest + vehicle (for the ANPR gate story)
-  guestFirstName String?
-  guestLastName  String?
-  guestEmail     String?
-  guestPhone     String?
-  vehiclePlate   String?
+  guests SessionGuest[]
+
+  // Lead guest + vehicle (for the ANPR gate story). Title and date of birth
+  // are Center Parcs parity: the lead booker must be an adult at arrival.
+  guestTitle       String?
+  guestFirstName   String?
+  guestLastName    String?
+  guestEmail       String?
+  guestPhone       String?
+  guestDateOfBirth String? // ISO YYYY-MM-DD
+  vehiclePlate     String?
+
+  // Marketing consent, captured with the details form like Center Parcs.
+  marketingEmail Boolean @default(false)
+  marketingSms   Boolean @default(false)
 
   booking BookingRecord?
 }
 
+// The guest manifest, Center Parcs parity: every guest named, children's
+// dates of birth, stored only in our DB - Apaleo never needs more than
+// counts and ages. One row per party member with a stable position per
+// session, so edits (and the future invite-a-guest link) never lose rows.
+model SessionGuest {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sessionId String
+  session   BookingSession @relation(fields: [sessionId], references: [id])
+  position  Int // 0 = lead adult; order fixed by the booked party shape
+  band      String // adult | child | toddler | infant, derived from the session
+  isLead    Boolean @default(false)
+
+  firstName   String?
+  lastName    String?
+  dateOfBirth String? // ISO YYYY-MM-DD, expected for non-adults
+  email       String? // lowercase; the invite-a-guest seam, unused today
+  invitedUserId String? // always null today; filled when invites ship
+
+  @@unique([sessionId, position])
+}
+
 // Written once the booking exists in Apaleo. `status` flips to paid only
-// after the folio payment is confirmed — the confirmation page reads this,
+// after the folio payment is confirmed; the confirmation page reads this,
 // never a redirect.
 model BookingRecord {
   id        String   @id @default(cuid())
@@ -62,4 +131,13 @@ model BookingRecord {
   status    String    @default("created") // created | paid | failed
   paidAt    DateTime?
   paymentId String? // Apaleo payment id returned by the folio post
+
+  // Ownership. Copied from the session at creation, or adopted later by the
+  // claim backfill when an account registers/logs in with the guest email.
+  // claimedVia records how the link happened so a wrong adoption is visible
+  // and hand-reversible.
+  userId     String?
+  user       User?     @relation(fields: [userId], references: [id])
+  claimedAt  DateTime?
+  claimedVia String? // "email-match" when adopted by the claim backfill
 }

@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { ConfirmationClient } from "./ConfirmationClient";
 
 export default async function ConfirmationPage({
@@ -6,5 +7,9 @@ export default async function ConfirmationPage({
   params: Promise<{ bookingId: string }>;
 }) {
   const { bookingId } = await params;
-  return <ConfirmationClient bookingId={bookingId} />;
+  return (
+    <Suspense>
+      <ConfirmationClient bookingId={bookingId} />
+    </Suspense>
+  );
 }

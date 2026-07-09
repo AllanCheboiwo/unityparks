@@ -1,5 +1,5 @@
 import "server-only";
-import type { BookingRecord } from "@prisma/client";
+import { Prisma, type BookingRecord } from "@prisma/client";
 import { prisma } from "../db";
 import { createBooking, getFolioForReservation } from "../apaleo/bookings";
 import { payFolio } from "../apaleo/payments";
@@ -61,16 +61,30 @@ export async function completeCheckout(sessionId: string): Promise<BookingRecord
       idempotencyKey: `up-book-${session.id}`,
     });
     const folio = await getFolioForReservation(reservationId);
-    record = await prisma.bookingRecord.create({
-      data: {
-        sessionId: session.id,
-        apaleoBookingId: bookingId,
-        apaleoReservationId: reservationId,
-        folioId: folio.folioId,
-        totalGrossAmount: Math.abs(folio.balance),
-        currency: folio.currency,
-      },
-    });
+    try {
+      record = await prisma.bookingRecord.create({
+        data: {
+          sessionId: session.id,
+          apaleoBookingId: bookingId,
+          apaleoReservationId: reservationId,
+          folioId: folio.folioId,
+          totalGrossAmount: Math.abs(folio.balance),
+          currency: folio.currency,
+          // Ownership comes from the session row, never the cookie: a retry
+          // can arrive logged-out and must still land under the account.
+          userId: session.userId,
+        },
+      });
+    } catch (err) {
+      // Two tabs racing Buy now: the loser resumes the winner's record and
+      // proceeds to payment instead of erroring.
+      const raced =
+        err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002"
+          ? await prisma.bookingRecord.findUnique({ where: { sessionId: session.id } })
+          : null;
+      if (!raced) throw err;
+      record = raced;
+    }
   }
 
   // 2. What does Apaleo say is owed right now?
@@ -111,6 +125,11 @@ export async function completeCheckout(sessionId: string): Promise<BookingRecord
       paidAt: new Date(),
       paymentId,
       folioId: folio.folioId,
+      // A record created on an earlier attempt (before the guest signed in
+      // mid-funnel) picks the stamp up here; a paid record never re-enters.
+      // undefined (not null) when both are empty: never overwrite a claim
+      // adoption that landed on the row while this checkout was running.
+      userId: record.userId ?? session.userId ?? undefined,
     },
   });
 

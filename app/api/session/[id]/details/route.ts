@@ -1,17 +1,47 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
+import { prisma } from "@/server/db";
 import { getSession, setGuestDetails } from "@/server/booking/session";
+import { getCurrentUser, createAuthSession } from "@/server/auth/session";
+import { hashPassword } from "@/server/auth/password";
+import { normalizeEmail } from "@/server/auth/normalize";
+import { claimByEmail } from "@/server/auth/claim";
 import { handleRoute, jsonError } from "@/server/api-helpers";
 
 const DetailsBody = z.object({
+  title: z.enum(["Mr", "Mrs", "Ms", "Miss", "Dr"]).optional(),
   firstName: z.string().min(1),
   lastName: z.string().min(1),
-  email: z.string().email(),
+  email: z.string().trim().email(),
   phone: z.string().min(7),
+  dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   vehiclePlate: z.string().optional(),
+  marketingEmail: z.boolean().optional(),
+  marketingSms: z.boolean().optional(),
+  // The client gates submit on the checkbox; the server enforces it too.
+  termsAccepted: z.literal(true),
+  // Present when the guest ticked "Create my Unity Parks account".
+  password: z.string().min(8).optional(),
 });
 
-/** Lead guest details plus the vehicle plate for the ANPR gate. */
+/** True when someone born on dob is 18 or older on the arrival date. Pure
+ * ISO string arithmetic - no timezones to get wrong. */
+function adultAtArrival(dob: string, arrival: string): boolean {
+  const cutoff = `${Number(arrival.slice(0, 4)) - 18}${arrival.slice(4)}`;
+  return dob <= cutoff;
+}
+
+/**
+ * Lead guest details plus, Center Parcs style, the account moment: a signed
+ * in guest stamps their walk, a new password mints a complete account, and
+ * plain guests stay plain guests.
+ *
+ * Guard order is load-bearing: the record-exists check freezes the guest
+ * columns (and ownership) the moment a real Apaleo reservation exists, so a
+ * checkout retry can never be hijacked into rewriting the email and adopting
+ * a paid booking through the claim backfill.
+ */
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -23,11 +53,61 @@ export async function POST(
     if (session.state === "completed") {
       return jsonError(409, "This booking is already confirmed. Start a new search to book another break.");
     }
+    const existingRecord = await prisma.bookingRecord.findUnique({
+      where: { sessionId: id },
+      select: { id: true },
+    });
+    if (existingRecord) {
+      return jsonError(409, "Your booking is already being confirmed. Press Buy now to finish.");
+    }
 
     const parsed = DetailsBody.safeParse(await req.json());
     if (!parsed.success) return jsonError(400, "Please check the details form.");
+    // termsAccepted is validated by Zod (must be true) and not stored.
+    const { password, termsAccepted, ...guest } = parsed.data;
+    void termsAccepted;
+    if (!adultAtArrival(guest.dateOfBirth, session.arrival)) {
+      return jsonError(400, "The lead booker must be over 18 at the time of arrival.");
+    }
+    const email = normalizeEmail(guest.email);
 
-    await setGuestDetails(id, parsed.data);
-    return NextResponse.json({ ok: true });
+    // Identity snapshot: whoever is signed in NOW. Null when signed out,
+    // written unconditionally so a stale stamp never survives a sign-out.
+    let user = await getCurrentUser();
+    let accountCreated = false;
+
+    if (!user && password) {
+      try {
+        user = await prisma.user.create({
+          data: {
+            email,
+            passwordHash: await hashPassword(password),
+            firstName: guest.firstName.trim(),
+            lastName: guest.lastName.trim(),
+            phone: guest.phone,
+          },
+        });
+      } catch (err) {
+        // The email-status check said "none" but an account exists now (or
+        // the check was skipped). Flip the client into its sign-in card.
+        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+          return NextResponse.json(
+            {
+              error: "This email already has a Unity Parks account. Sign in to continue.",
+              emailTaken: true,
+            },
+            { status: 409 },
+          );
+        }
+        throw err;
+      }
+      await claimByEmail(user.id, email);
+      // Signs the response: the guest reaches the pay step already signed in.
+      await createAuthSession(user.id);
+      accountCreated = true;
+    }
+
+    await setGuestDetails(id, guest, user?.id ?? null);
+    return NextResponse.json({ ok: true, accountCreated });
   });
 }

@@ -56,6 +56,16 @@ export type SessionSummary = {
   total: number | null;
 };
 
+export type GuestRowDto = {
+  position: number;
+  band: string;
+  isLead: boolean;
+  firstName: string | null;
+  lastName: string | null;
+  dateOfBirth: string | null;
+  email: string | null;
+};
+
 export type BookingConfirmation = {
   bookingId: string;
   reservationId: string;
@@ -64,6 +74,7 @@ export type BookingConfirmation = {
   totalGrossAmount: number;
   currency: string;
   folioBalance: number;
+  account: { status: "ownedByYou" | "existingAccount" | "none" };
   stay: {
     arrival: string;
     departure: string;
@@ -78,4 +89,6 @@ export type BookingConfirmation = {
     email: string | null;
     vehiclePlate: string | null;
   };
+  partyBands: string[];
+  guests: GuestRowDto[];
 };
