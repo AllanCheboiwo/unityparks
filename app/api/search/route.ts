@@ -45,8 +45,7 @@ export async function POST(req: NextRequest) {
     const session = await createSession({
       arrival,
       departure,
-      adults,
-      childrenAges,
+      parties: [{ adults, childrenAges }],
       userId: user?.id ?? null,
     });
 

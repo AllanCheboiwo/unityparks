@@ -31,14 +31,31 @@ export type ExtraSnapshotDto = {
   grossAmount: number;
 };
 
+export type LodgeSlotSummary = {
+  slot: number;
+  adults: number;
+  childrenAges: number[];
+  partyLabel: string;
+  lodge: {
+    unitGroupCode: string;
+    ratePlanId: string | null;
+    stayGrossAmount: number | null;
+    currency: string;
+  } | null;
+  extras: ExtraSnapshotDto[];
+};
+
 export type SessionSummary = {
   sessionId: string;
   state: string;
   arrival: string;
   departure: string;
   nights: number;
+  /** Whole-break totals; per-lodge parties live in `lodges`. */
   adults: number;
   partyLabel?: string;
+  /** One entry per lodge. The flat lodge/extras fields mirror slot 0. */
+  lodges: LodgeSlotSummary[];
   lodge: {
     unitGroupCode: string;
     ratePlanId: string | null;

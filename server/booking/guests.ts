@@ -68,8 +68,12 @@ export async function saveGuests(
         email: guest.email ? normalizeEmail(guest.email) : null,
       };
       await tx.sessionGuest.upsert({
-        where: { sessionId_position: { sessionId: session.id, position: guest.position } },
-        create: { sessionId: session.id, position: guest.position, ...data },
+        // Manifest still addresses the whole break as slot 0; per-lodge
+        // manifests land with the multi-lodge downstream work.
+        where: {
+          sessionId_slot_position: { sessionId: session.id, slot: 0, position: guest.position },
+        },
+        create: { sessionId: session.id, slot: 0, position: guest.position, ...data },
         update: data,
       });
     }

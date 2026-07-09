@@ -20,7 +20,29 @@ export async function GET(
         ? computeTotal(session.stayGrossAmount, extras)
         : null;
 
+    // One entry per lodge in the break. The flat lodge/extras fields below
+    // remain the slot-0 mirror while single-lodge clients migrate.
+    const lodges = session.lodges.map((l) => {
+      const ages = JSON.parse(l.childrenAges) as number[];
+      return {
+        slot: l.slot,
+        adults: l.adults,
+        childrenAges: ages,
+        partyLabel: partyLabel(l.adults, ages),
+        lodge: l.unitGroupCode
+          ? {
+              unitGroupCode: l.unitGroupCode,
+              ratePlanId: l.ratePlanId,
+              stayGrossAmount: l.stayGrossAmount,
+              currency: session.currency,
+            }
+          : null,
+        extras: JSON.parse(l.extras),
+      };
+    });
+
     return NextResponse.json({
+      lodges,
       sessionId: session.id,
       state: session.state,
       arrival: session.arrival,

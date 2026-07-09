@@ -8,6 +8,8 @@ const LodgeBody = z.object({
   ratePlanId: z.string(),
   stayGrossAmount: z.number().positive(),
   currency: z.string(),
+  // Which lodge of the break this choice is for (basket mode fills 0..N-1).
+  slot: z.number().int().min(0).max(2).default(0),
 });
 
 /** Put the chosen lodge (an Apaleo offer snapshot) in the basket. */
@@ -25,8 +27,12 @@ export async function POST(
 
     const parsed = LodgeBody.safeParse(await req.json());
     if (!parsed.success) return jsonError(400, "Invalid lodge selection.");
+    const { slot, ...lodge } = parsed.data;
+    if (!session.lodges.some((l) => l.slot === slot)) {
+      return jsonError(400, "That lodge slot is not part of this break.");
+    }
 
-    const updated = await chooseLodge(id, parsed.data);
-    return NextResponse.json({ ok: true, sessionId: updated.id });
+    await chooseLodge(id, lodge, slot);
+    return NextResponse.json({ ok: true, sessionId: id });
   });
 }

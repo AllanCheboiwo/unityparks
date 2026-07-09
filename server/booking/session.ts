@@ -1,8 +1,11 @@
 import "server-only";
-import type { BookingSession } from "@prisma/client";
+import type { BookingSession, SessionLodge } from "@prisma/client";
 import { prisma } from "../db";
 import { normalizeEmail } from "../auth/normalize";
 import { validateStay } from "./rules";
+
+/** A session with its lodges, cheapest-slot-first. Most callers want this. */
+export type SessionWithLodges = BookingSession & { lodges: SessionLodge[] };
 
 // Generous for a demo walk-through; refreshed on every step so a session
 // only dies if genuinely abandoned.
@@ -24,25 +27,42 @@ function freshExpiry(): Date {
 export async function createSession(input: {
   arrival: string;
   departure: string;
-  adults: number;
-  childrenAges?: number[];
+  // One entry per lodge in the break; a single-lodge booking is one entry.
+  parties: Array<{ adults: number; childrenAges?: number[] }>;
   // The signed-in user, when there is one. Checkout copies this onto the
   // BookingRecord, so it must be stamped here rather than read from the
   // cookie later - checkout retries can arrive logged-out.
   userId?: string | null;
-}): Promise<BookingSession> {
+}): Promise<SessionWithLodges> {
   const check = validateStay(input.arrival, input.departure);
   if (!check.ok) throw new Error(check.reason);
+  if (input.parties.length < 1 || input.parties.length > 3) {
+    throw new Error("A break has between one and three lodges.");
+  }
+
+  // Legacy mirror: the session-level party columns hold the whole break's
+  // totals so existing single-lodge readers stay sensible during the
+  // multi-lodge transition.
+  const totalAdults = input.parties.reduce((sum, p) => sum + p.adults, 0);
+  const allChildrenAges = input.parties.flatMap((p) => p.childrenAges ?? []);
 
   return prisma.bookingSession.create({
     data: {
       arrival: input.arrival,
       departure: input.departure,
-      adults: input.adults,
-      childrenAges: JSON.stringify(input.childrenAges ?? []),
+      adults: totalAdults,
+      childrenAges: JSON.stringify(allChildrenAges),
       userId: input.userId ?? null,
       expiresAt: freshExpiry(),
+      lodges: {
+        create: input.parties.map((party, slot) => ({
+          slot,
+          adults: party.adults,
+          childrenAges: JSON.stringify(party.childrenAges ?? []),
+        })),
+      },
     },
+    include: { lodges: { orderBy: { slot: "asc" } } },
   });
 }
 
@@ -51,8 +71,11 @@ export function parseChildrenAges(session: BookingSession): number[] {
 }
 
 /** Returns null for unknown or expired sessions - callers send those back to search. */
-export async function getSession(id: string): Promise<BookingSession | null> {
-  const session = await prisma.bookingSession.findUnique({ where: { id } });
+export async function getSession(id: string): Promise<SessionWithLodges | null> {
+  const session = await prisma.bookingSession.findUnique({
+    where: { id },
+    include: { lodges: { orderBy: { slot: "asc" } } },
+  });
   if (!session) return null;
   if (session.state !== "completed" && session.expiresAt < new Date()) return null;
   return session;
@@ -66,13 +89,21 @@ export async function chooseLodge(
     stayGrossAmount: number;
     currency: string;
   },
-): Promise<BookingSession> {
-  return prisma.bookingSession.update({
+  slot = 0,
+): Promise<void> {
+  const { currency, ...tier } = lodge;
+  await prisma.sessionLodge.update({
+    where: { sessionId_slot: { sessionId: id, slot } },
+    // Changing lodge resets extras - they were priced for the old rate plan.
+    data: { ...tier, extras: "[]" },
+  });
+  await prisma.bookingSession.update({
     where: { id },
     data: {
-      ...lodge,
-      // Changing lodge resets extras - they were priced for the old rate plan.
-      extras: "[]",
+      // Legacy mirror of slot 0 during the multi-lodge transition; currency
+      // lives at session level either way.
+      ...(slot === 0 ? { ...tier, extras: "[]" } : {}),
+      currency,
       expiresAt: freshExpiry(),
     },
   });
@@ -81,10 +112,18 @@ export async function chooseLodge(
 export async function setExtras(
   id: string,
   extras: ExtraSnapshot[],
-): Promise<BookingSession> {
-  return prisma.bookingSession.update({
+  slot = 0,
+): Promise<void> {
+  await prisma.sessionLodge.update({
+    where: { sessionId_slot: { sessionId: id, slot } },
+    data: { extras: JSON.stringify(extras) },
+  });
+  await prisma.bookingSession.update({
     where: { id },
-    data: { extras: JSON.stringify(extras), expiresAt: freshExpiry() },
+    data: {
+      ...(slot === 0 ? { extras: JSON.stringify(extras) } : {}),
+      expiresAt: freshExpiry(),
+    },
   });
 }
 

@@ -69,6 +69,7 @@ model BookingSession {
   extras String @default("[]")
 
   guests SessionGuest[]
+  lodges SessionLodge[]
 
   // Lead guest + vehicle (for the ANPR gate story). Title and date of birth
   // are Center Parcs parity: the lead booker must be an adult at arrival.
@@ -87,6 +88,38 @@ model BookingSession {
   booking BookingRecord?
 }
 
+// One lodge in a break: its slot, its own party, its chosen tier snapshot,
+// its extras, and (after checkout) its Apaleo reservation. A single-lodge
+// booking is simply the N=1 case; the funnel loops where it used to assume
+// one lodge. During the multi-lodge transition the legacy single-lodge
+// columns on BookingSession stay populated as a mirror of slot 0.
+model SessionLodge {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sessionId String
+  session   BookingSession @relation(fields: [sessionId], references: [id])
+  slot      Int // 0-based: Lodge 1, Lodge 2, Lodge 3
+
+  // This lodge's own party
+  adults       Int
+  childrenAges String @default("[]") // JSON int array
+
+  // Chosen tier (snapshot from Apaleo offers); null until selected
+  unitGroupCode   String?
+  ratePlanId      String?
+  stayGrossAmount Float?
+
+  // This lodge's extras: JSON [{ serviceId, code, name, count, grossAmount }]
+  extras String @default("[]")
+
+  // Set at checkout, when Apaleo returns one reservation per lodge
+  apaleoReservationId String?
+
+  @@unique([sessionId, slot])
+}
+
 // The guest manifest, Center Parcs parity: every guest named, children's
 // dates of birth, stored only in our DB - Apaleo never needs more than
 // counts and ages. One row per party member with a stable position per
@@ -98,8 +131,9 @@ model SessionGuest {
 
   sessionId String
   session   BookingSession @relation(fields: [sessionId], references: [id])
+  slot      Int @default(0) // which lodge this guest stays in
   position  Int // 0 = lead adult; order fixed by the booked party shape
-  band      String // adult | child | toddler | infant, derived from the session
+  band      String // adult | child | toddler | infant, derived from the party
   isLead    Boolean @default(false)
 
   firstName   String?
@@ -108,7 +142,7 @@ model SessionGuest {
   email       String? // lowercase; the invite-a-guest seam, unused today
   invitedUserId String? // always null today; filled when invites ship
 
-  @@unique([sessionId, position])
+  @@unique([sessionId, slot, position])
 }
 
 // Written once the booking exists in Apaleo. `status` flips to paid only
@@ -140,4 +174,29 @@ model BookingRecord {
   user       User?     @relation(fields: [userId], references: [id])
   claimedAt  DateTime?
   claimedVia String? // "email-match" when adopted by the claim backfill
+
+  reservations BookingReservation[]
+}
+
+// Payment state per reservation (one row per lodge in the booking): a crash
+// between folio payments must resume by settling only what is still owed,
+// never re-paying and never giving up. The legacy singular columns on
+// BookingRecord remain for rows born before multi-lodge; children are the
+// source of truth once backfilled.
+model BookingReservation {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  recordId String
+  record   BookingRecord @relation(fields: [recordId], references: [id])
+  slot     Int
+
+  apaleoReservationId String
+  folioId             String?
+  grossAmount         Float
+  currency            String
+  paymentId           String?
+  paidAt              DateTime?
+
+  @@unique([recordId, slot])
 }
