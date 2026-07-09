@@ -66,8 +66,9 @@ export async function createSession(input: {
   });
 }
 
-export function parseChildrenAges(session: BookingSession): number[] {
-  return JSON.parse(session.childrenAges) as number[];
+/** Works on a session (whole-break totals) or a single lodge's party. */
+export function parseChildrenAges(source: { childrenAges: string }): number[] {
+  return JSON.parse(source.childrenAges) as number[];
 }
 
 /** Returns null for unknown or expired sessions - callers send those back to search. */
@@ -177,6 +178,7 @@ export async function stampSessionUser(id: string, userId: string): Promise<void
   });
 }
 
-export function parseExtras(session: BookingSession): ExtraSnapshot[] {
+/** Works on a session (slot-0 mirror) or a single lodge's own extras. */
+export function parseExtras(session: { extras: string }): ExtraSnapshot[] {
   return JSON.parse(session.extras) as ExtraSnapshot[];
 }

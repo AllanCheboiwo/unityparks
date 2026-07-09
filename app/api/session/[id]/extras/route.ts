@@ -4,25 +4,33 @@ import { getExtraOffers } from "@/server/apaleo/offers";
 import { getSession, parseChildrenAges, setExtras } from "@/server/booking/session";
 import { handleRoute, jsonError } from "@/server/api-helpers";
 
-/** Live extras (Apaleo service offers) priced for this session's stay. */
+/**
+ * Live extras (Apaleo service offers) for one lodge of the break (?slot=,
+ * default 0), priced against that lodge's rate plan and party - extras are
+ * per lodge, the grocery pack goes to a specific kitchen.
+ */
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   return handleRoute(async () => {
     const { id } = await params;
     const session = await getSession(id);
     if (!session) return jsonError(410, "Session expired.");
-    if (!session.ratePlanId) return jsonError(400, "Choose a lodge first.");
+
+    const slot = Number(req.nextUrl.searchParams.get("slot") ?? 0);
+    const lodge = session.lodges.find((l) => l.slot === slot);
+    if (!lodge) return jsonError(400, "That lodge slot is not part of this break.");
+    if (!lodge.ratePlanId) return jsonError(400, "Choose a lodge first.");
 
     const extras = await getExtraOffers({
-      ratePlanId: session.ratePlanId,
+      ratePlanId: lodge.ratePlanId,
       arrival: session.arrival,
       departure: session.departure,
-      adults: session.adults,
-      childrenAges: parseChildrenAges(session),
+      adults: lodge.adults,
+      childrenAges: parseChildrenAges(lodge),
     });
-    return NextResponse.json({ extras });
+    return NextResponse.json({ extras, slot });
   });
 }
 
@@ -36,9 +44,11 @@ const ExtrasBody = z.object({
       grossAmount: z.number().nonnegative(),
     }),
   ),
+  // Which lodge these extras belong to.
+  slot: z.number().int().min(0).max(2).default(0),
 });
 
-/** Save the chosen extras (snapshots of what Apaleo quoted). */
+/** Save one lodge's chosen extras (snapshots of what Apaleo quoted). */
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -53,8 +63,11 @@ export async function POST(
 
     const parsed = ExtrasBody.safeParse(await req.json());
     if (!parsed.success) return jsonError(400, "Invalid extras.");
+    if (!session.lodges.some((l) => l.slot === parsed.data.slot)) {
+      return jsonError(400, "That lodge slot is not part of this break.");
+    }
 
-    await setExtras(id, parsed.data.extras);
+    await setExtras(id, parsed.data.extras, parsed.data.slot);
     return NextResponse.json({ ok: true });
   });
 }

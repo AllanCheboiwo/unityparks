@@ -2,23 +2,33 @@ import "server-only";
 import { apaleo, CHANNEL_CODE } from "./client";
 import { nightsBetween } from "../booking/rules";
 
-export type CreateBookingInput = {
-  arrival: string;
-  departure: string;
+export type ReservationInput = {
   adults: number;
   childrenAges?: number[];
   ratePlanId: string;
-  /** Apaleo service ids for the chosen extras. */
+  /** Apaleo service ids for this lodge's extras. */
   serviceIds: string[];
+};
+
+export type CreateBookingInput = {
+  arrival: string;
+  departure: string;
+  /** One entry per lodge; a single-lodge break is one entry. */
+  reservations: ReservationInput[];
   guest: { firstName: string; lastName: string; email: string; phone: string };
   vehiclePlate?: string;
   /** Persisted per checkout attempt so a retry can never double-book. */
   idempotencyKey: string;
 };
 
+/**
+ * One Apaleo booking holding one reservation per lodge - a single POST
+ * however many lodges the break has. The returned reservation ids are in
+ * payload order, so index N is lodge slot N.
+ */
 export async function createBooking(input: CreateBookingInput): Promise<{
   bookingId: string;
-  reservationId: string;
+  reservationIds: string[];
 }> {
   const nights = nightsBetween(input.arrival, input.departure);
   const guestComment = input.vehiclePlate
@@ -27,24 +37,22 @@ export async function createBooking(input: CreateBookingInput): Promise<{
 
   const body = {
     booker: input.guest,
-    reservations: [
-      {
-        arrival: input.arrival,
-        departure: input.departure,
-        adults: input.adults,
-        childrenAges: input.childrenAges?.length ? input.childrenAges : undefined,
-        channelCode: CHANNEL_CODE,
-        guaranteeType: "Prepayment",
-        primaryGuest: input.guest,
-        guestComment,
-        // One slice per night, all on the chosen rate plan. No amount
-        // overrides: Apaleo prices from its own rates.
-        timeSlices: Array.from({ length: nights }, () => ({
-          ratePlanId: input.ratePlanId,
-        })),
-        services: input.serviceIds.map((serviceId) => ({ serviceId })),
-      },
-    ],
+    reservations: input.reservations.map((reservation) => ({
+      arrival: input.arrival,
+      departure: input.departure,
+      adults: reservation.adults,
+      childrenAges: reservation.childrenAges?.length ? reservation.childrenAges : undefined,
+      channelCode: CHANNEL_CODE,
+      guaranteeType: "Prepayment",
+      primaryGuest: input.guest,
+      guestComment,
+      // One slice per night, all on this lodge's rate plan. No amount
+      // overrides: Apaleo prices from its own rates.
+      timeSlices: Array.from({ length: nights }, () => ({
+        ratePlanId: reservation.ratePlanId,
+      })),
+      services: reservation.serviceIds.map((serviceId) => ({ serviceId })),
+    })),
   };
 
   const created = await apaleo<{ id: string; reservationIds: Array<{ id: string }> }>(
@@ -54,7 +62,10 @@ export async function createBooking(input: CreateBookingInput): Promise<{
   );
   if (!created) throw new Error("Apaleo returned an empty booking response");
 
-  return { bookingId: created.id, reservationId: created.reservationIds[0].id };
+  return {
+    bookingId: created.id,
+    reservationIds: created.reservationIds.map((r) => r.id),
+  };
 }
 
 export type FolioSummary = {
