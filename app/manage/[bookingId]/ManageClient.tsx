@@ -17,6 +17,7 @@ type AmendResponse = {
 };
 
 type GuestRow = {
+  slot: number;
   position: number;
   band: string;
   firstName: string;
@@ -55,18 +56,22 @@ export function ManageClient({ bookingId }: { bookingId: string }) {
       return setError(result.error);
     }
     setBooking(result.data);
-    const saved = new Map(result.data.guests.map((g) => [g.position, g]));
     setGuestRows(
-      result.data.partyBands.map((band, position) => {
-        const g = saved.get(position);
-        return {
-          position,
-          band,
-          firstName: g?.firstName ?? (position === 0 ? (result.data.guest.firstName ?? "") : ""),
-          lastName: g?.lastName ?? (position === 0 ? (result.data.guest.lastName ?? "") : ""),
-          dateOfBirth: g?.dateOfBirth ?? "",
-          email: g?.email ?? "",
-        };
+      result.data.lodges.flatMap((lodge) => {
+        const saved = new Map(lodge.guests.map((g) => [g.position, g]));
+        return lodge.bands.map((band, position) => {
+          const g = saved.get(position);
+          const isLeadSeat = lodge.slot === 0 && position === 0;
+          return {
+            slot: lodge.slot,
+            position,
+            band,
+            firstName: g?.firstName ?? (isLeadSeat ? (result.data.guest.firstName ?? "") : ""),
+            lastName: g?.lastName ?? (isLeadSeat ? (result.data.guest.lastName ?? "") : ""),
+            dateOfBirth: g?.dateOfBirth ?? "",
+            email: g?.email ?? "",
+          };
+        });
       }),
     );
   }
@@ -197,22 +202,15 @@ export function ManageClient({ bookingId }: { bookingId: string }) {
         </div>
       </div>
 
-      {multi ? (
-        <div className="mt-8 rounded-2xl bg-white ring-1 ring-forest/10 shadow-sm p-5">
-          <p className="font-display text-lg text-forest">Move your break</p>
-          <p className="mt-1 text-sm text-foreground/60">
-            To change the dates on a multi-lodge break, call our team on{" "}
-            <span className="font-semibold whitespace-nowrap">+254 700 000 000</span>.
-            Online date changes for a single lodge are available on single-lodge
-            bookings.
-          </p>
-        </div>
-      ) : (
       <form onSubmit={move} className="mt-8 rounded-2xl bg-white ring-1 ring-forest/10 shadow-sm p-5">
         <p className="font-display text-lg text-forest">Move your break</p>
         <p className="mt-1 text-sm text-foreground/60">
-          Your whole {nights}-night break moves to a new start date. New dates
-          still start on a Friday or Monday, the same rule as booking.
+          Your whole {nights}-night break
+          {multi ? `, all ${booking.lodges.length} lodges,` : ""} moves to a new
+          start date. New dates still start on a Friday or Monday, the same
+          rule as booking.
+          {multi &&
+            " To change one lodge on its own or split dates, call our team on +254 700 000 000."}
         </p>
 
         <div className="mt-4 flex flex-wrap items-start gap-4">
@@ -256,12 +254,11 @@ export function ManageClient({ bookingId }: { bookingId: string }) {
         )}
         {moved && (
           <div className="mt-4 rounded-lg bg-moss/10 border border-moss/30 px-4 py-3 text-sm text-forest">
-            Break moved. Your reservation is updated in the reservation system
-            and the folio is still settled.
+            Break moved. {multi ? "Every lodge is" : "Your reservation is"}{" "}
+            updated in the reservation system and the folio is still settled.
           </div>
         )}
       </form>
-      )}
 
       {guestRows && (
         <div className="mt-8 rounded-2xl bg-white ring-1 ring-forest/10 shadow-sm p-5">
@@ -274,10 +271,11 @@ export function ManageClient({ bookingId }: { bookingId: string }) {
 
           <div className="mt-4 grid gap-4">
             {guestRows.map((row) => (
-              <div key={row.position} className="rounded-xl ring-1 ring-forest/10 p-4">
+              <div key={`${row.slot}-${row.position}`} className="rounded-xl ring-1 ring-forest/10 p-4">
                 <p className="text-sm font-semibold text-forest">
+                  {multi ? `Lodge ${row.slot + 1} · ` : ""}
                   {BAND_LABELS[row.band] ?? row.band}
-                  {row.position === 0 && (
+                  {row.slot === 0 && row.position === 0 && (
                     <span className="ml-2 rounded-full bg-forest/10 px-2 py-0.5 text-xs font-semibold text-forest">
                       Lead booker
                     </span>
@@ -291,7 +289,9 @@ export function ManageClient({ bookingId }: { bookingId: string }) {
                     onChange={(e) =>
                       setGuestRows((prev) =>
                         prev!.map((r) =>
-                          r.position === row.position ? { ...r, firstName: e.target.value } : r,
+                          r.slot === row.slot && r.position === row.position
+                            ? { ...r, firstName: e.target.value }
+                            : r,
                         ),
                       )
                     }
@@ -304,7 +304,9 @@ export function ManageClient({ bookingId }: { bookingId: string }) {
                     onChange={(e) =>
                       setGuestRows((prev) =>
                         prev!.map((r) =>
-                          r.position === row.position ? { ...r, lastName: e.target.value } : r,
+                          r.slot === row.slot && r.position === row.position
+                            ? { ...r, lastName: e.target.value }
+                            : r,
                         ),
                       )
                     }
@@ -319,7 +321,9 @@ export function ManageClient({ bookingId }: { bookingId: string }) {
                     onChange={(e) =>
                       setGuestRows((prev) =>
                         prev!.map((r) =>
-                          r.position === row.position ? { ...r, dateOfBirth: e.target.value } : r,
+                          r.slot === row.slot && r.position === row.position
+                            ? { ...r, dateOfBirth: e.target.value }
+                            : r,
                         ),
                       )
                     }
@@ -348,20 +352,29 @@ export function ManageClient({ bookingId }: { bookingId: string }) {
               setGuestsBusy(true);
               setGuestsError(null);
               setGuestsSaved(false);
-              const result = await apiFetch(`/api/booking/${bookingId}/guests${proofQuery}`, {
-                method: "PUT",
-                body: JSON.stringify({
-                  guests: guestRows.map((row) => ({
-                    position: row.position,
-                    firstName: row.firstName.trim() || undefined,
-                    lastName: row.lastName.trim() || undefined,
-                    dateOfBirth: row.dateOfBirth || undefined,
-                    email: row.email.trim() || undefined,
-                  })),
-                }),
-              });
+              // One save per lodge. Sequential: small DB writes, no Apaleo.
+              for (const lodge of booking.lodges) {
+                const result = await apiFetch(`/api/booking/${bookingId}/guests${proofQuery}`, {
+                  method: "PUT",
+                  body: JSON.stringify({
+                    slot: lodge.slot,
+                    guests: guestRows
+                      .filter((row) => row.slot === lodge.slot)
+                      .map((row) => ({
+                        position: row.position,
+                        firstName: row.firstName.trim() || undefined,
+                        lastName: row.lastName.trim() || undefined,
+                        dateOfBirth: row.dateOfBirth || undefined,
+                        email: row.email.trim() || undefined,
+                      })),
+                  }),
+                });
+                if (!result.ok) {
+                  setGuestsBusy(false);
+                  return setGuestsError(result.error);
+                }
+              }
               setGuestsBusy(false);
-              if (!result.ok) return setGuestsError(result.error);
               setGuestsSaved(true);
             }}
             className="mt-4 rounded-lg bg-forest text-white px-6 py-2.5 text-sm font-semibold hover:bg-forest-light disabled:opacity-60"

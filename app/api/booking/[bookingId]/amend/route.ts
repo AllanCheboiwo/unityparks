@@ -8,10 +8,11 @@ import {
 } from "@/server/apaleo/amend";
 import { getFolioForReservation } from "@/server/apaleo/bookings";
 import { payFolio } from "@/server/apaleo/payments";
+import { ApaleoError } from "@/server/apaleo/client";
 import { nightsBetween, validateStay } from "@/server/booking/rules";
 import { assertBookingAccess } from "@/server/booking/access";
 import { getCurrentUser } from "@/server/auth/session";
-import { handleRoute, jsonError } from "@/server/api-helpers";
+import { handleRoute, jsonError, PublicError } from "@/server/api-helpers";
 
 const AmendBody = z.object({
   arrival: z.string(),
@@ -19,10 +20,17 @@ const AmendBody = z.object({
 });
 
 /**
- * Move a booked break to new dates. Apaleo only checks availability here -
- * the Friday/Monday turnover rule is OURS to re-apply, which is exactly what
- * this route demonstrates. The break keeps its length; resizing a stay (with
- * refunds) is real-build territory.
+ * Move a booked break to new dates - the whole break, every lodge together.
+ * Apaleo only checks availability here; the Friday/Monday turnover rule is
+ * OURS to re-apply. The break keeps its length; resizing a stay, dropping a
+ * lodge or splitting dates is call-our-team territory.
+ *
+ * The loop is shaped so the break can never be left half-moved:
+ *   1. quote EVERY lodge for the new dates before touching any (a single
+ *      unavailable lodge refuses the whole move),
+ *   2. amend one reservation at a time; if one fails, roll the already-moved
+ *      ones back to the original dates,
+ *   3. settle each folio that a price difference left owing.
  */
 export async function POST(
   req: NextRequest,
@@ -32,7 +40,10 @@ export async function POST(
     const { bookingId } = await params;
     const record = await prisma.bookingRecord.findFirst({
       where: { apaleoBookingId: bookingId },
-      include: { session: true },
+      include: {
+        session: true,
+        reservations: { orderBy: { slot: "asc" } },
+      },
     });
     if (!record) return jsonError(404, "Booking not found.");
 
@@ -71,42 +82,125 @@ export async function POST(
       );
     }
 
-    const reservation = await getReservation(record.apaleoReservationId);
-    const quote = await getAmendmentQuote({
-      reservationId: record.apaleoReservationId,
-      unitGroupCode: reservation.unitGroup.code,
-      arrival,
-      departure,
-    });
-    if (!quote) {
-      return NextResponse.json(
-        { error: "Your lodge isn't available for those dates.", soldOut: true },
-        { status: 409 },
+    const slots =
+      record.reservations.length > 0
+        ? record.reservations.map((r) => ({ slot: r.slot, reservationId: r.apaleoReservationId }))
+        : [{ slot: 0, reservationId: record.apaleoReservationId }];
+    const multi = slots.length > 1;
+
+    // 1. Quote every lodge before moving any: a single sold-out lodge means
+    // nothing moves, so the break can never be split by a known refusal.
+    const lodges: Array<{
+      slot: number;
+      reservationId: string;
+      adults: number;
+      childrenAges?: number[];
+      ratePlanId: string;
+    }> = [];
+    for (const { slot, reservationId } of slots) {
+      const reservation = await getReservation(reservationId);
+      const quote = await getAmendmentQuote({
+        reservationId,
+        unitGroupCode: reservation.unitGroup.code,
+        arrival,
+        departure,
+      });
+      if (!quote) {
+        return NextResponse.json(
+          {
+            error: multi
+              ? `Lodge ${slot + 1} isn't available for those dates, so nothing was moved. Try different dates.`
+              : "Your lodge isn't available for those dates.",
+            soldOut: true,
+          },
+          { status: 409 },
+        );
+      }
+      lodges.push({
+        slot,
+        reservationId,
+        adults: reservation.adults,
+        childrenAges: reservation.childrenAges,
+        ratePlanId: reservation.ratePlan.id,
+      });
+    }
+
+    // 2. Move each reservation. On failure, put the already-moved ones back:
+    // a half-moved break is the one state this route must never leave behind.
+    const originalArrival = record.session.arrival;
+    const originalDeparture = record.session.departure;
+    const moved: typeof lodges = [];
+    try {
+      for (const lodge of lodges) {
+        await amendReservationDates({
+          reservationId: lodge.reservationId,
+          arrival,
+          departure,
+          adults: lodge.adults,
+          childrenAges: lodge.childrenAges,
+          ratePlanId: lodge.ratePlanId,
+        });
+        moved.push(lodge);
+      }
+    } catch (err) {
+      let rollbackFailed = false;
+      for (const lodge of moved) {
+        try {
+          await amendReservationDates({
+            reservationId: lodge.reservationId,
+            arrival: originalArrival,
+            departure: originalDeparture,
+            adults: lodge.adults,
+            childrenAges: lodge.childrenAges,
+            ratePlanId: lodge.ratePlanId,
+          });
+        } catch (rollbackErr) {
+          rollbackFailed = true;
+          console.error("Amend rollback failed", lodge.reservationId, rollbackErr);
+        }
+      }
+      if (rollbackFailed) {
+        console.error("Amend left a break part-moved", record.apaleoBookingId, err);
+        throw new PublicError(
+          502,
+          "We couldn't move every lodge and couldn't fully undo the change. Call our team on +254 700 000 000 and we'll put it right.",
+        );
+      }
+      if (err instanceof ApaleoError && err.status === 422) {
+        return NextResponse.json(
+          {
+            error: "One of your lodges was taken while we were moving your break, so it stays on its original dates. Try different dates.",
+            soldOut: true,
+          },
+          { status: 409 },
+        );
+      }
+      console.error("Amend failed, rolled back", record.apaleoBookingId, err);
+      throw new PublicError(
+        502,
+        "Moving your break failed, so it stays on its original dates. Please try again.",
       );
     }
 
-    await amendReservationDates({
-      reservationId: record.apaleoReservationId,
-      arrival,
-      departure,
-      adults: reservation.adults,
-      childrenAges: reservation.childrenAges,
-      ratePlanId: reservation.ratePlan.id,
-    });
-
-    // Same length + flat pricing usually means the folio stays settled, but a
-    // seasonal price difference would leave a balance - settle it the demo way.
-    const folio = await getFolioForReservation(record.apaleoReservationId);
-    if (folio.balance < 0) {
-      await payFolio({
-        folioId: folio.folioId,
-        amount: Math.abs(folio.balance),
-        currency: folio.currency,
-        receipt: `UP-${record.apaleoBookingId}-AMEND`,
-        idempotencyKey: `up-amend-${record.id}-${arrival}`,
-      });
+    // 3. Same length + flat pricing usually means folios stay settled, but a
+    // seasonal price difference would leave a balance - settle it per lodge.
+    let folioBalance = 0;
+    for (const lodge of lodges) {
+      const folio = await getFolioForReservation(lodge.reservationId);
+      if (folio.balance < 0) {
+        await payFolio({
+          folioId: folio.folioId,
+          amount: Math.abs(folio.balance),
+          currency: folio.currency,
+          receipt: `UP-${record.apaleoBookingId}-AMEND-${lodge.slot + 1}`,
+          idempotencyKey: `up-amend-${record.id}-${lodge.slot}-${arrival}`,
+        });
+        const settled = await getFolioForReservation(lodge.reservationId);
+        folioBalance += settled.balance;
+      } else {
+        folioBalance += folio.balance;
+      }
     }
-    const settledFolio = await getFolioForReservation(record.apaleoReservationId);
 
     await prisma.bookingSession.update({
       where: { id: record.sessionId },
@@ -117,7 +211,7 @@ export async function POST(
       ok: true,
       arrival,
       departure,
-      folioBalance: settledFolio.balance,
+      folioBalance,
     });
   });
 }

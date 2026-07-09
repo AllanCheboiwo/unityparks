@@ -67,12 +67,15 @@ export async function GET(
       folioBalance += folio.balance;
     }
 
+    const guestRows = (await loadGuests(record.sessionId)).map(guestRowDto);
     const lodges = record.session.lodges.map((l) => ({
       slot: l.slot,
       unitGroupCode: l.unitGroupCode,
       stayGrossAmount: l.stayGrossAmount,
       partyLabel: partyLabel(l.adults, parseChildrenAges(l)),
       extras: parseExtras(l),
+      bands: partyBands(l),
+      guests: guestRows.filter((r) => r.slot === l.slot),
     }));
 
     return NextResponse.json({
@@ -99,8 +102,6 @@ export async function GET(
         email: record.session.guestEmail,
         vehiclePlate: record.session.vehiclePlate,
       },
-      partyBands: partyBands(record.session),
-      guests: (await loadGuests(record.sessionId)).map(guestRowDto),
     });
   });
 }

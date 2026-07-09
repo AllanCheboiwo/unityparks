@@ -10,12 +10,12 @@ import { BookingSummary } from "@/components/BookingSummary";
 import { ExpiredNotice } from "@/components/ExpiredNotice";
 
 type GuestsPayload = {
-  bands: string[];
-  guests: GuestRowDto[];
+  lodges: Array<{ slot: number; bands: string[]; guests: GuestRowDto[] }>;
   lead: { firstName: string | null; lastName: string | null; email: string | null };
 };
 
 type Row = {
+  slot: number;
   position: number;
   band: string;
   firstName: string;
@@ -30,13 +30,14 @@ const labelClass = "text-xs font-medium text-foreground/60 uppercase tracking-wi
 
 /**
  * The Guests step, Center Parcs parity: name everyone coming, children's
- * dates of birth. Entirely optional here - skipping goes straight to
- * payment and the same card lives on Manage my booking afterwards.
+ * dates of birth, lodge by lodge. Entirely optional here - skipping goes
+ * straight to payment and the same card lives on Manage my booking after.
  */
 export function GuestsClient() {
   const router = useRouter();
   const sessionId = useSearchParams().get("session");
   const [rows, setRows] = useState<Row[] | null>(null);
+  const [lodgeSlots, setLodgeSlots] = useState<number[]>([]);
   const [summary, setSummary] = useState<SessionSummary | null>(null);
   const [expired, setExpired] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -53,19 +54,25 @@ export function GuestsClient() {
       if (!g.ok) return setError(g.error);
       if (s.ok) setSummary(s.data);
 
-      const saved = new Map(g.data.guests.map((row) => [row.position, row]));
+      setLodgeSlots(g.data.lodges.map((l) => l.slot));
       setRows(
-        g.data.bands.map((band, position) => {
-          const row = saved.get(position);
-          return {
-            position,
-            band,
-            // Row 0 is the lead booker, prefilled from the details step.
-            firstName: row?.firstName ?? (position === 0 ? (g.data.lead.firstName ?? "") : ""),
-            lastName: row?.lastName ?? (position === 0 ? (g.data.lead.lastName ?? "") : ""),
-            dateOfBirth: row?.dateOfBirth ?? "",
-            email: row?.email ?? (position === 0 ? (g.data.lead.email ?? "") : ""),
-          };
+        g.data.lodges.flatMap((lodge) => {
+          const saved = new Map(lodge.guests.map((row) => [row.position, row]));
+          return lodge.bands.map((band, position) => {
+            const row = saved.get(position);
+            const isLeadSeat = lodge.slot === 0 && position === 0;
+            return {
+              slot: lodge.slot,
+              position,
+              band,
+              // The first adult of the first lodge is the lead booker,
+              // prefilled from the details step.
+              firstName: row?.firstName ?? (isLeadSeat ? (g.data.lead.firstName ?? "") : ""),
+              lastName: row?.lastName ?? (isLeadSeat ? (g.data.lead.lastName ?? "") : ""),
+              dateOfBirth: row?.dateOfBirth ?? "",
+              email: row?.email ?? (isLeadSeat ? (g.data.lead.email ?? "") : ""),
+            };
+          });
         }),
       );
     })();
@@ -83,32 +90,47 @@ export function GuestsClient() {
     );
   }
 
-  function update(position: number, field: keyof Omit<Row, "position" | "band">, value: string) {
+  const multi = lodgeSlots.length > 1;
+
+  function update(
+    slot: number,
+    position: number,
+    field: keyof Omit<Row, "slot" | "position" | "band">,
+    value: string,
+  ) {
     setRows((prev) =>
-      prev!.map((row) => (row.position === position ? { ...row, [field]: value } : row)),
+      prev!.map((row) =>
+        row.slot === slot && row.position === position ? { ...row, [field]: value } : row,
+      ),
     );
   }
 
   async function saveAndContinue() {
     setBusy(true);
     setError(null);
-    const result = await apiFetch(`/api/session/${sessionId}/guests`, {
-      method: "PUT",
-      body: JSON.stringify({
-        guests: rows!.map((row) => ({
-          position: row.position,
-          firstName: row.firstName.trim() || undefined,
-          lastName: row.lastName.trim() || undefined,
-          dateOfBirth: row.dateOfBirth || undefined,
-          email: row.email.trim() || undefined,
-        })),
-      }),
-    });
-    if (isExpired(result)) return setExpired(true);
-    if (!result.ok) {
-      setError(result.error);
-      setBusy(false);
-      return;
+    // One save per lodge. Sequential: small DB writes, no Apaleo calls.
+    for (const slot of lodgeSlots) {
+      const result = await apiFetch(`/api/session/${sessionId}/guests`, {
+        method: "PUT",
+        body: JSON.stringify({
+          slot,
+          guests: rows!
+            .filter((row) => row.slot === slot)
+            .map((row) => ({
+              position: row.position,
+              firstName: row.firstName.trim() || undefined,
+              lastName: row.lastName.trim() || undefined,
+              dateOfBirth: row.dateOfBirth || undefined,
+              email: row.email.trim() || undefined,
+            })),
+        }),
+      });
+      if (isExpired(result)) return setExpired(true);
+      if (!result.ok) {
+        setError(result.error);
+        setBusy(false);
+        return;
+      }
     }
     router.push(`/checkout/pay?session=${sessionId}`);
   }
@@ -128,66 +150,77 @@ export function GuestsClient() {
             Manage my booking.
           </p>
 
-          <div className="mt-8 grid gap-4">
-            {rows.map((row) => (
-              <div
-                key={row.position}
-                className="rounded-2xl bg-white ring-1 ring-forest/10 shadow-sm p-5"
-              >
-                <p className="font-display text-lg text-forest">
-                  {BAND_LABELS[row.band] ?? row.band} {countWithinBand(rows, row)}
-                  {row.position === 0 && (
-                    <span className="ml-2 rounded-full bg-forest/10 px-2 py-0.5 text-xs font-semibold text-forest align-middle">
-                      Lead booker
-                    </span>
-                  )}
-                </p>
-                <div className="mt-3 grid grid-cols-2 gap-4">
-                  <label>
-                    <span className={labelClass}>First name</span>
-                    <input
-                      value={row.firstName}
-                      onChange={(e) => update(row.position, "firstName", e.target.value)}
-                      className={inputClass}
-                    />
-                  </label>
-                  <label>
-                    <span className={labelClass}>Last name</span>
-                    <input
-                      value={row.lastName}
-                      onChange={(e) => update(row.position, "lastName", e.target.value)}
-                      className={inputClass}
-                    />
-                  </label>
+          {lodgeSlots.map((slot) => {
+            const lodgeRows = rows.filter((row) => row.slot === slot);
+            return (
+              <div key={slot} className="mt-8">
+                {multi && (
+                  <p className="font-display text-xl text-forest mb-3">Lodge {slot + 1}</p>
+                )}
+                <div className="grid gap-4">
+                  {lodgeRows.map((row) => (
+                    <div
+                      key={row.position}
+                      className="rounded-2xl bg-white ring-1 ring-forest/10 shadow-sm p-5"
+                    >
+                      <p className="font-display text-lg text-forest">
+                        {BAND_LABELS[row.band] ?? row.band}{" "}
+                        {countWithinBand(lodgeRows, row)}
+                        {row.slot === 0 && row.position === 0 && (
+                          <span className="ml-2 rounded-full bg-forest/10 px-2 py-0.5 text-xs font-semibold text-forest align-middle">
+                            Lead booker
+                          </span>
+                        )}
+                      </p>
+                      <div className="mt-3 grid grid-cols-2 gap-4">
+                        <label>
+                          <span className={labelClass}>First name</span>
+                          <input
+                            value={row.firstName}
+                            onChange={(e) => update(row.slot, row.position, "firstName", e.target.value)}
+                            className={inputClass}
+                          />
+                        </label>
+                        <label>
+                          <span className={labelClass}>Last name</span>
+                          <input
+                            value={row.lastName}
+                            onChange={(e) => update(row.slot, row.position, "lastName", e.target.value)}
+                            className={inputClass}
+                          />
+                        </label>
+                      </div>
+                      {row.band !== "adult" && (
+                        <label className="block mt-3">
+                          <span className={labelClass}>Date of birth</span>
+                          <input
+                            type="date"
+                            value={row.dateOfBirth}
+                            onChange={(e) => update(row.slot, row.position, "dateOfBirth", e.target.value)}
+                            className={inputClass}
+                          />
+                        </label>
+                      )}
+                      {row.band === "adult" && !(row.slot === 0 && row.position === 0) && (
+                        <label className="block mt-3">
+                          <span className={labelClass}>
+                            Email <span className="normal-case font-normal">(optional, for inviting them later)</span>
+                          </span>
+                          <input
+                            type="email"
+                            value={row.email}
+                            onChange={(e) => update(row.slot, row.position, "email", e.target.value)}
+                            className={inputClass}
+                            placeholder="them@example.com"
+                          />
+                        </label>
+                      )}
+                    </div>
+                  ))}
                 </div>
-                {row.band !== "adult" && (
-                  <label className="block mt-3">
-                    <span className={labelClass}>Date of birth</span>
-                    <input
-                      type="date"
-                      value={row.dateOfBirth}
-                      onChange={(e) => update(row.position, "dateOfBirth", e.target.value)}
-                      className={inputClass}
-                    />
-                  </label>
-                )}
-                {row.band === "adult" && row.position !== 0 && (
-                  <label className="block mt-3">
-                    <span className={labelClass}>
-                      Email <span className="normal-case font-normal">(optional, for inviting them later)</span>
-                    </span>
-                    <input
-                      type="email"
-                      value={row.email}
-                      onChange={(e) => update(row.position, "email", e.target.value)}
-                      className={inputClass}
-                      placeholder="them@example.com"
-                    />
-                  </label>
-                )}
               </div>
-            ))}
-          </div>
+            );
+          })}
 
           {error && (
             <div className="mt-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">
@@ -222,9 +255,9 @@ export function GuestsClient() {
   );
 }
 
-/** "Adult 2 of 3" style counter within a band, blank when the band has one. */
-function countWithinBand(rows: Row[], row: Row): string {
-  const sameBand = rows.filter((r) => r.band === row.band);
+/** "Adult 2 of 3" style counter within one lodge's band; blank when alone. */
+function countWithinBand(lodgeRows: Row[], row: Row): string {
+  const sameBand = lodgeRows.filter((r) => r.band === row.band);
   if (sameBand.length <= 1) return "";
   return `${sameBand.findIndex((r) => r.position === row.position) + 1} of ${sameBand.length}`;
 }

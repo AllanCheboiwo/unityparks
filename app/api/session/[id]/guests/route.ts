@@ -16,10 +16,12 @@ const GuestsBody = z.object({
       }),
     )
     .max(20),
+  // Which lodge these guests stay in.
+  slot: z.number().int().min(0).max(2).default(0),
 });
 
-/** The Guests step's data: the booked party shape, any saved rows, and the
- * lead booker for prefilling row 0. */
+/** The Guests step's data: each lodge's party shape and saved rows, plus the
+ * lead booker for prefilling the first lodge's first adult. */
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -28,9 +30,14 @@ export async function GET(
     const { id } = await params;
     const session = await getSession(id);
     if (!session) return jsonError(410, "Session expired.");
+
+    const rows = (await loadGuests(id)).map(guestRowDto);
     return NextResponse.json({
-      bands: partyBands(session),
-      guests: (await loadGuests(id)).map(guestRowDto),
+      lodges: session.lodges.map((lodge) => ({
+        slot: lodge.slot,
+        bands: partyBands(lodge),
+        guests: rows.filter((r) => r.slot === lodge.slot),
+      })),
       lead: {
         firstName: session.guestFirstName,
         lastName: session.guestLastName,
@@ -40,8 +47,8 @@ export async function GET(
   });
 }
 
-/** Save the manifest during the funnel. After the break is booked, edits go
- * through the booking route, which demands proof of access. */
+/** Save one lodge's manifest during the funnel. After the break is booked,
+ * edits go through the booking route, which demands proof of access. */
 export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -56,8 +63,10 @@ export async function PUT(
 
     const parsed = GuestsBody.safeParse(await req.json());
     if (!parsed.success) return jsonError(400, "Please check the guest details.");
+    const lodge = session.lodges.find((l) => l.slot === parsed.data.slot);
+    if (!lodge) return jsonError(400, "That lodge slot is not part of this break.");
 
-    await saveGuests(session, parsed.data.guests);
+    await saveGuests(lodge, parsed.data.guests);
     return NextResponse.json({ ok: true });
   });
 }

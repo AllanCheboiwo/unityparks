@@ -74,6 +74,7 @@ export type SessionSummary = {
 };
 
 export type GuestRowDto = {
+  slot: number;
   position: number;
   band: string;
   isLead: boolean;
@@ -92,13 +93,15 @@ export type BookingConfirmation = {
   currency: string;
   folioBalance: number;
   account: { status: "ownedByYou" | "existingAccount" | "none" };
-  /** One entry per lodge in the booking. */
+  /** One entry per lodge in the booking, manifest included. */
   lodges: {
     slot: number;
     unitGroupCode: string | null;
     stayGrossAmount: number | null;
     partyLabel: string;
     extras: ExtraSnapshotDto[];
+    bands: string[];
+    guests: GuestRowDto[];
   }[];
   stay: {
     arrival: string;
@@ -114,6 +117,4 @@ export type BookingConfirmation = {
     email: string | null;
     vehiclePlate: string | null;
   };
-  partyBands: string[];
-  guests: GuestRowDto[];
 };
