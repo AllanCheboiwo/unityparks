@@ -1,6 +1,7 @@
 import "server-only";
 import { apaleo, CHANNEL_CODE } from "./client";
 import { nightsBetween } from "../booking/rules";
+import { occupancyAges } from "../booking/party";
 
 export type ReservationInput = {
   adults: number;
@@ -41,7 +42,10 @@ export async function createBooking(input: CreateBookingInput): Promise<{
       arrival: input.arrival,
       departure: input.departure,
       adults: reservation.adults,
-      childrenAges: reservation.childrenAges?.length ? reservation.childrenAges : undefined,
+      // Cot infants don't occupy a bed, so Apaleo never hears about them.
+      childrenAges: occupancyAges(reservation.childrenAges ?? []).length
+        ? occupancyAges(reservation.childrenAges ?? [])
+        : undefined,
       channelCode: CHANNEL_CODE,
       guaranteeType: "Prepayment",
       primaryGuest: input.guest,

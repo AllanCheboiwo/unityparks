@@ -3,11 +3,11 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
-import { formatKes } from "@/lib/format";
 import {
   MAX_BEDROOMS,
   MAX_INFANTS,
-  maxToddlers,
+  MAX_PARTY,
+  countedGuests,
   requiredBedrooms,
 } from "@/lib/occupancy";
 import { TurnoverCalendar, validArrivalDows } from "@/components/TurnoverCalendar";
@@ -16,8 +16,7 @@ import { TurnoverCalendar, validArrivalDows } from "@/components/TurnoverCalenda
  * The Center Parcs-style booking bar: four fields (village, dates, lodges,
  * guests), each opening a panel that hugs the bar directly beneath it, then
  * Search. Book one, two or three lodges; each lodge has its own party, and
- * the guests panel splits into a section per lodge. Options the backend can't
- * honour yet (dogs, adapted stock) stay greyed with a "real build" tag.
+ * the guests panel splits into a section per lodge.
  *
  * Dates have two modes, both enforcing turnover: pick a specific start day, or
  * search a whole month for the start dates that are open. Bedrooms are derived
@@ -25,7 +24,6 @@ import { TurnoverCalendar, validArrivalDows } from "@/components/TurnoverCalenda
  */
 
 const BOOKING_HORIZON_DAYS = 100;
-const MAX_LODGE_SLEEPS = 8;
 const MAX_LODGES = 3;
 const VILLAGE_NAME = "Unity Parks Naivasha";
 
@@ -134,18 +132,12 @@ function Stepper({
   );
 }
 
-function RealBuildTag() {
-  return (
-    <span className="rounded-full bg-sand text-forest/60 text-[10px] font-medium px-2 py-0.5 ml-2">
-      real build
-    </span>
-  );
-}
-
 /**
- * The age-band and bedroom steppers for one lodge's party. Bedrooms follow
- * the party (one per two adults or children) and can be raised to the max;
- * toddlers ride along up to two per bedroom; infants cap at two.
+ * The age-band and bedroom steppers for one lodge's party. A lodge sleeps
+ * eight: adults, children and toddlers all count toward that cap, so each of
+ * those steppers stops once the party reaches eight. Infants under 2 sleep in
+ * a cot, do not count toward the eight, and cap at two. Bedrooms follow the
+ * party (one per two adults or children) and can be raised to the max.
  *
  * layout "stack" is the narrow single-lodge dropdown (each field a row).
  * layout "row" is the Center Parcs multi-lodge shape: the fields spread
@@ -160,8 +152,28 @@ function LodgeParty({
   onChange: (patch: Partial<Party>) => void;
   layout?: "stack" | "row";
 }) {
-  const requiredBed = requiredBedrooms(party.adults, party.children);
-  const toddlerCap = maxToddlers(party.bedrooms);
+  // Clamped to the largest lodge: a big party shares bedrooms rather than
+  // demanding a fifth that no lodge has.
+  const requiredBed = Math.min(requiredBedrooms(party.adults, party.children), MAX_BEDROOMS);
+
+  // The eight-person cap counts adults, children and toddlers. `slack` is how
+  // many more of those the lodge can still take, so each stepper's max is its
+  // own value plus the slack; at eight, every one of them stops.
+  const slack = MAX_PARTY - countedGuests(party.adults, party.children, party.toddlers);
+
+  // Bedrooms follow the party both ways. If the guest has manually raised
+  // bedrooms above what the party needs, we keep that choice but never let it
+  // fall below the new requirement; otherwise bedrooms track the party exactly,
+  // so reducing adults or children brings the count back down.
+  const changeParty = (patch: Partial<Party>) => {
+    const nextRequired = Math.min(
+      requiredBedrooms(patch.adults ?? party.adults, patch.children ?? party.children),
+      MAX_BEDROOMS,
+    );
+    const manuallyRaised = party.bedrooms > requiredBed;
+    const bedrooms = manuallyRaised ? Math.max(party.bedrooms, nextRequired) : nextRequired;
+    onChange({ ...patch, bedrooms });
+  };
 
   const fields = [
     {
@@ -170,9 +182,8 @@ function LodgeParty({
       sub: "18+ years",
       value: party.adults,
       min: 1,
-      max: 8,
-      onStep: (n: number) =>
-        onChange({ adults: n, bedrooms: Math.max(party.bedrooms, requiredBedrooms(n, party.children)) }),
+      max: party.adults + slack,
+      onStep: (n: number) => changeParty({ adults: n }),
     },
     {
       key: "children",
@@ -180,17 +191,16 @@ function LodgeParty({
       sub: "6 - 17 years",
       value: party.children,
       min: 0,
-      max: 7,
-      onStep: (n: number) =>
-        onChange({ children: n, bedrooms: Math.max(party.bedrooms, requiredBedrooms(party.adults, n)) }),
+      max: party.children + slack,
+      onStep: (n: number) => changeParty({ children: n }),
     },
     {
       key: "toddlers",
       label: "Toddlers",
-      sub: layout === "row" ? "2 - 5 years" : "2 - 5 years · up to 2 share a room",
+      sub: "2 - 5 years",
       value: party.toddlers,
       min: 0,
-      max: toddlerCap,
+      max: party.toddlers + slack,
       onStep: (n: number) => onChange({ toddlers: n }),
     },
     {
@@ -209,7 +219,7 @@ function LodgeParty({
       value: party.bedrooms,
       min: requiredBed,
       max: MAX_BEDROOMS,
-      onStep: (n: number) => onChange({ bedrooms: n, toddlers: Math.min(party.toddlers, maxToddlers(n)) }),
+      onStep: (n: number) => onChange({ bedrooms: n }),
     },
   ];
 
@@ -225,15 +235,6 @@ function LodgeParty({
             </div>
           </div>
         ))}
-        {/* Dogs sits in the row of columns, greyed, mirroring Center Parcs. */}
-        <div className="opacity-50">
-          <p className="text-sm font-semibold text-forest">
-            Dogs
-            <RealBuildTag />
-          </p>
-          <p className="text-[11px] text-foreground/55">Max 2, real build</p>
-          <div className="mt-2 h-8 flex items-center text-sm font-semibold text-forest/50">0</div>
-        </div>
       </div>
     );
   }
@@ -270,13 +271,10 @@ export function BookingBar() {
   const [arrival, setArrival] = useState("");
   const [nights, setNights] = useState<number>(4); // Center Parcs' widget default
 
-  // Whole-month search state.
+  // Whole-month search: a break shape plus a month is all the widget asks.
+  // The per-date narrowing lives on the results page as a price strip.
   const [monthPattern, setMonthPattern] = useState<string>("3-fri");
   const [monthValue, setMonthValue] = useState<string>("");
-  const [monthStep, setMonthStep] = useState<"select" | "results">("select");
-  const [monthResults, setMonthResults] = useState<MonthDate[] | null>(null);
-  const [monthBusy, setMonthBusy] = useState(false);
-  const [monthError, setMonthError] = useState<string | null>(null);
 
   // One party per lodge; a single-lodge break has one entry.
   const [parties, setParties] = useState<Party[]>([{ ...DEFAULT_PARTY }]);
@@ -305,12 +303,10 @@ export function BookingBar() {
       while (next.length < n) next.push({ ...DEFAULT_PARTY });
       return next;
     });
-    setMonthResults(null);
   }
 
   function updateParty(index: number, patch: Partial<Party>) {
     setParties((prev) => prev.map((p, i) => (i === index ? { ...p, ...patch } : p)));
-    setMonthResults(null);
   }
 
   function changeNights(n: number) {
@@ -331,44 +327,12 @@ export function BookingBar() {
     return end >= today && start <= horizonEnd;
   }
 
-  async function findMonth() {
-    setMonthError(null);
-    if (!monthValue) {
-      setMonthError("Pick a month to search.");
-      return;
-    }
-    const pattern = MONTH_PATTERNS.find((p) => p.key === monthPattern)!;
-    setMonthBusy(true);
-    // Availability is priced on the first lodge's party (a discovery view).
-    const lead = parties[0];
-    const query = new URLSearchParams({
-      month: monthValue,
-      nights: String(pattern.nights),
-      dow: pattern.dow,
-      adults: String(lead.adults),
-      children: String(lead.children),
-      toddlers: String(lead.toddlers),
-      infants: String(lead.infants),
-    });
-    const result = await apiFetch<{ dates: MonthDate[] }>(`/api/month-availability?${query}`);
-    setMonthBusy(false);
-    if (!result.ok) {
-      setMonthError(result.error);
-      return;
-    }
-    setMonthResults(result.data.dates);
-    setMonthStep("results");
-  }
-
   function clearMonth() {
     setMonthValue("");
     setMonthPattern("3-fri");
-    setMonthResults(null);
-    setMonthError(null);
-    setMonthStep("select");
   }
 
-  async function runSearch(arr: string, nts: number) {
+  async function runSearch(arr: string, nts: number, extraParams = "") {
     if (!village) {
       setOpen("village");
       setError("Choose your village to get started.");
@@ -379,11 +343,20 @@ export function BookingBar() {
       setError("Choose your dates to get started.");
       return;
     }
-    const oversized = parties.findIndex((p) => partySize(p) > MAX_LODGE_SLEEPS);
+    const oversized = parties.findIndex(
+      (p) => countedGuests(p.adults, p.children, p.toddlers) > MAX_PARTY,
+    );
     if (oversized !== -1) {
       setOpen("guests");
       const label = lodgeCount > 1 ? `Lodge ${oversized + 1}` : "Your party";
-      setError(`Our largest lodge sleeps ${MAX_LODGE_SLEEPS}. ${label} has ${partySize(parties[oversized])} guests.`);
+      const counted = countedGuests(
+        parties[oversized].adults,
+        parties[oversized].children,
+        parties[oversized].toddlers,
+      );
+      setError(
+        `Our largest lodge sleeps ${MAX_PARTY} plus up to ${MAX_INFANTS} infants. ${label} has ${counted} guests aged 2 and over.`,
+      );
       return;
     }
     setBusy(true);
@@ -418,7 +391,7 @@ export function BookingBar() {
       // their own party on the basket page.
       const bedroomsParam =
         lodgeCount === 1 && lead.bedrooms > 1 ? `&bedrooms=${lead.bedrooms}` : "";
-      router.push(`/lodges?session=${result.data.sessionId}${bedroomsParam}`);
+      router.push(`/lodges?session=${result.data.sessionId}${bedroomsParam}${extraParams}`);
       return;
     }
     if (result.refused) setRefusal(result.error);
@@ -426,11 +399,64 @@ export function BookingBar() {
     setBusy(false);
   }
 
-  function pickMonthDate(d: MonthDate) {
+  /**
+   * Month mode: price the month's candidate start dates for the chosen break
+   * shape, then land on the results page with the cheapest one selected. The
+   * page shows the whole month as a price strip, so the guest narrows there.
+   */
+  async function runMonthSearch() {
+    if (!village) {
+      setOpen("village");
+      setError("Choose your village to get started.");
+      return;
+    }
+    if (!monthValue) {
+      setOpen("dates");
+      setError("Choose a month to get started.");
+      return;
+    }
+    const oversized = parties.findIndex(
+      (p) => countedGuests(p.adults, p.children, p.toddlers) > MAX_PARTY,
+    );
+    if (oversized !== -1) {
+      setOpen("guests");
+      const label = lodgeCount > 1 ? `Lodge ${oversized + 1}` : "Your party";
+      setError(
+        `Our largest lodge sleeps ${MAX_PARTY} plus up to ${MAX_INFANTS} infants. ${label} has too many guests aged 2 and over.`,
+      );
+      return;
+    }
     const pattern = MONTH_PATTERNS.find((p) => p.key === monthPattern)!;
-    setArrival(d.arrival);
-    setNights(pattern.nights);
-    runSearch(d.arrival, pattern.nights);
+    setBusy(true);
+    setError(null);
+    setRefusal(null);
+    // Priced on the first lodge's party, same as the results page's strip.
+    const lead = parties[0];
+    const query = new URLSearchParams({
+      month: monthValue,
+      nights: String(pattern.nights),
+      dow: pattern.dow,
+      adults: String(lead.adults),
+      children: String(lead.children),
+      toddlers: String(lead.toddlers),
+      infants: String(lead.infants),
+    });
+    const result = await apiFetch<{ dates: MonthDate[] }>(`/api/month-availability?${query}`);
+    if (!result.ok) {
+      setError(result.error);
+      setBusy(false);
+      return;
+    }
+    const openDates = result.data.dates.filter((d) => d.available && d.fromPrice !== null);
+    if (openDates.length === 0) {
+      setRefusal(
+        `Nothing is open for a ${pattern.label.toLowerCase()} break (${pattern.sub}) in ${monthLabel(monthValue)}. Try another month or break shape.`,
+      );
+      setBusy(false);
+      return;
+    }
+    const cheapest = openDates.reduce((a, b) => (b.fromPrice! < a.fromPrice! ? b : a));
+    await runSearch(cheapest.arrival, pattern.nights, `&month=${monthValue}`);
   }
 
   const guestsLabel =
@@ -522,7 +548,15 @@ export function BookingBar() {
             className={chip}
           >
             <span className={chipLabel}>Dates</span>
-            {arrival ? (
+            {dateMode === "month" ? (
+              monthValue ? (
+                <span className={chipValue}>
+                  {monthLabel(monthValue)} · {monthPatternLabel()}
+                </span>
+              ) : (
+                <span className={chipPlaceholder}>Choose a month</span>
+              )
+            ) : arrival ? (
               <span className={chipValue}>
                 {shortDate(arrival)} → {shortDate(departure)}
               </span>
@@ -612,7 +646,7 @@ export function BookingBar() {
                     </button>
                   </div>
                 </>
-              ) : monthStep === "select" ? (
+              ) : (
                 <>
                   {/* Year headers with (decorative) navigation, two years */}
                   <div className="flex items-center gap-3 mb-4">
@@ -638,10 +672,7 @@ export function BookingBar() {
                         <p className="text-[11px] text-foreground/55 mb-1">{p.sub}</p>
                         <button
                           type="button"
-                          onClick={() => {
-                            setMonthPattern(p.key);
-                            setMonthResults(null);
-                          }}
+                          onClick={() => setMonthPattern(p.key)}
                           className={
                             monthPattern === p.key
                               ? "rounded-md bg-forest text-white px-4 py-2 text-sm font-semibold"
@@ -667,10 +698,7 @@ export function BookingBar() {
                               key={mi}
                               type="button"
                               disabled={!selectable}
-                              onClick={() => {
-                                setMonthValue(value);
-                                setMonthResults(null);
-                              }}
+                              onClick={() => setMonthValue(value)}
                               className={
                                 selected
                                   ? "rounded-md bg-forest text-white text-sm font-semibold px-3 py-2"
@@ -688,17 +716,10 @@ export function BookingBar() {
                   </div>
 
                   <div className="mt-4 rounded-lg bg-forest/5 px-4 py-3 text-xs text-foreground/70">
-                    You can book a break for a three-night weekend (Friday to
-                    Monday), four-night midweek (Monday to Friday) or seven
-                    nights (starting Monday or Friday). Only months inside our
-                    booking window can be searched.
+                    Pick a break shape and a month, then hit Search. We&apos;ll
+                    show every start date that&apos;s open, cheapest first.
+                    Only months inside our booking window can be searched.
                   </div>
-
-                  {monthError && (
-                    <div className="mt-3 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-800">
-                      {monthError}
-                    </div>
-                  )}
 
                   <div className="flex items-center justify-end gap-4 mt-3">
                     <button
@@ -710,64 +731,12 @@ export function BookingBar() {
                     </button>
                     <button
                       type="button"
-                      onClick={findMonth}
-                      disabled={monthBusy}
-                      className="rounded-lg bg-forest text-white px-6 py-2 text-sm font-semibold hover:bg-forest-light disabled:opacity-60"
+                      onClick={() => setOpen("lodges")}
+                      disabled={!monthValue}
+                      className="rounded-lg bg-forest text-white px-6 py-2 text-sm font-semibold hover:bg-forest-light disabled:opacity-40"
                     >
-                      {monthBusy ? "Checking…" : "Next"}
+                      Next
                     </button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => setMonthStep("select")}
-                    className="text-sm text-forest underline underline-offset-2"
-                  >
-                    ← Choose another month
-                  </button>
-                  <p className="mt-2 text-sm font-semibold text-forest">
-                    {monthPatternLabel()} breaks in {monthValue ? monthLabel(monthValue) : ""}
-                  </p>
-
-                  <div className="mt-3 grid gap-2 max-h-72 overflow-y-auto pr-1">
-                    {monthResults && monthResults.length === 0 && (
-                      <p className="text-sm text-foreground/60">
-                        No breaks of that shape start in{" "}
-                        {monthValue ? monthLabel(monthValue) : "that month"} within our
-                        booking window. Try another month or break length.
-                      </p>
-                    )}
-                    {monthResults?.map((d) => (
-                      <div
-                        key={d.arrival}
-                        className={`flex items-center justify-between rounded-lg px-4 py-2.5 ring-1 ${
-                          d.available ? "ring-forest/15 bg-white" : "ring-forest/10 bg-sand/40 opacity-70"
-                        }`}
-                      >
-                        <div>
-                          <p className="text-sm font-semibold text-forest">
-                            {shortDate(d.arrival)} → {shortDate(d.departure)}
-                          </p>
-                          <p className="text-xs text-foreground/55">
-                            {d.available
-                              ? `${lodgeCount > 1 ? "lodge 1 " : ""}from ${formatKes(d.fromPrice!)}`
-                              : "Sold out"}
-                          </p>
-                        </div>
-                        {d.available && (
-                          <button
-                            type="button"
-                            onClick={() => pickMonthDate(d)}
-                            disabled={busy}
-                            className="rounded-lg bg-forest text-white px-5 py-1.5 text-sm font-semibold hover:bg-forest-light disabled:opacity-60"
-                          >
-                            {busy ? "…" : "Select"}
-                          </button>
-                        )}
-                      </div>
-                    ))}
                   </div>
                 </>
               )}
@@ -879,30 +848,6 @@ export function BookingBar() {
                 </div>
               ))}
 
-              {/* Dogs (single lodge only - multi shows it per lodge) and the
-                  adapted-lodge affordance, both real-build for now. */}
-              <div className="mt-3 pt-3 border-t border-forest/10">
-                {lodgeCount === 1 && (
-                  <div className="flex items-center justify-between py-2 opacity-50">
-                    <div>
-                      <p className="text-sm font-semibold text-forest">
-                        Dogs
-                        <RealBuildTag />
-                      </p>
-                      <p className="text-xs text-foreground/55">Dog-friendly lodges arrive with the real build</p>
-                    </div>
-                    <span className="text-sm font-semibold text-forest/50 pr-1">0</span>
-                  </div>
-                )}
-                <div className="flex items-center justify-between py-2 opacity-50">
-                  <p className="text-sm font-semibold text-forest">
-                    Adapted lodge required?
-                    <RealBuildTag />
-                  </p>
-                  <span className="w-9 h-5 rounded-full ring-1 ring-forest/25" />
-                </div>
-              </div>
-
               <div className="flex justify-end mt-2">
                 <button
                   type="button"
@@ -919,7 +864,7 @@ export function BookingBar() {
         {/* Search */}
         <button
           type="button"
-          onClick={() => runSearch(arrival, nights)}
+          onClick={() => (dateMode === "month" ? runMonthSearch() : runSearch(arrival, nights))}
           disabled={busy}
           className="shrink-0 bg-forest text-white px-8 text-base font-semibold hover:bg-forest-light transition-colors disabled:opacity-60 py-4 sm:py-0 rounded-b-2xl sm:rounded-b-none sm:rounded-r-2xl"
         >

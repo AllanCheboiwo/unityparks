@@ -16,6 +16,17 @@ export function formatDate(iso: string): string {
   });
 }
 
+/** "Fri 10 Jul" - chip-sized date used by the results price strip. */
+export function formatShortDate(iso: string): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  return d.toLocaleDateString("en-GB", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    timeZone: "UTC",
+  });
+}
+
 /** Age-band display names, matching the search widget's bands. */
 export const BAND_LABELS: Record<string, string> = {
   adult: "Adult",

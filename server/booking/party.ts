@@ -22,6 +22,16 @@ export function bandsToAges(counts: {
   ];
 }
 
+/**
+ * The ages that occupy beds. Infants (under 2) sleep in cots on top of a
+ * lodge's sleeping capacity, so they are stripped from anything sent to
+ * Apaleo, whose maxPersons counts every person it is told about. Our own
+ * sessions keep the full ages for party labels and the guest manifest.
+ */
+export function occupancyAges(ages: number[]): number[] {
+  return ages.filter((age) => age >= 2);
+}
+
 /** "2 adults · 1 child · 2 toddlers" - derived back from the stored ages. */
 export function partyLabel(adults: number, childrenAges: number[]): string {
   const count = (age: number) => childrenAges.filter((a) => a === age).length;

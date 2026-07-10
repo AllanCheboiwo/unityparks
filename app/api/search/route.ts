@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getStayOffers } from "@/server/apaleo/offers";
 import { validateStay } from "@/server/booking/rules";
-import { bandsToAges } from "@/server/booking/party";
+import { bandsToAges, occupancyAges } from "@/server/booking/party";
 import { createSession } from "@/server/booking/session";
 import { getCurrentUser } from "@/server/auth/session";
 import { handleRoute, jsonError } from "@/server/api-helpers";
@@ -51,13 +51,14 @@ export async function POST(req: NextRequest) {
       childrenAges: bandsToAges(p),
     }));
     // Each lodge is booked whole, so every party must fit one lodge.
+    // Infants ride in cots and don't take a bed (see occupancyAges).
     for (const [i, p] of parties.entries()) {
-      const size = p.adults + p.childrenAges.length;
+      const size = p.adults + occupancyAges(p.childrenAges).length;
       if (size > 8) {
         return NextResponse.json(
           {
             refused: true,
-            reason: `Our largest lodge sleeps 8. Lodge ${i + 1} has ${size} guests. Split the party differently or call our team.`,
+            reason: `Our largest lodge sleeps 8. Lodge ${i + 1} has ${size} guests aged 2 and over. Split the party differently or call our team.`,
           },
           { status: 422 },
         );
