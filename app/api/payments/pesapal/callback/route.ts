@@ -10,8 +10,11 @@ import { confirmPesapalPayment } from "@/server/booking/checkout";
  * does the asking, and only its answer decides where the guest lands.
  */
 export async function GET(req: NextRequest) {
+  // Behind Railway's proxy req.url carries the container-local host
+  // (localhost:8080), so guest-facing redirects are built from APP_BASE_URL.
+  const base = process.env.APP_BASE_URL ?? req.url;
   const trackingId = req.nextUrl.searchParams.get("OrderTrackingId");
-  if (!trackingId) return NextResponse.redirect(new URL("/", req.url));
+  if (!trackingId) return NextResponse.redirect(new URL("/", base));
 
   try {
     const { outcome, record } = await confirmPesapalPayment(trackingId);
@@ -21,13 +24,13 @@ export async function GET(req: NextRequest) {
       return NextResponse.redirect(
         new URL(
           `/confirmation/${record.apaleoBookingId}?session=${record.sessionId}`,
-          req.url,
+          base,
         ),
       );
     }
     // pending or failed: back to the pay page, which explains and retries.
     return NextResponse.redirect(
-      new URL(`/checkout/pay?session=${record.sessionId}&payment=${outcome}`, req.url),
+      new URL(`/checkout/pay?session=${record.sessionId}&payment=${outcome}`, base),
     );
   } catch (err) {
     console.error("Pesapal callback failed", err);
@@ -40,7 +43,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(
       new URL(
         sessionId ? `/checkout/pay?session=${sessionId}&payment=error` : "/",
-        req.url,
+        base,
       ),
     );
   }
