@@ -176,6 +176,46 @@ model BookingRecord {
   claimedVia String? // "email-match" when adopted by the claim backfill
 
   reservations BookingReservation[]
+  pesapalTransactions PesapalTransaction[]
+}
+
+// One Pesapal order per payment attempt for a booking (the guest sees one
+// charge even for a multi-lodge break; the per-folio split is recorded on
+// Apaleo at settle time). The row id doubles as the merchant reference sent
+// to Pesapal, so a lookup can start from either end. Pesapal requires a
+// fresh merchant reference per attempt, hence one row per attempt.
+model PesapalTransaction {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  recordId String
+  record   BookingRecord @relation(fields: [recordId], references: [id])
+
+  // What we asked Pesapal to collect, snapshot at submit time. Checked
+  // against Pesapal's word before any folio write-back.
+  amount   Float
+  currency String
+
+  // Pesapal's id and hosted-page URL, set once SubmitOrderRequest succeeds.
+  // The URL is kept so a pending attempt can be re-entered without creating
+  // a duplicate order (the shared sandbox merchant rate-limits submissions).
+  orderTrackingId String? @unique
+  redirectUrl     String?
+
+  // pending | completed | failed | superseded, plus three flags a human must
+  // act on: mismatch (Pesapal's amount differs from ours), excess (a second
+  // order for an already-paid booking was collected), reversed (chargeback
+  // after settlement).
+  status           String  @default("pending")
+  confirmationCode String? // Pesapal's processor confirmation, for reconciliation
+  paymentMethod    String? // e.g. Visa, MpesaKE, as reported by GetTransactionStatus
+
+  // The serializer: holds the record id while this row is the one live
+  // attempt (pending, or completed but not yet settled); cleared when the
+  // row retires. The unique constraint turns two concurrent Buy nows into a
+  // plain constraint violation instead of two payable Pesapal orders.
+  liveForRecordId String? @unique
 }
 
 // Payment state per reservation (one row per lodge in the booking): a crash

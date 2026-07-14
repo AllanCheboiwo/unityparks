@@ -55,6 +55,13 @@ export async function POST(
       email: req.nextUrl.searchParams.get("email"),
     });
 
+    // A booking awaiting payment must not change shape: a Pesapal order for
+    // the old total may be minutes from settling, and the amount collected
+    // has to match what the folios ask for at settle time.
+    if (record.status !== "paid") {
+      return jsonError(409, "Finish paying for your break before changing it.");
+    }
+
     const parsed = AmendBody.safeParse(await req.json());
     if (!parsed.success) return jsonError(400, "Please choose new dates.");
     const { arrival, departure } = parsed.data;

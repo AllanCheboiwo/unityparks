@@ -2,10 +2,12 @@ import "server-only";
 import { apaleo } from "./client";
 
 /**
- * The demo's simulated payment: post the amount owed onto the folio as a
- * manual "Other" payment. Apaleo records the money as received and the folio
- * settles - no processor involved. In the real build this is replaced by the
- * Pesapal collect -> confirm -> record sequence; the call shape stays the same.
+ * The record step of every payment path: post the amount owed onto the folio
+ * as a manual "Other" payment. Apaleo records the money as received and the
+ * folio settles - no processor involved in THIS call. With the simulated
+ * provider this is the whole payment; with Pesapal it runs only after our own
+ * status read confirmed the money, and the receipt carries the Pesapal
+ * tracking id so the folio points back at the real collection.
  */
 export async function payFolio(params: {
   folioId: string;

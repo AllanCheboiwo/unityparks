@@ -1,15 +1,38 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { apiFetch, isExpired } from "@/lib/api";
-import { formatDate, formatKes, nightsLabel } from "@/lib/format";
+import { formatDate, formatKes, formatShortDate, nightsLabel } from "@/lib/format";
 import { LODGES, TIER_ORDER } from "@/content/lodges";
 import type { SessionSummary, StayOfferDto } from "@/lib/types";
 import { Stepper } from "@/components/Stepper";
 import { ExpiredNotice } from "@/components/ExpiredNotice";
+
+/** One candidate start date in a whole-month search, from /api/month-availability. */
+type MonthDate = {
+  arrival: string;
+  departure: string;
+  available: boolean;
+  fromPrice: number | null;
+  currency: string;
+};
+
+/**
+ * Band counts recovered from the stored representative ages. The bands are
+ * defined by age ranges (children 6-17, toddlers 2-5, infants under 2), so
+ * counting by range is exact whatever representative age the server picked.
+ */
+function agesToBands(adults: number, ages: number[]) {
+  return {
+    adults,
+    children: ages.filter((a) => a >= 6).length,
+    toddlers: ages.filter((a) => a >= 2 && a <= 5).length,
+    infants: ages.filter((a) => a < 2).length,
+  };
+}
 
 export function LodgesClient() {
   const router = useRouter();
@@ -17,17 +40,28 @@ export function LodgesClient() {
   const sessionId = searchParams.get("session");
   // Bedrooms preference filters but never blocks (single-lodge only).
   const bedroomsPref = Number(searchParams.get("bedrooms") ?? 0);
+  // A whole-month search carries ?month=; the price strip lets the guest hop
+  // between that month's start dates without going back to the widget.
+  const month = searchParams.get("month");
   const [session, setSession] = useState<SessionSummary | null>(null);
   const [offersBySlot, setOffersBySlot] = useState<Record<number, StayOfferDto[]>>({});
   const [activeSlot, setActiveSlot] = useState(0);
   const [expired, setExpired] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selecting, setSelecting] = useState<string | null>(null);
+  const [monthDates, setMonthDates] = useState<MonthDate[] | null>(null);
+  const monthKey = useRef<string | null>(null);
+  const [dateSwitching, setDateSwitching] = useState(false);
 
   useEffect(() => {
     if (!sessionId) return;
+    // A date hop replaces the session mid-page; without this guard the old
+    // session's slower fetches would land after the new one's and show the
+    // previous date's prices against the new date's header.
+    let stale = false;
     (async () => {
       const s = await apiFetch<SessionSummary>(`/api/session/${sessionId}`);
+      if (stale) return;
       if (isExpired(s)) return setExpired(true);
       if (!s.ok) return setError(s.error);
       const summary = s.data;
@@ -42,16 +76,52 @@ export function LodgesClient() {
           ),
         ),
       );
+      if (stale) return;
       const map: Record<number, StayOfferDto[]> = {};
       results.forEach((r, i) => {
         if (r.ok) map[summary.lodges[i].slot] = r.data.offers;
       });
       setOffersBySlot(map);
+      setDateSwitching(false);
     })();
+    return () => {
+      stale = true;
+    };
   }, [sessionId]);
 
+  // One strip fetch per month/shape/party combination. Hopping between dates
+  // swaps the session but not the strip, so the key check skips the refetch.
+  // The result depends only on the key, so a late response is safe to keep as
+  // long as the key is still current; a failed fetch clears the key so the
+  // next render can retry instead of caching the failure forever.
+  useEffect(() => {
+    if (!month || !session) return;
+    const lead = agesToBands(session.lodges[0].adults, session.lodges[0].childrenAges);
+    const dow = new Date(`${session.arrival}T00:00:00Z`).getUTCDay() === 5 ? "fri" : "mon";
+    const key = [month, session.nights, dow, lead.adults, lead.children, lead.toddlers, lead.infants].join("|");
+    if (monthKey.current === key) return;
+    monthKey.current = key;
+    (async () => {
+      const query = new URLSearchParams({
+        month,
+        nights: String(session.nights),
+        dow,
+        adults: String(lead.adults),
+        children: String(lead.children),
+        toddlers: String(lead.toddlers),
+        infants: String(lead.infants),
+      });
+      const r = await apiFetch<{ dates: MonthDate[] }>(`/api/month-availability?${query}`);
+      if (monthKey.current !== key) return; // superseded by a different strip
+      if (r.ok) setMonthDates(r.data.dates);
+      else monthKey.current = null;
+    })();
+  }, [month, session]);
+
   if (!sessionId || expired) return <ExpiredNotice />;
-  if (error) {
+  // Only a failed initial load takes over the page. Later errors (a date hop
+  // or lodge pick going wrong) show in the inline box beside the results.
+  if (error && !session) {
     return <p className="mx-auto max-w-2xl px-5 py-20 text-center text-red-700">{error}</p>;
   }
   if (!session) {
@@ -114,7 +184,40 @@ export function LodgesClient() {
     if (nextUnchosen) setActiveSlot(nextUnchosen.slot);
   }
 
-  const activePartySize = activeLodge.adults + activeLodge.childrenAges.length;
+  // Infants sleep in cots, so they don't count against a lodge's beds.
+  const activePartySize =
+    activeLodge.adults + activeLodge.childrenAges.filter((a) => a >= 2).length;
+
+  /** Hop to another start date in the month: a fresh search, same parties. */
+  async function switchDate(d: MonthDate) {
+    if (!session || !d.available || d.arrival === session.arrival || dateSwitching) return;
+    setDateSwitching(true);
+    setError(null);
+    const bands = session.lodges.map((l) => agesToBands(l.adults, l.childrenAges));
+    const result = await apiFetch<{ sessionId: string }>("/api/search", {
+      method: "POST",
+      body: JSON.stringify({
+        arrival: d.arrival,
+        departure: d.departure,
+        ...bands[0],
+        ...(bands.length > 1 ? { lodges: bands } : {}),
+      }),
+    });
+    if (!result.ok) {
+      setError(result.error);
+      setDateSwitching(false);
+      return;
+    }
+    const params = new URLSearchParams({ session: result.data.sessionId, month: month! });
+    if (bedroomsPref > 0) params.set("bedrooms", String(bedroomsPref));
+    router.replace(`/lodges?${params.toString()}`);
+  }
+
+  // The strip's cheapest open date wears the "Lowest price" tag.
+  const openDates = (monthDates ?? []).filter((d) => d.available && d.fromPrice !== null);
+  const cheapestArrival = openDates.length
+    ? openDates.reduce((a, b) => (b.fromPrice! < a.fromPrice! ? b : a)).arrival
+    : null;
 
   return (
     <div className="mx-auto max-w-5xl px-5 py-8">
@@ -142,6 +245,55 @@ export function LodgesClient() {
         {!multi && <> · {activeLodge.partyLabel}</>}
         {!multi && bedroomsPref > 1 && ` · ${bedroomsPref}+ bedrooms preferred`}
       </p>
+
+      {/* Whole-month price strip: every start date in the searched month,
+          cheapest tagged, sold-out unclickable. Prices follow lodge 1. */}
+      {month && monthDates && monthDates.length > 0 && (
+        <div className="mt-6 flex gap-2 overflow-x-auto pb-1">
+          {monthDates.map((d) => {
+            const isSelected = d.arrival === session.arrival;
+            const isCheapest = d.arrival === cheapestArrival;
+            return (
+              <button
+                key={d.arrival}
+                type="button"
+                disabled={!d.available || isSelected || dateSwitching}
+                onClick={() => switchDate(d)}
+                className={`relative shrink-0 min-w-[10.5rem] rounded-xl px-4 pb-3 text-left transition ${
+                  isCheapest ? "pt-7" : "pt-3"
+                } ${
+                  isSelected
+                    ? "bg-forest ring-2 ring-forest"
+                    : d.available
+                      ? "bg-white ring-1 ring-forest/15 hover:ring-forest/40 disabled:opacity-60"
+                      : "bg-sand/40 ring-1 ring-forest/10 opacity-60 cursor-not-allowed"
+                }`}
+              >
+                {isCheapest && (
+                  <span className="absolute top-1.5 left-4 rounded-full bg-gold text-forest text-[10px] font-semibold px-2 py-0.5">
+                    Lowest price
+                  </span>
+                )}
+                <span className={`block text-sm font-semibold ${isSelected ? "text-white" : "text-forest"}`}>
+                  {formatShortDate(d.arrival)}
+                </span>
+                <span className={`block text-[11px] ${isSelected ? "text-white/70" : "text-foreground/55"}`}>
+                  {session.nights} nights
+                </span>
+                <span
+                  className={`block mt-0.5 text-sm font-semibold ${
+                    isSelected ? "text-white" : d.available ? "text-forest" : "text-foreground/45"
+                  }`}
+                >
+                  {d.available
+                    ? `${multi ? "lodge 1 from" : "from"} ${formatKes(d.fromPrice!)}`
+                    : "Sold out"}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Basket strip (multi-lodge only) */}
       {multi && (
@@ -212,7 +364,7 @@ export function LodgesClient() {
         </div>
       )}
 
-      <div className="mt-6 grid gap-6">
+      <div className={`mt-6 grid gap-6 ${dateSwitching ? "opacity-50 pointer-events-none" : ""}`}>
         {TIER_ORDER.map((code) => {
           const lodge = LODGES[code];
           const rawOffer = offersByCode.get(code);
@@ -231,8 +383,14 @@ export function LodgesClient() {
                 isChosenHere ? "ring-2 ring-forest" : "ring-forest/10"
               } ${offer ? "" : "opacity-60"}`}
             >
+              {/* Unavailable tiers go black-and-white, Center Parcs style. */}
               <div className="relative h-44 sm:h-auto sm:w-64 shrink-0">
-                <Image src={lodge.image} alt={lodge.name} fill className="object-cover" />
+                <Image
+                  src={lodge.image}
+                  alt={lodge.name}
+                  fill
+                  className={`object-cover ${offer ? "" : "grayscale"}`}
+                />
               </div>
 
               <div className="p-5 flex-1 flex flex-col sm:flex-row sm:items-center gap-5">

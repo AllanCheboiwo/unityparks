@@ -1,19 +1,47 @@
 import "server-only";
-import { Prisma, type BookingRecord, type BookingReservation } from "@prisma/client";
+import {
+  Prisma,
+  type BookingRecord,
+  type BookingReservation,
+  type PesapalTransaction,
+} from "@prisma/client";
 import { prisma } from "../db";
 import { createBooking, getFolioForReservation, type FolioSummary } from "../apaleo/bookings";
 import { payFolio } from "../apaleo/payments";
 import { ApaleoError } from "../apaleo/client";
+import { getOrderStatus, submitOrder } from "../pesapal/orders";
+import { paymentMatchesOrder } from "../pesapal/status";
 import { PublicError } from "../api-helpers";
+import { paymentsProvider } from "./provider";
 import { getSession, parseChildrenAges, parseExtras } from "./session";
+import { loadGuests } from "./guests";
 
 type RecordWithReservations = BookingRecord & { reservations: BookingReservation[] };
+type SessionForCheckout = NonNullable<Awaited<ReturnType<typeof getSession>>>;
+
+/** Where the guest's browser (and Pesapal's IPN) finds us. */
+function appBaseUrl(): string {
+  return process.env.APP_BASE_URL ?? "http://localhost:3000";
+}
+
+export type CheckoutOutcome =
+  | { kind: "paid"; record: BookingRecord }
+  | { kind: "redirect"; redirectUrl: string };
 
 /**
- * The "Buy now" moment, in three steps that mirror the real build:
+ * The "Buy now" moment. Reserve first, then collect, then record:
  *   1. create the booking in Apaleo - one booking, one reservation per lodge
- *   2. read each reservation's folio - Apaleo's number for what is owed
- *   3. pay each folio (demo: manual "Other" payment)
+ *   2. collect the money - Pesapal's hosted page (or the demo simulation)
+ *   3. record it - pay each reservation's folio in Apaleo
+ *
+ * With the simulated provider all three happen in this one call, exactly as
+ * the demo always has. With Pesapal this call ends at a redirect to their
+ * payment page; confirmPesapalPayment() picks up steps 2-3 when the guest
+ * (or the IPN) comes back. Re-entry is the same entry point: Buy now again
+ * resumes wherever the last attempt stopped - a collected-but-unrecorded
+ * payment settles, a pending order re-offers the same payment page, a
+ * failed one gets a fresh order. Reservations are never re-created (per
+ * session idempotency key) and folios are never re-paid (per-slot keys).
  *
  * Ordering rules that keep money truthful:
  *   - The BookingRecord lookup comes BEFORE the session-expiry gate. Once a
@@ -22,17 +50,354 @@ type RecordWithReservations = BookingRecord & { reservations: BookingReservation
  *   - The record is created carrying every folio's real total, so a crash
  *     between payment and the final update can never leave a paid booking
  *     recorded at 0.
- *   - Payment state lives per reservation (BookingReservation children):
- *     "crashed after paying folio 2 of 3" resumes by settling only what is
- *     still owed, never re-paying (per-slot idempotency keys) and never
- *     giving up.
+ *   - A Pesapal order is only ever trusted after our own GetTransactionStatus
+ *     call says COMPLETED with the amount and currency we asked for. The
+ *     browser redirect proves nothing.
+ *   - The PesapalTransaction row flips to "completed" BEFORE the folio
+ *     write-backs, so a crash between the two leaves a row saying "money
+ *     collected, not yet recorded" - the resume paths finish the recording,
+ *     never re-collect.
  */
-export async function completeCheckout(sessionId: string): Promise<BookingRecord> {
+export async function beginCheckout(sessionId: string): Promise<CheckoutOutcome> {
+  const provider = paymentsProvider();
+  // A forced PAYMENTS_PROVIDER=pesapal can bypass the presence checks, so
+  // fail the config error here, BEFORE a reservation is created for nothing.
+  const ipnId = process.env.PESAPAL_IPN_ID;
+  if (provider === "pesapal" && !ipnId) {
+    throw new Error("PESAPAL_IPN_ID is not set. Run: node scripts/register-pesapal-ipn.mjs");
+  }
+
+  const { record, session } = await ensureRecord(sessionId);
+  if (record.status === "paid") return { kind: "paid", record };
+
+  if (provider === "simulated") {
+    const paid = await settleBooking(record, session, null, null);
+    return { kind: "paid", record: paid };
+  }
+
+  const transactions = await prisma.pesapalTransaction.findMany({
+    where: { recordId: record.id },
+    orderBy: { createdAt: "desc" },
+  });
+
+  // A mismatch row means Pesapal reported collecting something other than
+  // what we asked for. Folios stay untouched and Buy now stays closed until
+  // a human resolves it - a fresh order on top would only bury the problem.
+  if (transactions.some((t) => t.status === "mismatch")) {
+    throw new PublicError(
+      502,
+      "The payment we received doesn't match your booking total. Please contact us before paying again.",
+    );
+  }
+
+  // Finish any attempt where money was already collected but a crash stopped
+  // the folio recording - never send that guest to pay again.
+  const collected = transactions.find((t) => t.status === "completed");
+  if (collected) {
+    const paid = await settleBooking(record, session, collected.orderTrackingId, collected.amount);
+    return { kind: "paid", record: paid };
+  }
+
+  // A live order may already be out there: ask Pesapal what happened to it.
+  const open = transactions.find((t) => t.status === "pending" && t.orderTrackingId);
+  if (open) {
+    const status = await getOrderStatus(open.orderTrackingId!);
+    if (status.outcome === "completed") {
+      await confirmCollected(open, status);
+      const paid = await settleBooking(record, session, open.orderTrackingId, open.amount);
+      return { kind: "paid", record: paid };
+    }
+    if (status.outcome === "pending" && open.redirectUrl) {
+      // Still waiting on the guest: same order, same payment page. Reusing
+      // it keeps retries off the shared sandbox merchant's rate limits.
+      return { kind: "redirect", redirectUrl: open.redirectUrl };
+    }
+    await prisma.pesapalTransaction.updateMany({
+      where: { id: open.id, status: "pending" },
+      data: {
+        status: status.outcome === "pending" ? "superseded" : "failed",
+        confirmationCode: status.confirmationCode,
+        paymentMethod: status.paymentMethod,
+        liveForRecordId: null,
+      },
+    });
+  }
+
+  return submitFreshOrder(record, session, ipnId!);
+}
+
+/**
+ * Create the one live attempt and send its order to Pesapal. The unique
+ * liveForRecordId column is the lock: when two requests race here, exactly
+ * one row wins and the loser resolves against the winner instead of minting
+ * a second payable order. Retired attempts (failed, superseded) have the
+ * column cleared, so they never block a legitimate retry.
+ */
+async function submitFreshOrder(
+  record: RecordWithReservations,
+  session: SessionForCheckout,
+  ipnId: string,
+): Promise<CheckoutOutcome> {
+  let transaction: PesapalTransaction | null = null;
+  for (let attempt = 0; attempt < 2 && !transaction; attempt++) {
+    try {
+      transaction = await prisma.pesapalTransaction.create({
+        data: {
+          recordId: record.id,
+          amount: record.totalGrossAmount,
+          currency: record.currency,
+          liveForRecordId: record.id,
+        },
+      });
+    } catch (err) {
+      const raced =
+        err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002";
+      if (!raced) throw err;
+
+      const winner = await prisma.pesapalTransaction.findUnique({
+        where: { liveForRecordId: record.id },
+      });
+      if (!winner) continue; // winner retired between our create and read: take its place
+
+      if (winner.status === "completed") {
+        // The racing confirm already collected money on the winner: record it.
+        const paid = await settleBooking(record, session, winner.orderTrackingId, winner.amount);
+        return { kind: "paid", record: paid };
+      }
+      if (winner.redirectUrl) {
+        // The winner's order is live: this guest joins it.
+        return { kind: "redirect", redirectUrl: winner.redirectUrl };
+      }
+      if (Date.now() - winner.createdAt.getTime() < 2 * 60_000) {
+        // The winner is mid-SubmitOrderRequest in another request. Its
+        // redirect will land there; this one just needs patience.
+        throw new PublicError(
+          409,
+          "We're already setting up your payment. Give it a moment, then press the button again.",
+        );
+      }
+      // A crashed attempt: no order URL ever landed and nobody is coming
+      // back for it. Its merchant reference may or may not exist at Pesapal,
+      // so it is dead to us either way - retire it and take its place.
+      await prisma.pesapalTransaction.update({
+        where: { id: winner.id },
+        data: { status: "superseded", liveForRecordId: null },
+      });
+    }
+  }
+  if (!transaction) {
+    throw new PublicError(
+      409,
+      "We're already setting up your payment. Give it a moment, then press the button again.",
+    );
+  }
+
+  const order = await submitOrder({
+    merchantReference: transaction.id,
+    amount: transaction.amount,
+    currency: transaction.currency,
+    description: `Unity Parks break ${session.arrival} to ${session.departure}`,
+    callbackUrl: `${appBaseUrl()}/api/payments/pesapal/callback`,
+    notificationId: ipnId,
+    billing: {
+      firstName: session.guestFirstName!,
+      lastName: session.guestLastName!,
+      email: session.guestEmail!,
+      phone: session.guestPhone ?? undefined,
+    },
+  });
+  await prisma.pesapalTransaction.update({
+    where: { id: transaction.id },
+    data: { orderTrackingId: order.orderTrackingId, redirectUrl: order.redirectUrl },
+  });
+
+  return { kind: "redirect", redirectUrl: order.redirectUrl };
+}
+
+export type PesapalConfirmation = {
+  outcome: "completed" | "pending" | "failed";
+  record: BookingRecord;
+};
+
+/**
+ * The other half of the Pesapal flow: the guest's browser came back to the
+ * callback URL, or the IPN fired. Both land here, both are idempotent, and
+ * a race between them is settled by Apaleo's idempotency keys (same key,
+ * same payment). Only our own status read decides anything.
+ */
+export async function confirmPesapalPayment(
+  orderTrackingId: string,
+): Promise<PesapalConfirmation> {
+  const transaction = await prisma.pesapalTransaction.findUnique({
+    where: { orderTrackingId },
+    include: { record: { include: { reservations: { orderBy: { slot: "asc" } } } } },
+  });
+  if (!transaction) throw new PublicError(404, "Unknown payment reference.");
+
+  const record = transaction.record;
+
+  // Already recorded as a mismatch: the fact is stored, the pay page holds
+  // the guest, a human resolves it. "failed" keeps the callback off the
+  // confirmation page and lets the IPN acknowledge without retry-looping.
+  if (transaction.status === "mismatch") return { outcome: "failed", record };
+
+  if (record.status === "paid") {
+    return confirmAgainstPaidRecord(transaction, record);
+  }
+
+  // The shopping-session TTL must never block recording collected money, so
+  // read the session row directly rather than through the expiry gate.
+  const session = await prisma.bookingSession.findUnique({
+    where: { id: record.sessionId },
+    include: { lodges: { orderBy: { slot: "asc" } } },
+  });
+  if (!session) throw new PublicError(404, "Unknown payment reference.");
+
+  // Money already confirmed collected on an earlier pass: just finish the
+  // folio recording.
+  if (transaction.status === "completed") {
+    const paid = await settleBooking(record, session, orderTrackingId, transaction.amount);
+    return { outcome: "completed", record: paid };
+  }
+
+  const status = await getOrderStatus(orderTrackingId);
+  if (status.outcome === "completed") {
+    await confirmCollected(transaction, status);
+    const paid = await settleBooking(record, session, orderTrackingId, transaction.amount);
+    return { outcome: "completed", record: paid };
+  }
+  if (status.outcome === "failed" || status.outcome === "reversed") {
+    // Guard on "pending" so a concurrent confirm that already flipped this
+    // row to completed can never be downgraded.
+    await prisma.pesapalTransaction.updateMany({
+      where: { id: transaction.id, status: "pending" },
+      data: {
+        status: "failed",
+        confirmationCode: status.confirmationCode,
+        paymentMethod: status.paymentMethod,
+        liveForRecordId: null,
+      },
+    });
+    return { outcome: "failed", record };
+  }
+  return { outcome: "pending", record };
+}
+
+/**
+ * A confirmation arriving for a booking that is already paid. Never a blind
+ * success: ask Pesapal what happened to THIS order, because two truths hide
+ * here - a late payment on a stale order (money collected twice), and a
+ * chargeback on the order that settled. Both are recorded loudly for a
+ * human; neither touches the folios by itself.
+ */
+async function confirmAgainstPaidRecord(
+  transaction: PesapalTransaction,
+  record: BookingRecord,
+): Promise<PesapalConfirmation> {
+  const status = await getOrderStatus(transaction.orderTrackingId!);
+
+  if (transaction.status === "completed") {
+    // The order that settled the booking, revisited (IPN retry, reload).
+    if (status.outcome === "reversed") {
+      console.error(
+        "Pesapal payment REVERSED after settlement",
+        JSON.stringify({ transactionId: transaction.id, recordId: record.id }),
+      );
+      await prisma.pesapalTransaction.updateMany({
+        where: { id: transaction.id, status: "completed" },
+        data: { status: "reversed", liveForRecordId: null },
+      });
+    }
+    return { outcome: "completed", record };
+  }
+
+  if (status.outcome === "completed") {
+    // Money collected on an order that did NOT settle this booking: the
+    // guest paid a stale payment page after another order already paid the
+    // folios. Record the excess so reconciliation can refund it.
+    console.error(
+      "Pesapal EXCESS collection on paid booking",
+      JSON.stringify({
+        transactionId: transaction.id,
+        recordId: record.id,
+        amount: status.amount,
+        confirmationCode: status.confirmationCode,
+      }),
+    );
+    await prisma.pesapalTransaction.updateMany({
+      where: { id: transaction.id, status: { in: ["pending", "failed", "superseded"] } },
+      data: {
+        status: "excess",
+        confirmationCode: status.confirmationCode,
+        paymentMethod: status.paymentMethod,
+        liveForRecordId: null,
+      },
+    });
+  }
+  // Whatever this stale order says, the booking itself is honestly paid.
+  return { outcome: "completed", record };
+}
+
+/**
+ * Flip a transaction to "collected" after OUR status read said COMPLETED.
+ * Refuses to record a payment that doesn't match what we asked Pesapal to
+ * collect - that mismatch means a bug or tampering, and folios stay clean
+ * until a human looks.
+ */
+async function confirmCollected(
+  transaction: PesapalTransaction,
+  status: { amount: number; currency: string | null; confirmationCode: string | null; paymentMethod: string | null },
+): Promise<void> {
+  if (!paymentMatchesOrder(transaction, status)) {
+    console.error(
+      "Pesapal amount MISMATCH",
+      JSON.stringify({
+        transactionId: transaction.id,
+        expected: { amount: transaction.amount, currency: transaction.currency },
+        reported: { amount: status.amount, currency: status.currency },
+      }),
+    );
+    // The row itself carries the wedge, so it survives log rotation: Buy now
+    // refuses while a mismatch row exists, and confirms answer "failed"
+    // without retry-looping the IPN.
+    await prisma.pesapalTransaction.updateMany({
+      where: { id: transaction.id, status: "pending" },
+      data: {
+        status: "mismatch",
+        confirmationCode: status.confirmationCode,
+        paymentMethod: status.paymentMethod,
+        liveForRecordId: null,
+      },
+    });
+    throw new PublicError(
+      502,
+      "The payment we received doesn't match your booking total. Please contact us before paying again.",
+    );
+  }
+  // liveForRecordId stays set: collected-but-unsettled is still the one live
+  // attempt, and it keeps blocking fresh orders until settle records it.
+  await prisma.pesapalTransaction.update({
+    where: { id: transaction.id },
+    data: {
+      status: "completed",
+      confirmationCode: status.confirmationCode,
+      paymentMethod: status.paymentMethod,
+    },
+  });
+}
+
+/**
+ * Step 1: make sure the Apaleo booking and our BookingRecord exist, creating
+ * them on the first pass and resuming them on any retry.
+ */
+async function ensureRecord(sessionId: string): Promise<{
+  record: RecordWithReservations;
+  session: SessionForCheckout;
+}> {
   const existing = await prisma.bookingRecord.findUnique({
     where: { sessionId },
     include: { reservations: { orderBy: { slot: "asc" } } },
   });
-  if (existing?.status === "paid") return existing;
 
   // With a record in flight, shopping-session expiry no longer applies.
   const session = existing
@@ -44,6 +409,8 @@ export async function completeCheckout(sessionId: string): Promise<BookingRecord
   if (!session) {
     throw new PublicError(410, "Your booking session has expired. Please search again.");
   }
+  if (existing) return { record: existing, session };
+
   if (
     session.lodges.length === 0 ||
     session.lodges.some((l) => !l.ratePlanId || !l.unitGroupCode)
@@ -54,91 +421,146 @@ export async function completeCheckout(sessionId: string): Promise<BookingRecord
     throw new PublicError(400, "Guest details are missing.");
   }
 
-  // 1. Booking in Apaleo (skipped if a previous attempt got this far).
-  let record: RecordWithReservations | null = existing;
-  if (!record) {
-    const { bookingId, reservationIds } = await createBooking({
-      arrival: session.arrival,
-      departure: session.departure,
-      reservations: session.lodges.map((lodge) => ({
-        adults: lodge.adults,
-        childrenAges: parseChildrenAges(lodge),
-        ratePlanId: lodge.ratePlanId!,
-        serviceIds: parseExtras(lodge).map((e) => e.serviceId),
-      })),
-      guest: {
-        firstName: session.guestFirstName,
-        lastName: session.guestLastName,
-        email: session.guestEmail,
-        phone: session.guestPhone ?? "",
-      },
-      vehiclePlate: session.vehiclePlate ?? undefined,
-      idempotencyKey: `up-book-${session.id}`,
-    });
+  // The manifest names the whole party; Apaleo shows everyone but the lead
+  // (already the primaryGuest) as additional guests on that lodge's
+  // reservation. Rows without a last name stay local: Apaleo rejects them,
+  // and the manifest card allows gaps.
+  const manifest = await loadGuests(session.id);
 
-    // One folio per reservation, read before the record exists so it is
-    // born carrying the real total of every lodge.
-    const folios: FolioSummary[] = [];
-    for (const reservationId of reservationIds) {
-      folios.push(await getFolioForReservation(reservationId));
-    }
-    const total = folios.reduce((sum, folio) => sum + Math.abs(folio.balance), 0);
+  const { bookingId, reservationIds } = await createBooking({
+    arrival: session.arrival,
+    departure: session.departure,
+    reservations: session.lodges.map((lodge) => ({
+      adults: lodge.adults,
+      childrenAges: parseChildrenAges(lodge),
+      ratePlanId: lodge.ratePlanId!,
+      serviceIds: parseExtras(lodge).map((e) => e.serviceId),
+      additionalGuests: manifest
+        .filter((g) => g.slot === lodge.slot && !g.isLead && g.lastName)
+        .map((g) => ({
+          firstName: g.firstName ?? undefined,
+          lastName: g.lastName!,
+          email: g.email ?? undefined,
+          birthDate: g.dateOfBirth ?? undefined,
+        })),
+    })),
+    guest: {
+      firstName: session.guestFirstName,
+      lastName: session.guestLastName,
+      email: session.guestEmail,
+      phone: session.guestPhone ?? "",
+    },
+    vehiclePlate: session.vehiclePlate ?? undefined,
+    idempotencyKey: `up-book-${session.id}`,
+  });
 
-    try {
-      record = await prisma.bookingRecord.create({
-        data: {
-          sessionId: session.id,
-          apaleoBookingId: bookingId,
-          // Legacy mirror: slot 0's reservation and folio, for pages that
-          // are not multi-lodge aware yet.
-          apaleoReservationId: reservationIds[0],
-          folioId: folios[0].folioId,
-          totalGrossAmount: total,
-          currency: folios[0].currency,
-          // Ownership comes from the session row, never the cookie: a retry
-          // can arrive logged-out and must still land under the account.
-          userId: session.userId,
-          reservations: {
-            create: reservationIds.map((reservationId, slot) => ({
-              slot,
-              apaleoReservationId: reservationId,
-              folioId: folios[slot].folioId,
-              grossAmount: Math.abs(folios[slot].balance),
-              currency: folios[slot].currency,
-            })),
-          },
+  // One folio per reservation, read before the record exists so it is
+  // born carrying the real total of every lodge.
+  const folios: FolioSummary[] = [];
+  for (const reservationId of reservationIds) {
+    folios.push(await getFolioForReservation(reservationId));
+  }
+  const total = folios.reduce((sum, folio) => sum + Math.abs(folio.balance), 0);
+
+  let record: RecordWithReservations;
+  try {
+    record = await prisma.bookingRecord.create({
+      data: {
+        sessionId: session.id,
+        apaleoBookingId: bookingId,
+        // Legacy mirror: slot 0's reservation and folio, for pages that
+        // are not multi-lodge aware yet.
+        apaleoReservationId: reservationIds[0],
+        folioId: folios[0].folioId,
+        totalGrossAmount: total,
+        currency: folios[0].currency,
+        // Ownership comes from the session row, never the cookie: a retry
+        // can arrive logged-out and must still land under the account.
+        userId: session.userId,
+        reservations: {
+          create: reservationIds.map((reservationId, slot) => ({
+            slot,
+            apaleoReservationId: reservationId,
+            folioId: folios[slot].folioId,
+            grossAmount: Math.abs(folios[slot].balance),
+            currency: folios[slot].currency,
+          })),
         },
-        include: { reservations: { orderBy: { slot: "asc" } } },
-      });
-    } catch (err) {
-      // Two tabs racing Buy now: the loser resumes the winner's record and
-      // proceeds to payment instead of erroring.
-      const raced =
-        err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002"
-          ? await prisma.bookingRecord.findUnique({
-              where: { sessionId: session.id },
-              include: { reservations: { orderBy: { slot: "asc" } } },
-            })
-          : null;
-      if (!raced) throw err;
-      record = raced;
-    }
+      },
+      include: { reservations: { orderBy: { slot: "asc" } } },
+    });
+  } catch (err) {
+    // Two tabs racing Buy now: the loser resumes the winner's record and
+    // proceeds to payment instead of erroring.
+    const raced =
+      err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002"
+        ? await prisma.bookingRecord.findUnique({
+            where: { sessionId: session.id },
+            include: { reservations: { orderBy: { slot: "asc" } } },
+          })
+        : null;
+    if (!raced) throw err;
+    record = raced;
+  }
 
-    // Stamp each lodge with its reservation, for manage and amend later.
-    for (const [slot, reservationId] of reservationIds.entries()) {
-      await prisma.sessionLodge.updateMany({
-        where: { sessionId: session.id, slot },
-        data: { apaleoReservationId: reservationId },
-      });
+  // Stamp each lodge with its reservation, for manage and amend later.
+  for (const [slot, reservationId] of reservationIds.entries()) {
+    await prisma.sessionLodge.updateMany({
+      where: { sessionId: session.id, slot },
+      data: { apaleoReservationId: reservationId },
+    });
+  }
+
+  return { record, session };
+}
+
+/**
+ * Steps 2+3 (recording): settle every reservation still owing, one folio at
+ * a time. Already-paid children are skipped, so a retry never double-pays.
+ * `pesapalTrackingId` rides the folio receipt so Apaleo's books point back
+ * at the Pesapal order; null means the demo's simulated payment.
+ *
+ * `collectedTotal` is what Pesapal actually collected (null for simulated).
+ * Folios can drift while an order sits unpaid - the window is however long
+ * the guest dwells on the hosted page - so before recording anything we
+ * check that what the folios ask for is still what the money covers.
+ */
+async function settleBooking(
+  record: RecordWithReservations,
+  session: { id: string; userId: string | null },
+  pesapalTrackingId: string | null,
+  collectedTotal: number | null,
+): Promise<BookingRecord> {
+  const folioByChild = new Map<string, FolioSummary>();
+  if (collectedTotal != null) {
+    let owedTotal = 0;
+    for (const child of record.reservations) {
+      if (child.paidAt) {
+        // Already recorded on an earlier pass; it consumed its share.
+        owedTotal += child.grossAmount;
+        continue;
+      }
+      const folio = await getFolioForReservation(child.apaleoReservationId);
+      folioByChild.set(child.id, folio);
+      owedTotal += Math.abs(folio.balance);
+    }
+    if (Math.abs(owedTotal - collectedTotal) >= 0.01) {
+      console.error(
+        "Folio total no longer matches collected payment",
+        JSON.stringify({ recordId: record.id, owedTotal, collectedTotal, pesapalTrackingId }),
+      );
+      throw new PublicError(
+        502,
+        "Your booking changed while the payment was in progress. Please contact us - do not pay again.",
+      );
     }
   }
 
-  // 2 + 3. Settle every reservation still owing, one folio at a time.
-  // Already-paid children are skipped, so a retry never double-pays.
   for (const child of record.reservations) {
     if (child.paidAt) continue;
 
-    const folio = await getFolioForReservation(child.apaleoReservationId);
+    const folio =
+      folioByChild.get(child.id) ?? (await getFolioForReservation(child.apaleoReservationId));
     const owed = Math.abs(folio.balance);
 
     // owed is 0 if a previous attempt paid this folio but crashed before
@@ -150,7 +572,9 @@ export async function completeCheckout(sessionId: string): Promise<BookingRecord
           folioId: folio.folioId,
           amount: owed,
           currency: folio.currency,
-          receipt: `UP-${record.apaleoBookingId}-${child.slot + 1}`,
+          receipt: pesapalTrackingId
+            ? `PSP-${pesapalTrackingId}`
+            : `UP-${record.apaleoBookingId}-${child.slot + 1}`,
           idempotencyKey: `up-pay-${session.id}-${child.slot}`,
         });
         paymentId = payment.paymentId;
@@ -170,7 +594,10 @@ export async function completeCheckout(sessionId: string): Promise<BookingRecord
     }
     await prisma.bookingReservation.update({
       where: { id: child.id },
-      data: { paidAt: new Date(), paymentId, folioId: folio.folioId },
+      // paymentId only when we have one: a racing settle (callback vs IPN)
+      // that lost the payFolio to its twin must not blank the winner's id
+      // with its own stale null.
+      data: { paidAt: new Date(), paymentId: paymentId ?? undefined, folioId: folio.folioId },
     });
   }
 

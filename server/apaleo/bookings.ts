@@ -1,6 +1,7 @@
 import "server-only";
 import { apaleo, CHANNEL_CODE } from "./client";
 import { nightsBetween } from "../booking/rules";
+import { occupancyAges } from "../booking/party";
 
 export type ReservationInput = {
   adults: number;
@@ -8,6 +9,17 @@ export type ReservationInput = {
   ratePlanId: string;
   /** Apaleo service ids for this lodge's extras. */
   serviceIds: string[];
+  /**
+   * Named co-guests for this lodge, shown in Apaleo's "additional guests"
+   * section. The lead booker is the primaryGuest, never listed here.
+   * Apaleo requires lastName; everything else is optional.
+   */
+  additionalGuests?: Array<{
+    firstName?: string;
+    lastName: string;
+    email?: string;
+    birthDate?: string;
+  }>;
 };
 
 export type CreateBookingInput = {
@@ -41,10 +53,16 @@ export async function createBooking(input: CreateBookingInput): Promise<{
       arrival: input.arrival,
       departure: input.departure,
       adults: reservation.adults,
-      childrenAges: reservation.childrenAges?.length ? reservation.childrenAges : undefined,
+      // Cot infants don't occupy a bed, so Apaleo never hears about them.
+      childrenAges: occupancyAges(reservation.childrenAges ?? []).length
+        ? occupancyAges(reservation.childrenAges ?? [])
+        : undefined,
       channelCode: CHANNEL_CODE,
       guaranteeType: "Prepayment",
       primaryGuest: input.guest,
+      additionalGuests: reservation.additionalGuests?.length
+        ? reservation.additionalGuests
+        : undefined,
       guestComment,
       // One slice per night, all on this lodge's rate plan. No amount
       // overrides: Apaleo prices from its own rates.

@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { completeCheckout } from "@/server/booking/checkout";
+import { beginCheckout } from "@/server/booking/checkout";
 import { handleRoute } from "@/server/api-helpers";
 
 /**
- * "Buy now": creates the booking in Apaleo, reads the folio, settles it with
- * the simulated payment, and records the paid state. Idempotent - a retry or
- * double-click returns the same paid booking.
+ * "Buy now": creates the booking in Apaleo, then either settles it on the
+ * spot (simulated provider) or answers with Pesapal's payment page for the
+ * client to redirect to. Idempotent - a retry or double-click resumes the
+ * same booking wherever the last attempt stopped.
  */
 export async function POST(
   _req: NextRequest,
@@ -13,7 +14,14 @@ export async function POST(
 ) {
   return handleRoute(async () => {
     const { id } = await params;
-    const record = await completeCheckout(id);
+    const outcome = await beginCheckout(id);
+    if (outcome.kind === "redirect") {
+      return NextResponse.json({
+        status: "redirect",
+        redirectUrl: outcome.redirectUrl,
+      });
+    }
+    const record = outcome.record;
     return NextResponse.json({
       bookingId: record.apaleoBookingId,
       reservationId: record.apaleoReservationId,

@@ -1,6 +1,7 @@
 import "server-only";
 import { NextResponse } from "next/server";
 import { ApaleoError } from "./apaleo/client";
+import { PesapalError } from "./pesapal/client";
 
 /**
  * An error whose message is written for the guest, carrying its HTTP status.
@@ -41,6 +42,16 @@ export async function handleRoute(
       }
       return NextResponse.json(
         { error: "The booking system couldn't process that request." },
+        { status: 502 },
+      );
+    }
+    if (err instanceof PesapalError) {
+      // Reached only from the order-submission stage (Buy now): nothing has
+      // been collected yet, so "try again" is the whole truth. The confirm
+      // routes catch their own errors and redirect instead.
+      console.error("Pesapal error", err.status, JSON.stringify(err.body)?.slice(0, 600));
+      return NextResponse.json(
+        { error: "We couldn't reach the payment provider. Nothing was charged - please try again." },
         { status: 502 },
       );
     }

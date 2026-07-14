@@ -1,6 +1,7 @@
 import "server-only";
 import { apaleo, CHANNEL_CODE } from "./client";
 import { nightsBetween } from "../booking/rules";
+import { occupancyAges } from "../booking/party";
 
 /**
  * Post-booking date changes. Two facts drive the shape of this file:
@@ -86,7 +87,10 @@ export async function amendReservationDates(params: {
       arrival: params.arrival,
       departure: params.departure,
       adults: params.adults,
-      childrenAges: params.childrenAges?.length ? params.childrenAges : undefined,
+      // Cot infants don't occupy a bed, so Apaleo never hears about them.
+      childrenAges: occupancyAges(params.childrenAges ?? []).length
+        ? occupancyAges(params.childrenAges ?? [])
+        : undefined,
       timeSlices: Array.from({ length: nights }, () => ({
         ratePlanId: params.ratePlanId,
       })),

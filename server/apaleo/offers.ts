@@ -1,5 +1,6 @@
 import "server-only";
 import { apaleo, CHANNEL_CODE, PROPERTY_ID } from "./client";
+import { occupancyAges } from "@/server/booking/party";
 
 /** A lodge tier priced for the whole break - one card on the results page. */
 export type StayOffer = {
@@ -37,8 +38,10 @@ export async function getStayOffers(params: {
     adults: String(params.adults),
     channelCode: CHANNEL_CODE,
   });
-  if (params.childrenAges?.length) {
-    query.set("childrenAges", params.childrenAges.join(","));
+  // Cot infants don't take a bed, so they never count toward maxPersons.
+  const bedAges = occupancyAges(params.childrenAges ?? []);
+  if (bedAges.length) {
+    query.set("childrenAges", bedAges.join(","));
   }
   const data = await apaleo<ApaleoOffersResponse>("GET", `/booking/v1/offers?${query}`);
   if (!data?.offers) return []; // 204 = nothing bookable for these dates
@@ -98,8 +101,10 @@ export async function getExtraOffers(params: {
     adults: String(params.adults),
     channelCode: CHANNEL_CODE,
   });
-  if (params.childrenAges?.length) {
-    query.set("childrenAges", params.childrenAges.join(","));
+  // Same cot rule as stays: per-person extras never count infants either.
+  const bedAges = occupancyAges(params.childrenAges ?? []);
+  if (bedAges.length) {
+    query.set("childrenAges", bedAges.join(","));
   }
   const data = await apaleo<ApaleoServiceOffersResponse>(
     "GET",

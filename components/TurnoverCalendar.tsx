@@ -29,6 +29,12 @@ function toIso(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
+function addDays(iso: string, days: number): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return toIso(d);
+}
+
 /** Weekdays on which a break of this length may start. */
 export function validArrivalDows(nights: number): number[] {
   return [MONDAY, FRIDAY].filter((dow) => {
@@ -75,6 +81,11 @@ export function TurnoverCalendar({
   const [viewMonth, setViewMonth] = useState(Number(initial.slice(5, 7)) - 1);
 
   const validDows = useMemo(() => validArrivalDows(nights), [nights]);
+
+  // The picked stay, shown Center Parcs style: dark arrival and departure
+  // with a tinted band for the nights in between. Derived from the arrival,
+  // so it needs no extra props and spans month boundaries for free.
+  const departureIso = value ? addDays(value, nights) : null;
 
   function monthCells(year: number, month: number) {
     const first = new Date(Date.UTC(year, month, 1));
@@ -154,6 +165,12 @@ export function TurnoverCalendar({
             const validDay = validDows.includes(cell.dow);
             const pickable = inRange && validDay;
             const selected = value === cell.iso;
+            const isDeparture = departureIso === cell.iso;
+            const inStay =
+              value !== null &&
+              departureIso !== null &&
+              cell.iso > value &&
+              cell.iso < departureIso;
             return (
               <button
                 key={j}
@@ -164,10 +181,14 @@ export function TurnoverCalendar({
                 }}
                 className={
                   selected
-                    ? "m-0.5 rounded-md bg-forest text-white text-sm py-1.5 font-semibold"
-                    : pickable
-                      ? "m-0.5 rounded-md text-sm py-1.5 font-semibold text-forest ring-1 ring-forest/25 hover:bg-forest hover:text-white transition-colors"
-                      : "m-0.5 rounded-md text-sm py-1.5 text-foreground/25 cursor-not-allowed"
+                    ? "my-0.5 ml-0.5 rounded-l-md bg-forest text-white text-sm py-1.5 font-semibold"
+                    : isDeparture
+                      ? "my-0.5 mr-0.5 rounded-r-md bg-forest text-white text-sm py-1.5 font-semibold"
+                      : inStay
+                        ? "my-0.5 bg-forest/15 text-forest text-sm py-1.5 font-medium"
+                        : pickable
+                          ? "m-0.5 rounded-md text-sm py-1.5 font-semibold text-forest ring-1 ring-forest/25 hover:bg-forest hover:text-white transition-colors"
+                          : "m-0.5 rounded-md text-sm py-1.5 text-foreground/25 cursor-not-allowed"
                 }
               >
                 {cell.day}
