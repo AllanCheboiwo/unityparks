@@ -3,6 +3,7 @@ import { getSession, parseChildrenAges, parseExtras } from "@/server/booking/ses
 import { computeTotal, nightsBetween } from "@/server/booking/rules";
 import { partyLabel } from "@/server/booking/party";
 import { handleRoute, jsonError } from "@/server/api-helpers";
+import { prisma } from "@/server/db";
 
 /** Everything a funnel page needs to render this session's basket. */
 export async function GET(
@@ -11,7 +12,20 @@ export async function GET(
 ) {
   return handleRoute(async () => {
     const { id } = await params;
-    const session = await getSession(id);
+    let session = await getSession(id);
+    if (!session) {
+      // Same rule as checkout: once a booking record exists, the shopping
+      // TTL no longer applies. A guest can sit on Pesapal's page past the
+      // 30-minute mark; the pay page must still render so Buy now can
+      // resume the reserved booking instead of stranding it.
+      const record = await prisma.bookingRecord.findUnique({ where: { sessionId: id } });
+      if (record) {
+        session = await prisma.bookingSession.findUnique({
+          where: { id },
+          include: { lodges: { orderBy: { slot: "asc" } } },
+        });
+      }
+    }
     if (!session) return jsonError(410, "Session expired.");
 
     const extras = parseExtras(session);

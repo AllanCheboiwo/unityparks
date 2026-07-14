@@ -10,11 +10,25 @@ import { Stepper } from "@/components/Stepper";
 import { BookingSummary } from "@/components/BookingSummary";
 import { ExpiredNotice } from "@/components/ExpiredNotice";
 
-type CheckoutResponse = { bookingId: string; status: string };
+type CheckoutResponse =
+  | { status: "redirect"; redirectUrl: string }
+  | { status: string; bookingId: string };
 
-export function PayClient() {
+// What the guest sees after Pesapal bounced them back without a paid booking.
+const PAYMENT_NOTICES: Record<string, string> = {
+  failed:
+    "Your payment didn't go through and nothing was collected. Your lodge is still reserved - try again below.",
+  pending:
+    "We haven't seen your payment arrive yet. If you completed it, press the button below and we'll check again; otherwise you can simply pay again.",
+  error:
+    "Something went wrong while confirming your payment. Press the button below to pick up where you left off.",
+};
+
+export function PayClient({ provider }: { provider: "simulated" | "pesapal" }) {
   const router = useRouter();
-  const sessionId = useSearchParams().get("session");
+  const searchParams = useSearchParams();
+  const sessionId = searchParams.get("session");
+  const paymentNotice = PAYMENT_NOTICES[searchParams.get("payment") ?? ""] ?? null;
   const [session, setSession] = useState<SessionSummary | null>(null);
   const [expired, setExpired] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -30,6 +44,17 @@ export function PayClient() {
       setSession(s.data);
     })();
   }, [sessionId]);
+
+  // Browser back from Pesapal can restore this page from the bfcache with
+  // busy still true, which would leave the button dead. pageshow with
+  // persisted=true is exactly that restore.
+  useEffect(() => {
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) setBusy(false);
+    };
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
+  }, []);
 
   if (!sessionId || expired) return <ExpiredNotice />;
   if (error && !session) {
@@ -88,9 +113,17 @@ export function PayClient() {
       setBusy(false);
       return;
     }
+    // Real payments: the lodge is reserved and Pesapal's hosted page takes
+    // it from here. A full navigation, not a router push - it's another site.
+    if (result.data.status === "redirect" && "redirectUrl" in result.data) {
+      window.location.assign(result.data.redirectUrl);
+      return;
+    }
     // Carry the session id: it is the fresh-from-checkout proof of access,
     // so the confirmation page never greets the buyer with a challenge.
-    router.push(`/confirmation/${result.data.bookingId}?session=${sessionId}`);
+    if ("bookingId" in result.data) {
+      router.push(`/confirmation/${result.data.bookingId}?session=${sessionId}`);
+    }
   }
 
   if (soldOut) {
@@ -178,6 +211,12 @@ export function PayClient() {
             )}
           </div>
 
+          {paymentNotice && !error && (
+            <div className="mt-4 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-900">
+              {paymentNotice}
+            </div>
+          )}
+
           {error && (
             <div className="mt-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">
               {error}
@@ -189,11 +228,18 @@ export function PayClient() {
             disabled={busy}
             className="mt-6 w-full rounded-lg bg-forest text-white px-6 py-3.5 text-base font-semibold hover:bg-forest-light disabled:opacity-60"
           >
-            {busy ? "Confirming your booking…" : `Buy now · ${formatKes(bookingTotal)}`}
+            {busy
+              ? provider === "pesapal"
+                ? "One moment…"
+                : "Confirming your booking…"
+              : provider === "pesapal"
+                ? `Pay securely · ${formatKes(bookingTotal)}`
+                : `Buy now · ${formatKes(bookingTotal)}`}
           </button>
           <p className="mt-3 text-center text-xs text-foreground/50">
-            Demo environment: your booking is real in our reservation system, but
-            no money moves.
+            {provider === "pesapal"
+              ? "You'll finish paying on Pesapal's secure page (sandbox). Card and M-Pesa test payments only - no real money moves."
+              : "Demo environment: your booking is real in our reservation system, but no money moves."}
           </p>
         </div>
       </div>

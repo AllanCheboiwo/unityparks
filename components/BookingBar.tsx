@@ -87,7 +87,7 @@ function monthLabel(value: string): string {
   return `${MONTH_NAMES[m - 1]} ${y}`;
 }
 
-type PanelName = "village" | "dates" | "lodges" | "guests";
+type PanelName = "dates" | "lodges" | "guests";
 
 type SearchResponse = { sessionId: string };
 
@@ -265,7 +265,8 @@ function LodgeParty({
 export function BookingBar() {
   const router = useRouter();
   const [open, setOpen] = useState<PanelName | null>(null);
-  const [village, setVillage] = useState<string | null>(null);
+  // One village in this demo, so it is fixed rather than chosen.
+  const village = VILLAGE_NAME;
 
   const [dateMode, setDateMode] = useState<"specific" | "month">("specific");
   const [arrival, setArrival] = useState("");
@@ -333,11 +334,6 @@ export function BookingBar() {
   }
 
   async function runSearch(arr: string, nts: number, extraParams = "") {
-    if (!village) {
-      setOpen("village");
-      setError("Choose your village to get started.");
-      return;
-    }
     if (!arr) {
       setOpen("dates");
       setError("Choose your dates to get started.");
@@ -405,11 +401,6 @@ export function BookingBar() {
    * page shows the whole month as a price strip, so the guest narrows there.
    */
   async function runMonthSearch() {
-    if (!village) {
-      setOpen("village");
-      setError("Choose your village to get started.");
-      return;
-    }
     if (!monthValue) {
       setOpen("dates");
       setError("Choose a month to get started.");
@@ -495,48 +486,12 @@ export function BookingBar() {
 
       {/* The bar */}
       <div className="relative z-30 rounded-2xl bg-white shadow-xl shadow-forest/10 ring-1 ring-forest/10 flex flex-col sm:flex-row items-stretch divide-y sm:divide-y-0 sm:divide-x divide-forest/10">
-        {/* Village */}
+        {/* Village - one village in this demo, shown fixed */}
         <div className={field}>
-          <button
-            type="button"
-            onClick={() => toggle("village")}
-            aria-expanded={open === "village"}
-            className={`${chip} sm:rounded-l-2xl`}
-          >
+          <div className="pl-5 pr-5 py-4 sm:rounded-l-2xl">
             <span className={chipLabel}>Village</span>
-            <span className={village ? chipValue : chipPlaceholder}>
-              {village ?? "Select location(s)"}
-            </span>
-            <Chevron />
-          </button>
-          {open === "village" && (
-            <div className={`${panelCard} left-0 w-[min(92vw,22rem)]`}>
-              <p className="text-xs font-medium text-foreground/60 mb-2">Select your village</p>
-              <button
-                type="button"
-                onClick={() => {
-                  setVillage(VILLAGE_NAME);
-                  setError(null);
-                  setOpen("dates");
-                }}
-                className="w-full flex items-center justify-between rounded-lg px-2 -mx-2 py-2 text-left hover:bg-sand/50"
-              >
-                <div>
-                  <p className="text-sm font-semibold text-forest">{VILLAGE_NAME}</p>
-                  <p className="text-xs text-foreground/55">Lake Naivasha, Kenya</p>
-                </div>
-                <span
-                  className={
-                    village
-                      ? "w-5 h-5 rounded-full bg-forest flex items-center justify-center text-white text-[10px]"
-                      : "w-5 h-5 rounded-full ring-1 ring-forest/25"
-                  }
-                >
-                  {village ? "✓" : ""}
-                </span>
-              </button>
-            </div>
-          )}
+            <span className={chipValue}>{village}</span>
+          </div>
         </div>
 
         {/* Dates */}
