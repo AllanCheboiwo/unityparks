@@ -214,6 +214,14 @@ export async function POST(
       data: { arrival, departure },
     });
 
+    // A moved break no longer holds its old physical lodge: Apaleo re-books
+    // the unit group at the new dates, so any assigned unit is stale. Clear
+    // the stored names rather than show a lodge number nobody is promised.
+    await prisma.bookingReservation.updateMany({
+      where: { recordId: record.id },
+      data: { assignedUnitId: null, assignedUnitName: null },
+    });
+
     return NextResponse.json({
       ok: true,
       arrival,

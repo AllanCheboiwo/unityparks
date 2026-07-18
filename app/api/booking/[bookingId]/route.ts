@@ -68,15 +68,26 @@ export async function GET(
     }
 
     const guestRows = (await loadGuests(record.sessionId)).map(guestRowDto);
-    const lodges = record.session.lodges.map((l) => ({
-      slot: l.slot,
-      unitGroupCode: l.unitGroupCode,
-      stayGrossAmount: l.stayGrossAmount,
-      partyLabel: partyLabel(l.adults, parseChildrenAges(l)),
-      extras: parseExtras(l),
-      bands: partyBands(l),
-      guests: guestRows.filter((r) => r.slot === l.slot),
-    }));
+    const lodges = record.session.lodges.map((l) => {
+      // The location outcome lives on BookingReservation (written at
+      // checkout); the request lives on SessionLodge. Join them by slot.
+      const reservation = record.reservations.find((r) => r.slot === l.slot);
+      const feeDropped = reservation?.locationFeeDropped ?? false;
+      return {
+        slot: l.slot,
+        unitGroupCode: l.unitGroupCode,
+        stayGrossAmount: l.stayGrossAmount,
+        partyLabel: partyLabel(l.adults, parseChildrenAges(l)),
+        extras: parseExtras(l),
+        bands: partyBands(l),
+        guests: guestRows.filter((r) => r.slot === l.slot),
+        assignedUnitName: reservation?.assignedUnitName ?? null,
+        requestedUnitName: l.locationUnitName,
+        // Only a fee that actually survived to the folio is shown as paid.
+        locationFee: feeDropped ? null : l.locationFee,
+        locationFeeDropped: feeDropped,
+      };
+    });
 
     return NextResponse.json({
       bookingId: record.apaleoBookingId,

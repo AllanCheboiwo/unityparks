@@ -92,6 +92,8 @@ export function ExtrasClient() {
     (sum, l) => sum + overrideBySlot[l.slot].reduce((a, e) => a + e.grossAmount, 0),
     0,
   );
+  // Saved on the location step; part of the running total but not editable here.
+  const locationTotal = session.lodges.reduce((sum, l) => sum + (l.location?.fee ?? 0), 0);
   const anyChosen = Object.values(chosenBySlot).some((s) => s.size > 0);
 
   const activeOffers = offersBySlot[activeSlot] ?? [];
@@ -127,7 +129,7 @@ export function ExtrasClient() {
 
   return (
     <div className="mx-auto max-w-5xl px-5 py-8 pb-32">
-      <Stepper current="Extras" />
+      <Stepper current="Little Extras" />
 
       <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-8 lg:items-start">
         <div>
@@ -228,10 +230,11 @@ export function ExtrasClient() {
           <div className="text-sm">
             <span className="text-foreground/60">
               Lodges {formatKes(stayTotal)}
+              {locationTotal > 0 && <> + lodge choice {formatKes(locationTotal)}</>}
               {extrasTotal > 0 && <> + extras {formatKes(extrasTotal)}</>} ·{" "}
             </span>
             <span className="font-semibold text-forest">
-              Total {formatKes(stayTotal + extrasTotal)}
+              Total {formatKes(stayTotal + locationTotal + extrasTotal)}
             </span>
           </div>
           <button

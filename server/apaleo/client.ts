@@ -69,7 +69,7 @@ type RequestOptions = {
  * Retries once on 429 (honouring Retry-After) and once on 5xx.
  */
 export async function apaleo<T>(
-  method: "GET" | "POST" | "PUT" | "PATCH",
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
   path: string,
   options: RequestOptions = {},
 ): Promise<T | null> {

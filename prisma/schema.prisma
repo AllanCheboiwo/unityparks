@@ -114,6 +114,16 @@ model SessionLodge {
   // This lodge's extras: JSON [{ serviceId, code, name, count, grossAmount }]
   extras String @default("[]")
 
+  // Location step: the guest's request. "unit" means a specific lodge picked
+  // for a fee, "none" means no preference (free), null means the step has not
+  // been completed yet. The fee is an Apaleo service-offer snapshot, never a
+  // locally invented number; the service itself is attached at checkout.
+  locationChoice    String?
+  locationUnitId    String? // Apaleo unit id, e.g. UPNV-EBP
+  locationUnitName  String? // display name, e.g. "Lakeview Lodge 3"
+  locationServiceId String? // fee service to attach at checkout (UPNV-LOCATION)
+  locationFee       Float?
+
   // Set at checkout, when Apaleo returns one reservation per lodge
   apaleoReservationId String?
 
@@ -237,6 +247,14 @@ model BookingReservation {
   currency            String
   paymentId           String?
   paidAt              DateTime?
+
+  // Location step outcome, written when the reservation is created. The unit
+  // Apaleo actually assigned, and whether the guest's chosen unit was lost to
+  // a concurrent booking (Center Parcs policy: comparable unit auto-assigned,
+  // fee removed before the payment amount was fixed).
+  assignedUnitId     String?
+  assignedUnitName   String?
+  locationFeeDropped Boolean @default(false)
 
   @@unique([recordId, slot])
 }

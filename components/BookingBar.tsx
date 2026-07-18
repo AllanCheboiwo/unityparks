@@ -52,12 +52,23 @@ type MonthDate = {
 };
 
 /** One lodge's party. Bedrooms are derived but overridable up to the max. */
-type Party = {
+export type Party = {
   adults: number;
   children: number;
   toddlers: number;
   infants: number;
   bedrooms: number;
+};
+
+/**
+ * Seed values for mounting the bar over an existing search (the results
+ * page), so the guest sees their current search and can change any part of
+ * it in place. Omitted on the home page, where the bar starts blank.
+ */
+export type BookingBarInitial = {
+  arrival: string;
+  nights: number;
+  parties: Party[];
 };
 
 const DEFAULT_PARTY: Party = { adults: 2, children: 0, toddlers: 0, infants: 0, bedrooms: 1 };
@@ -262,15 +273,19 @@ function LodgeParty({
   );
 }
 
-export function BookingBar() {
+export function BookingBar({ initial }: { initial?: BookingBarInitial }) {
   const router = useRouter();
   const [open, setOpen] = useState<PanelName | null>(null);
   // One village in this demo, so it is fixed rather than chosen.
   const village = VILLAGE_NAME;
 
+  // Seeded from the current search on the results page (re-mounted per
+  // session via key=, so plain useState initials are enough). A month-mode
+  // search still lands here as its chosen specific date; searching again
+  // with a specific date deliberately drops the month price strip.
   const [dateMode, setDateMode] = useState<"specific" | "month">("specific");
-  const [arrival, setArrival] = useState("");
-  const [nights, setNights] = useState<number>(4); // Center Parcs' widget default
+  const [arrival, setArrival] = useState(initial?.arrival ?? "");
+  const [nights, setNights] = useState<number>(initial?.nights ?? 4); // Center Parcs' widget default
 
   // Whole-month search: a break shape plus a month is all the widget asks.
   // The per-date narrowing lives on the results page as a price strip.
@@ -278,7 +293,9 @@ export function BookingBar() {
   const [monthValue, setMonthValue] = useState<string>("");
 
   // One party per lodge; a single-lodge break has one entry.
-  const [parties, setParties] = useState<Party[]>([{ ...DEFAULT_PARTY }]);
+  const [parties, setParties] = useState<Party[]>(
+    initial?.parties.length ? initial.parties.map((p) => ({ ...p })) : [{ ...DEFAULT_PARTY }],
+  );
   const [refusal, setRefusal] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);

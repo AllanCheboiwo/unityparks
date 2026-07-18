@@ -183,6 +183,9 @@ export function ManageClient({ bookingId }: { bookingId: string }) {
                   {lodge?.name ?? "Lodge"}
                 </span>
                 <span className="text-foreground/55"> · {l.partyLabel}</span>
+                {l.assignedUnitName && (
+                  <span className="text-foreground/55"> · {l.assignedUnitName}</span>
+                )}
               </p>
             );
           })}
