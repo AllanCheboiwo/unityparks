@@ -205,19 +205,19 @@ function Chevron() {
  * The date treatment for the filled field: a tiny weekday label
  * above the date itself.
  */
-function DateStack({ iso }: { iso: string }) {
+function DateStack({ iso, showYear = true }: { iso: string; showYear?: boolean }) {
   const d = new Date(`${iso}T00:00:00Z`);
   const weekday = d.toLocaleDateString("en-GB", { weekday: "long", timeZone: "UTC" });
   const date = d.toLocaleDateString("en-GB", {
     day: "2-digit",
     month: "short",
-    year: "numeric",
+    ...(showYear ? { year: "numeric" as const } : {}),
     timeZone: "UTC",
   });
   return (
     <span className="flex flex-col">
       <span className="text-[11px] leading-none text-foreground/55 mb-[6px]">{weekday}</span>
-      <span className="text-base font-semibold leading-none text-ink whitespace-nowrap">{date}</span>
+      <span className="text-[15px] font-semibold leading-none text-ink whitespace-nowrap">{date}</span>
     </span>
   );
 }
@@ -578,7 +578,10 @@ export function BookingBar({ initial }: { initial?: BookingBarInitial }) {
       : `${totalGuests} guests`;
   const lodgesLabel = `${lodgeCount} ${lodgeCount === 1 ? "lodge" : "lodges"}`;
 
-  const field = "relative flex-1 min-w-[160px]";
+  // Dates carries the widest content (two stacked dates and an arrow), so it
+  // gets more of the row; min-w-0 lets every field shrink instead of spill.
+  const field = "relative flex-1 min-w-0 sm:min-w-[150px]";
+  const dateField = "relative flex-[1.4] min-w-0 sm:min-w-[210px]";
   const chip =
     "relative w-full h-full text-left pl-4 pr-10 py-3.5 hover:bg-mist/60 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-navy/40";
   const chipInner = "flex items-center gap-3";
@@ -625,7 +628,7 @@ export function BookingBar({ initial }: { initial?: BookingBarInitial }) {
         </div>
 
         {/* Dates */}
-        <div className={field}>
+        <div className={dateField}>
           <button
             type="button"
             onClick={() => toggle("dates")}
@@ -650,8 +653,13 @@ export function BookingBar({ initial }: { initial?: BookingBarInitial }) {
                     </>
                   )
                 ) : arrival ? (
-                  <span className="flex items-center gap-2.5">
-                    <DateStack iso={arrival} />
+                  // Year only on departure when both fall in the same year,
+                  // so the pair fits the field instead of overflowing it.
+                  <span className="flex items-center gap-2 overflow-hidden">
+                    <DateStack
+                      iso={arrival}
+                      showYear={arrival.slice(0, 4) !== departure.slice(0, 4)}
+                    />
                     <ArrowRightIcon className="shrink-0 text-ink/60" />
                     <DateStack iso={departure} />
                   </span>

@@ -32,22 +32,22 @@ export const ACTIVITIES: ActivityCard[] = [
   {
     title: "Swimming lagoon",
     copy: "Warm water all year round, slides for the brave and shallows for the small. The heart of the village, whatever the weather.",
-    image: "/activities/pool.svg",
+    image: "/photos/activity-pool.jpg",
   },
   {
     title: "On the water",
     copy: "Rowing boats, pedalos and calm lake mornings. Life jackets and big smiles provided.",
-    image: "/activities/boats.svg",
+    image: "/photos/activity-boats.jpg",
   },
   {
     title: "Cycle trails",
     copy: "Shaded forest loops for every pace, from balance bikes to big rides. Hire a bike or bring your own.",
-    image: "/activities/cycle.svg",
+    image: "/photos/activity-cycle.jpg",
   },
   {
     title: "Forest spa",
     copy: "Steam, stillness and birdsong. A grown-up pause while the rest of the family plays.",
-    image: "/activities/spa.svg",
+    image: "/photos/activity-spa.jpg",
   },
 ];
 
@@ -56,19 +56,19 @@ export const SEASONS: SeasonCard[] = [
     title: "Green season",
     copy: "Bright days, cool forest shade and the village at its liveliest.",
     price: "from KES 45,000*",
-    image: "/seasons/green.svg",
+    image: "/photos/season-green.jpg",
   },
   {
     title: "The long rains",
     copy: "Dramatic skies, quiet trails and the best prices of the year.",
     price: "from KES 38,500*",
-    image: "/seasons/rains.svg",
+    image: "/photos/season-rains.jpg",
   },
   {
     title: "Festive season",
     copy: "Lights in the trees, feasts in the lodge and the year's happiest goodbyes.",
     price: "from KES 62,000*",
-    image: "/seasons/festive.svg",
+    image: "/photos/season-festive.jpg",
   },
 ];
 
@@ -76,17 +76,17 @@ export const DISCOVER: DiscoverCard[] = [
   {
     title: "Group bookings",
     copy: "Book several lodges together and keep the whole clan in one corner of the forest.",
-    image: "/discover/groups.svg",
+    image: "/photos/discover-groups.jpg",
   },
   {
     title: "Gift a break",
     copy: "Give someone a forest break to look forward to. Memories beat wrapping paper.",
-    image: "/discover/gift.svg",
+    image: "/photos/discover-gift.jpg",
   },
   {
     title: "Village news",
     copy: "What is new in the village, from lodge upgrades to lagoon opening times.",
-    image: "/discover/news.svg",
+    image: "/photos/discover-news.jpg",
   },
 ];
 

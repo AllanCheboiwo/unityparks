@@ -68,7 +68,7 @@ function FunnelHero({ title }: { title: string }) {
   return (
     <div
       className="relative h-[240px] md:h-[300px] bg-cover bg-center"
-      style={{ backgroundImage: "url(/band-lake.svg)" }}
+      style={{ backgroundImage: "url(/photos/band-lake.jpg)" }}
     >
       <div className="absolute inset-0 bg-black/25" />
       <div className="relative flex h-full items-center justify-center px-5">

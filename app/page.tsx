@@ -41,21 +41,24 @@ export default async function HomePage() {
       {/* 2. Media band with the booking bar floating over its top. */}
       <section id="search" className="relative">
         <div className="relative aspect-[21/9] min-h-[340px] w-full overflow-hidden">
-          <Image
-            src="/hero-forest.svg"
-            alt="Timber lodges among layered forest trees on the shore of Lake Naivasha"
-            fill
-            priority
-            className="object-cover"
+          {/* Muted looping video, poster first so the band never flashes empty. */}
+          <video
+            className="absolute inset-0 h-full w-full object-cover"
+            src="/videos/hero-family-lake.mp4"
+            poster="/photos/hero-forest.jpg"
+            autoPlay
+            muted
+            loop
+            playsInline
+            aria-label="A family walking together by the lake"
           />
         </div>
         <div className="absolute inset-x-0 top-6 z-10 sm:top-10">
-          <div className="mx-auto max-w-6xl px-5">
+          <StickySearch>
             <BookingBar />
-          </div>
+          </StickySearch>
         </div>
       </section>
-      <StickySearch />
 
       {/* 3. Village intro. */}
       <section id="discover" className="mx-auto max-w-6xl px-5 py-16">
