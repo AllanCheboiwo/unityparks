@@ -31,6 +31,28 @@ export type ExtraSnapshotDto = {
   grossAmount: number;
 };
 
+/** One pickable physical lodge on the location step. */
+export type UnitOptionDto = {
+  id: string;
+  name: string;
+};
+
+/** What the location step offers for one lodge slot. */
+export type LocationOffersDto = {
+  slot: number;
+  units: UnitOptionDto[];
+  /** The choice fee as Apaleo priced it; null if the service is missing. */
+  fee: { serviceId: string; amount: number; currency: string } | null;
+};
+
+/** A lodge slot's saved location choice. */
+export type LocationChoiceDto = {
+  choice: "unit" | "none";
+  unitId: string | null;
+  unitName: string | null;
+  fee: number | null;
+};
+
 export type LodgeSlotSummary = {
   slot: number;
   adults: number;
@@ -43,6 +65,8 @@ export type LodgeSlotSummary = {
     currency: string;
   } | null;
   extras: ExtraSnapshotDto[];
+  /** null until the location step has been completed for this slot. */
+  location: LocationChoiceDto | null;
 };
 
 export type SessionSummary = {
@@ -102,6 +126,15 @@ export type BookingConfirmation = {
     extras: ExtraSnapshotDto[];
     bands: string[];
     guests: GuestRowDto[];
+    /** The physical lodge Apaleo assigned at checkout, when it could. */
+    assignedUnitName: string | null;
+    /** The unit the guest asked for on the location step, if any. */
+    requestedUnitName: string | null;
+    /** The location-choice fee actually charged; null when none was. */
+    locationFee: number | null;
+    /** True when the chosen unit was lost to a concurrent booking and the
+     *  fee was removed before payment (Center Parcs fallback policy). */
+    locationFeeDropped: boolean;
   }[];
   stay: {
     arrival: string;

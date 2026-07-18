@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getExtraOffers } from "@/server/apaleo/offers";
+import { LOCATION_SERVICE_CODE } from "@/server/apaleo/units";
 import { getSession, parseChildrenAges, setExtras } from "@/server/booking/session";
 import { handleRoute, jsonError } from "@/server/api-helpers";
+import { prisma } from "@/server/db";
 
 /**
  * Live extras (Apaleo service offers) for one lodge of the break (?slot=,
@@ -23,13 +25,15 @@ export async function GET(
     if (!lodge) return jsonError(400, "That lodge slot is not part of this break.");
     if (!lodge.ratePlanId) return jsonError(400, "Choose a lodge first.");
 
-    const extras = await getExtraOffers({
+    const offers = await getExtraOffers({
       ratePlanId: lodge.ratePlanId,
       arrival: session.arrival,
       departure: session.departure,
       adults: lodge.adults,
       childrenAges: parseChildrenAges(lodge),
     });
+    // The location-choice fee is sold by the location step, never here.
+    const extras = offers.filter((o) => o.code !== LOCATION_SERVICE_CODE);
     return NextResponse.json({ extras, slot });
   });
 }
@@ -59,6 +63,11 @@ export async function POST(
     if (!session) return jsonError(410, "Session expired.");
     if (session.state === "completed") {
       return jsonError(409, "This booking is already confirmed. Start a new search to book another break.");
+    }
+    // Once a real reservation exists its folio is a settled fact; a late
+    // extras edit could never reach it and would only make summaries lie.
+    if (await prisma.bookingRecord.findUnique({ where: { sessionId: id } })) {
+      return jsonError(409, "Your booking is already being processed. Press Buy now to finish.");
     }
 
     const parsed = ExtrasBody.safeParse(await req.json());

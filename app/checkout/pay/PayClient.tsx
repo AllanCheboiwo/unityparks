@@ -95,6 +95,7 @@ export function PayClient({ provider }: { provider: "simulated" | "pesapal" }) {
     (sum, l) =>
       sum +
       (l.lodge?.stayGrossAmount ?? 0) +
+      (l.location?.fee ?? 0) +
       l.extras.reduce((a, e) => a + e.grossAmount, 0),
     0,
   );
@@ -148,7 +149,7 @@ export function PayClient({ provider }: { provider: "simulated" | "pesapal" }) {
 
   return (
     <div className="mx-auto max-w-5xl px-5 py-8">
-      <Stepper current="Pay" />
+      <Stepper current="Payment" />
 
       <h1 className="font-display text-3xl text-forest">
         Your <em>break</em>
@@ -187,6 +188,11 @@ export function PayClient({ provider }: { provider: "simulated" | "pesapal" }) {
                   </p>
                   <p className="text-sm text-foreground/60">
                     {l.partyLabel} · whole lodge
+                  </p>
+                  <p className="text-xs text-foreground/50 mt-1">
+                    {l.location?.choice === "unit" && l.location.unitName
+                      ? `Your pick: ${l.location.unitName} (lodge number confirmed at booking)`
+                      : "Lodge number: no preference, assigned at booking"}
                   </p>
                   {l.extras.length > 0 && (
                     <p className="text-xs text-foreground/50 mt-1">

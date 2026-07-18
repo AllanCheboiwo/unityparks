@@ -7,6 +7,12 @@ import {
 } from "@prisma/client";
 import { prisma } from "../db";
 import { createBooking, getFolioForReservation, type FolioSummary } from "../apaleo/bookings";
+import {
+  assignSpecificUnit,
+  autoAssignUnit,
+  removeReservationService,
+  type UnitOption,
+} from "../apaleo/units";
 import { payFolio } from "../apaleo/payments";
 import { ApaleoError } from "../apaleo/client";
 import { getOrderStatus, submitOrder } from "../pesapal/orders";
@@ -434,7 +440,14 @@ async function ensureRecord(sessionId: string): Promise<{
       adults: lodge.adults,
       childrenAges: parseChildrenAges(lodge),
       ratePlanId: lodge.ratePlanId!,
-      serviceIds: parseExtras(lodge).map((e) => e.serviceId),
+      // The location fee rides along as one more service, so Apaleo prices
+      // it into the folio from birth like any extra.
+      serviceIds: [
+        ...parseExtras(lodge).map((e) => e.serviceId),
+        ...(lodge.locationChoice === "unit" && lodge.locationServiceId
+          ? [lodge.locationServiceId]
+          : []),
+      ],
       additionalGuests: manifest
         .filter((g) => g.slot === lodge.slot && !g.isLead && g.lastName)
         .map((g) => ({
@@ -453,6 +466,11 @@ async function ensureRecord(sessionId: string): Promise<{
     vehiclePlate: session.vehiclePlate ?? undefined,
     idempotencyKey: `up-book-${session.id}`,
   });
+
+  // Give every reservation its physical lodge while the folio can still
+  // change: a dropped fee after the totals below are read would desync the
+  // payment amount from the folio and wedge settlement.
+  const assignments = await assignUnits(session, reservationIds);
 
   // One folio per reservation, read before the record exists so it is
   // born carrying the real total of every lodge.
@@ -484,6 +502,9 @@ async function ensureRecord(sessionId: string): Promise<{
             folioId: folios[slot].folioId,
             grossAmount: Math.abs(folios[slot].balance),
             currency: folios[slot].currency,
+            assignedUnitId: assignments[slot].assignedUnitId,
+            assignedUnitName: assignments[slot].assignedUnitName,
+            locationFeeDropped: assignments[slot].locationFeeDropped,
           })),
         },
       },
@@ -503,15 +524,133 @@ async function ensureRecord(sessionId: string): Promise<{
     record = raced;
   }
 
-  // Stamp each lodge with its reservation, for manage and amend later.
+  // Stamp each lodge with its reservation, for manage and amend later. When
+  // the fallback dropped a lodge's fee, clear it off the session too, so
+  // every session-driven total (pay page after a failed payment, summaries)
+  // matches the frozen record instead of resurrecting the removed fee. The
+  // requested unit name stays: the confirmation's notice quotes it.
   for (const [slot, reservationId] of reservationIds.entries()) {
     await prisma.sessionLodge.updateMany({
       where: { sessionId: session.id, slot },
-      data: { apaleoReservationId: reservationId },
+      data: {
+        apaleoReservationId: reservationId,
+        ...(assignments[slot].locationFeeDropped
+          ? { locationFee: null, locationServiceId: null }
+          : {}),
+      },
     });
   }
 
   return { record, session };
+}
+
+type AssignmentOutcome = {
+  assignedUnitId: string | null;
+  assignedUnitName: string | null;
+  locationFeeDropped: boolean;
+};
+
+/**
+ * Give every reservation its physical lodge, honouring the location step.
+ *
+ * Two passes, specific choices first: a no-preference auto-assign must never
+ * grab a unit a sibling lodge of this same break paid to pick (Apaleo cannot
+ * know about a preference that is still only in our session).
+ *
+ * A specific choice Apaleo refuses as occupied (422: another guest's checkout
+ * won the unit between selection and now) gets the Center Parcs fallback: a
+ * comparable lodge in the same tier is auto-assigned and the location fee
+ * service is removed from the folio, right here, before the folio totals are
+ * read and frozen into the payment amount. Any other error (429 that outlived
+ * its retries, 5xx) is rethrown: the attempt fails before the record exists
+ * and a retry replays cleanly - a transient outage must not cost the guest a
+ * pick they could have kept.
+ *
+ * Safe to re-run on a checkout retry: re-assigning the unit a reservation
+ * already holds is a plain 200, and removing an already-removed service is
+ * a 204 (both verified against the sandbox). One narrow non-goal: if a crash
+ * lands between the fee removal and record creation AND the blocking guest
+ * cancels inside that same window, a retry can win the unit with the fee
+ * already gone - the guest is undercharged, never overcharged, so we accept
+ * it rather than add an Apaleo read to every checkout.
+ */
+async function assignUnits(
+  session: SessionForCheckout,
+  reservationIds: string[],
+): Promise<AssignmentOutcome[]> {
+  const outcomes: AssignmentOutcome[] = new Array(reservationIds.length);
+
+  // session.lodges is slot-ordered and reservations were created in that
+  // order, so index N pairs lodge N with reservation N.
+  const entries = [...reservationIds.entries()].map(([index, reservationId]) => ({
+    index,
+    reservationId,
+    lodge: session.lodges[index],
+  }));
+
+  // Pass 1: everyone who paid to pick gets their unit (or the fallback).
+  for (const { index, reservationId, lodge } of entries) {
+    if (!(lodge.locationChoice === "unit" && lodge.locationUnitId)) continue;
+    try {
+      const unit = await assignSpecificUnit(reservationId, lodge.locationUnitId);
+      outcomes[index] = {
+        assignedUnitId: unit.id,
+        assignedUnitName: unit.name,
+        locationFeeDropped: false,
+      };
+    } catch (err) {
+      // Only "unit occupied" triggers the fallback; everything else aborts
+      // the attempt so a retry can keep the guest's choice.
+      if (!(err instanceof ApaleoError && err.status === 422)) throw err;
+      console.warn(
+        "Chosen unit no longer assignable, applying fallback",
+        JSON.stringify({ reservationId, unitId: lodge.locationUnitId }),
+      );
+      // Money first: the fee leaves the folio before anything else. If this
+      // throws, the whole attempt fails BEFORE the record exists and a retry
+      // replays cleanly - better than charging for a lost choice.
+      if (lodge.locationServiceId) {
+        await removeReservationService(reservationId, lodge.locationServiceId);
+      }
+      const fallback = await autoAssignSafely(reservationId);
+      outcomes[index] = {
+        assignedUnitId: fallback?.id ?? null,
+        assignedUnitName: fallback?.name ?? null,
+        locationFeeDropped: true,
+      };
+    }
+  }
+
+  // Pass 2: no-preference lodges take whatever is left, so the confirmation
+  // can greet everyone with a real lodge number.
+  for (const { index, reservationId, lodge } of entries) {
+    if (lodge.locationChoice === "unit" && lodge.locationUnitId) continue;
+    const unit = await autoAssignSafely(reservationId);
+    outcomes[index] = {
+      assignedUnitId: unit?.id ?? null,
+      assignedUnitName: unit?.name ?? null,
+      locationFeeDropped: false,
+    };
+  }
+
+  return outcomes;
+}
+
+/**
+ * Auto-assignment is a nicety, never worth failing a checkout over: with no
+ * unit assigned, Apaleo simply picks one at check-in.
+ */
+async function autoAssignSafely(reservationId: string): Promise<UnitOption | null> {
+  try {
+    return await autoAssignUnit(reservationId);
+  } catch (err) {
+    if (!(err instanceof ApaleoError)) throw err;
+    console.warn(
+      "Auto-assign failed, leaving the unit for check-in",
+      JSON.stringify({ reservationId, status: err.status }),
+    );
+    return null;
+  }
 }
 
 /**

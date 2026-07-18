@@ -2,13 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { apiFetch, isExpired } from "@/lib/api";
 import { formatDate, formatKes, formatShortDate, nightsLabel } from "@/lib/format";
 import { LODGES, TIER_ORDER } from "@/content/lodges";
+import { MAX_BEDROOMS, requiredBedrooms } from "@/lib/occupancy";
 import type { SessionSummary, StayOfferDto } from "@/lib/types";
-import { Stepper } from "@/components/Stepper";
+import { BookingBar, type BookingBarInitial } from "@/components/BookingBar";
 import { ExpiredNotice } from "@/components/ExpiredNotice";
 
 /** One candidate start date in a whole-month search, from /api/month-availability. */
@@ -177,7 +177,7 @@ export function LodgesClient() {
     setSession(summary);
     // Single lodge: straight on. Multi: advance to the next empty slot.
     if (summary.lodges.length === 1) {
-      router.push(`/checkout/extras?session=${sessionId}`);
+      router.push(`/checkout/location?session=${sessionId}`);
       return;
     }
     const nextUnchosen = summary.lodges.find((l) => !l.lodge);
@@ -219,9 +219,31 @@ export function LodgesClient() {
     ? openDates.reduce((a, b) => (b.fromPrice! < a.fromPrice! ? b : a)).arrival
     : null;
 
+  // The bar mirrors this search so the guest can change any part of it in
+  // place, Center Parcs style. Bands are recovered from the stored ages;
+  // bedrooms re-derive from each party, except a manually raised preference
+  // (?bedrooms=, single-lodge only) which must survive a re-search.
+  const barInitial: BookingBarInitial = {
+    arrival: session.arrival,
+    nights: session.nights,
+    parties: session.lodges.map((l) => {
+      const bands = agesToBands(l.adults, l.childrenAges);
+      const required = Math.min(requiredBedrooms(bands.adults, bands.children), MAX_BEDROOMS);
+      const preferred = l.slot === 0 && !multi ? bedroomsPref : 0;
+      return {
+        ...bands,
+        bedrooms: Math.min(Math.max(required, preferred), MAX_BEDROOMS),
+      };
+    }),
+  };
+
   return (
     <div className="mx-auto max-w-5xl px-5 py-8">
-      <Stepper current="Lodge" />
+      {/* keyed by session: a re-search swaps the session, and the fresh
+          mount re-seeds the bar from the new search */}
+      <div className="relative z-30 mb-8">
+        <BookingBar key={session.sessionId} initial={barInitial} />
+      </div>
 
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h1 className="font-display text-3xl text-forest">
@@ -235,9 +257,6 @@ export function LodgesClient() {
             </>
           )}
         </h1>
-        <Link href="/" className="text-xs text-lake underline underline-offset-2">
-          Change dates
-        </Link>
       </div>
       <p className="mt-1 text-sm text-foreground/60">
         {formatDate(session.arrival)} → {formatDate(session.departure)} ·{" "}
@@ -334,7 +353,7 @@ export function LodgesClient() {
             </div>
             <button
               type="button"
-              onClick={() => router.push(`/checkout/extras?session=${sessionId}`)}
+              onClick={() => router.push(`/checkout/location?session=${sessionId}`)}
               disabled={!allChosen}
               className="rounded-lg bg-forest text-white px-6 py-2.5 text-sm font-semibold hover:bg-forest-light disabled:opacity-40"
             >

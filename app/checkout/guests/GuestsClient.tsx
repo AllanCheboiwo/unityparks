@@ -137,7 +137,7 @@ export function GuestsClient() {
 
   return (
     <div className="mx-auto max-w-5xl px-5 py-8">
-      <Stepper current="Guests" />
+      <Stepper current="Guest Details" />
 
       <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-8 lg:items-start">
         <div className="max-w-xl">

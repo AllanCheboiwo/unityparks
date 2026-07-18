@@ -20,6 +20,21 @@ export type ExtraSnapshot = {
   grossAmount: number;
 };
 
+/**
+ * The location step's choice for one lodge. "unit" carries the picked lodge
+ * plus the fee exactly as Apaleo's service offer priced it; "none" is the
+ * free no-preference option.
+ */
+export type LocationChoice =
+  | { choice: "none" }
+  | {
+      choice: "unit";
+      unitId: string;
+      unitName: string;
+      serviceId: string;
+      fee: number;
+    };
+
 function freshExpiry(): Date {
   return new Date(Date.now() + SESSION_TTL_MS);
 }
@@ -95,8 +110,17 @@ export async function chooseLodge(
   const { currency, ...tier } = lodge;
   await prisma.sessionLodge.update({
     where: { sessionId_slot: { sessionId: id, slot } },
-    // Changing lodge resets extras - they were priced for the old rate plan.
-    data: { ...tier, extras: "[]" },
+    // Changing lodge resets extras (priced for the old rate plan) and the
+    // location choice (the picked unit belongs to the old tier).
+    data: {
+      ...tier,
+      extras: "[]",
+      locationChoice: null,
+      locationUnitId: null,
+      locationUnitName: null,
+      locationServiceId: null,
+      locationFee: null,
+    },
   });
   await prisma.bookingSession.update({
     where: { id },
@@ -125,6 +149,39 @@ export async function setExtras(
       ...(slot === 0 ? { extras: JSON.stringify(extras) } : {}),
       expiresAt: freshExpiry(),
     },
+  });
+}
+
+/** Save one lodge's location choice. No flat mirror: location never existed
+ *  on the legacy single-lodge columns, so there is nothing to keep in step. */
+export async function setLocation(
+  id: string,
+  location: LocationChoice,
+  slot = 0,
+): Promise<void> {
+  const data =
+    location.choice === "unit"
+      ? {
+          locationChoice: "unit",
+          locationUnitId: location.unitId,
+          locationUnitName: location.unitName,
+          locationServiceId: location.serviceId,
+          locationFee: location.fee,
+        }
+      : {
+          locationChoice: "none",
+          locationUnitId: null,
+          locationUnitName: null,
+          locationServiceId: null,
+          locationFee: null,
+        };
+  await prisma.sessionLodge.update({
+    where: { sessionId_slot: { sessionId: id, slot } },
+    data,
+  });
+  await prisma.bookingSession.update({
+    where: { id },
+    data: { expiresAt: freshExpiry() },
   });
 }
 

@@ -29,10 +29,18 @@ export async function GET(
     if (!session) return jsonError(410, "Session expired.");
 
     const extras = parseExtras(session);
-    const total =
-      session.stayGrossAmount != null
-        ? computeTotal(session.stayGrossAmount, extras)
-        : null;
+    // Whole-break display total: every lodge's stay, extras and location fee.
+    // The location fee joins here explicitly; it is deliberately NOT part of
+    // the extras JSON (the extras page overwrites that list wholesale).
+    const total = session.lodges.some((l) => l.stayGrossAmount != null)
+      ? session.lodges.reduce(
+          (sum, l) =>
+            sum +
+            computeTotal(l.stayGrossAmount ?? 0, parseExtras(l)) +
+            (l.locationFee ?? 0),
+          0,
+        )
+      : null;
 
     // One entry per lodge in the break. The flat lodge/extras fields below
     // remain the slot-0 mirror while single-lodge clients migrate.
@@ -52,6 +60,14 @@ export async function GET(
             }
           : null,
         extras: JSON.parse(l.extras),
+        location: l.locationChoice
+          ? {
+              choice: l.locationChoice,
+              unitId: l.locationUnitId,
+              unitName: l.locationUnitName,
+              fee: l.locationFee,
+            }
+          : null,
       };
     });
 

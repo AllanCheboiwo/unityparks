@@ -140,6 +140,27 @@ export function ConfirmationClient({ bookingId }: { bookingId: string }) {
                   </span>
                   <span className="font-medium">{formatKes(l.stayGrossAmount ?? 0)}</span>
                 </div>
+                {l.assignedUnitName && (
+                  <p className="text-sm mt-1 pl-3 text-foreground/70">
+                    You&apos;re staying in <span className="font-medium text-forest">{l.assignedUnitName}</span>
+                  </p>
+                )}
+                {l.locationFee != null && (
+                  <div className="flex justify-between text-sm mt-1 pl-3 text-foreground/70">
+                    <span>Lodge location choice</span>
+                    <span>{formatKes(l.locationFee)}</span>
+                  </div>
+                )}
+                {l.locationFeeDropped && (
+                  <p className="mt-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-900">
+                    {l.requestedUnitName ?? "Your chosen lodge"} was booked by
+                    another guest moments before you finished checking out.
+                    {l.assignedUnitName
+                      ? ` We've assigned ${l.assignedUnitName} instead`
+                      : " We'll assign you a comparable lodge"}{" "}
+                    and the location choice fee was not charged.
+                  </p>
+                )}
                 {l.extras.map((extra) => (
                   <div key={extra.serviceId} className="flex justify-between text-sm mt-1 pl-3 text-foreground/70">
                     <span>
