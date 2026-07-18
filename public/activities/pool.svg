@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 600" role="img" aria-hidden="true">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f6edd9"/>
+      <stop offset="1" stop-color="#e9d9b8"/>
+    </linearGradient>
+  </defs>
+  <rect width="900" height="600" fill="url(#sky)"/>
+  <circle cx="740" cy="100" r="44" fill="#fdf8ec"/>
+  <!-- back forest -->
+  <path d="M0 230 Q150 184 300 216 Q450 248 600 202 Q750 158 900 210 L900 340 L0 340 Z" fill="#647e1b"/>
+  <path d="M0 288 Q180 250 360 282 Q540 312 720 272 Q810 254 900 280 L900 380 L0 380 Z" fill="#536917"/>
+  <!-- grass -->
+  <path d="M0 356 Q225 340 450 352 Q675 364 900 348 L900 600 L0 600 Z" fill="#536917"/>
+  <!-- lagoon: sandy edge, shallow water, deep centre -->
+  <path d="M130 420 Q210 360 350 356 Q530 350 670 380 Q800 406 810 460 Q818 520 670 546 Q470 572 290 550 Q130 530 110 470 Q104 440 130 420 Z" fill="#e9d9b8"/>
+  <path d="M170 432 Q240 384 360 380 Q520 376 640 402 Q756 426 764 464 Q770 510 646 530 Q470 552 310 532 Q170 514 152 468 Q146 446 170 432 Z" fill="#3d7391"/>
+  <path d="M280 444 Q360 416 460 420 Q580 424 640 448 Q680 466 664 486 Q630 510 500 510 Q370 510 310 488 Q262 468 280 444 Z" fill="#2c5670"/>
+  <rect x="330" y="446" width="130" height="4" rx="2" fill="#3d7391"/>
+  <rect x="470" y="478" width="110" height="4" rx="2" fill="#3d7391"/>
+  <!-- poolside trees -->
+  <g fill="#3f5012">
+    <ellipse cx="120" cy="352" rx="66" ry="16"/>
+    <polygon points="114,420 126,420 123,364 117,364"/>
+    <circle cx="806" cy="366" r="44"/>
+    <rect x="799" y="396" width="12" height="42"/>
+  </g>
+</svg>

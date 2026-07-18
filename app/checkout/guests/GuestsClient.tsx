@@ -8,6 +8,8 @@ import type { GuestRowDto, SessionSummary } from "@/lib/types";
 import { Stepper } from "@/components/Stepper";
 import { BookingSummary } from "@/components/BookingSummary";
 import { ExpiredNotice } from "@/components/ExpiredNotice";
+import { CheckoutBreadcrumb } from "../Breadcrumb";
+import { AlertIcon } from "../icons";
 
 type GuestsPayload = {
   lodges: Array<{ slot: number; bands: string[]; guests: GuestRowDto[] }>;
@@ -25,11 +27,11 @@ type Row = {
 };
 
 const inputClass =
-  "mt-1 w-full rounded-lg border border-forest/20 px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-forest/40";
-const labelClass = "text-xs font-medium text-foreground/60 uppercase tracking-wide";
+  "mt-1.5 w-full rounded-md border border-[#cccccc] bg-white px-3 py-2.5 text-base text-ink focus:outline-none focus:border-navy focus:ring-2 focus:ring-navy/25";
+const labelClass = "text-sm font-semibold text-foreground";
 
 /**
- * The Guests step, Center Parcs parity: name everyone coming, children's
+ * The Guests step: name everyone coming, children's
  * dates of birth, lodge by lodge. Entirely optional here - skipping goes
  * straight to payment and the same card lives on Manage my booking after.
  */
@@ -80,7 +82,9 @@ export function GuestsClient() {
 
   if (!sessionId || expired) return <ExpiredNotice />;
   if (error && !rows) {
-    return <p className="mx-auto max-w-2xl px-5 py-20 text-center text-red-700">{error}</p>;
+    return (
+      <p className="mx-auto max-w-2xl px-5 py-20 text-center text-[#b3261e]">{error}</p>
+    );
   }
   if (!rows) {
     return (
@@ -137,14 +141,15 @@ export function GuestsClient() {
 
   return (
     <div className="mx-auto max-w-5xl px-5 py-8">
+      <CheckoutBreadcrumb />
+      <h1 className="font-display text-[34px] leading-tight font-bold text-ink mb-5">
+        Who&apos;s coming along?
+      </h1>
       <Stepper current="Guest Details" />
 
       <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-8 lg:items-start">
         <div className="max-w-xl">
-          <h1 className="font-display text-3xl text-forest">
-            Your <em>party</em>
-          </h1>
-          <p className="mt-1 text-sm text-foreground/60">
+          <p className="text-sm text-foreground/70">
             Name everyone coming so their activity passes and wristbands are
             ready at the gate. You can skip this and add them any time from
             Manage my booking.
@@ -155,24 +160,26 @@ export function GuestsClient() {
             return (
               <div key={slot} className="mt-8">
                 {multi && (
-                  <p className="font-display text-xl text-forest mb-3">Lodge {slot + 1}</p>
+                  <p className="font-display text-xl font-bold text-ink mb-3">
+                    Lodge {slot + 1}
+                  </p>
                 )}
                 <div className="grid gap-4">
                   {lodgeRows.map((row) => (
                     <div
                       key={row.position}
-                      className="rounded-2xl bg-white ring-1 ring-forest/10 shadow-sm p-5"
+                      className="rounded-lg bg-white border border-line p-6"
                     >
-                      <p className="font-display text-lg text-forest">
+                      <p className="text-xl font-bold text-ink">
                         {BAND_LABELS[row.band] ?? row.band}{" "}
                         {countWithinBand(lodgeRows, row)}
                         {row.slot === 0 && row.position === 0 && (
-                          <span className="ml-2 rounded-full bg-forest/10 px-2 py-0.5 text-xs font-semibold text-forest align-middle">
+                          <span className="ml-2 rounded-full bg-mist px-2 py-0.5 text-xs font-semibold text-olive align-middle">
                             Lead booker
                           </span>
                         )}
                       </p>
-                      <div className="mt-3 grid grid-cols-2 gap-4">
+                      <div className="mt-4 grid grid-cols-2 gap-4">
                         <label>
                           <span className={labelClass}>First name</span>
                           <input
@@ -191,7 +198,7 @@ export function GuestsClient() {
                         </label>
                       </div>
                       {row.band !== "adult" && (
-                        <label className="block mt-3">
+                        <label className="block mt-4">
                           <span className={labelClass}>Date of birth</span>
                           <input
                             type="date"
@@ -202,9 +209,9 @@ export function GuestsClient() {
                         </label>
                       )}
                       {row.band === "adult" && !(row.slot === 0 && row.position === 0) && (
-                        <label className="block mt-3">
+                        <label className="block mt-4">
                           <span className={labelClass}>
-                            Email <span className="normal-case font-normal">(optional, for inviting them later)</span>
+                            Email <span className="font-normal">(optional, for inviting them later)</span>
                           </span>
                           <input
                             type="email"
@@ -223,17 +230,14 @@ export function GuestsClient() {
           })}
 
           {error && (
-            <div className="mt-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">
-              {error}
+            <div className="mt-4 flex items-start gap-2 rounded-md border border-[#b3261e]/30 bg-[#b3261e]/5 px-4 py-3 text-sm text-[#b3261e]">
+              <AlertIcon />
+              <span>{error}</span>
             </div>
           )}
 
           <div className="mt-6 flex items-center gap-4">
-            <button
-              onClick={saveAndContinue}
-              disabled={busy}
-              className="rounded-lg bg-forest text-white px-6 py-3 text-sm font-semibold hover:bg-forest-light disabled:opacity-60"
-            >
+            <button onClick={saveAndContinue} disabled={busy} className="btn-primary">
               {busy ? "Saving…" : "Save and continue"}
             </button>
             <button
@@ -246,7 +250,7 @@ export function GuestsClient() {
         </div>
 
         {summary && (
-          <aside className="mt-8 lg:mt-0 lg:sticky lg:top-20">
+          <aside className="mt-8 lg:mt-0 lg:sticky lg:top-6">
             <BookingSummary summary={summary} />
           </aside>
         )}

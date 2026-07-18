@@ -1,26 +1,44 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" role="img" aria-hidden="true">
   <defs>
     <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#cfe3cf"/><stop offset="1" stop-color="#eef0dd"/>
+      <stop offset="0" stop-color="#f6edd9"/>
+      <stop offset="1" stop-color="#e9d9b8"/>
     </linearGradient>
   </defs>
-  <rect width="800" height="500" fill="url(#sky)"/>
-  <circle cx="150" cy="100" r="40" fill="#f5e6b8"/>
-  <path d="M0 350 Q200 320 400 345 T800 340 V500 H0 Z" fill="#6a9450"/>
-  <path d="M0 395 Q250 370 500 390 T800 385 V500 H0 Z" fill="#4c7a3a"/>
-  <g fill="#1e3a29">
-    <path d="M60 355 L95 225 L130 355 Z"/><path d="M140 360 L170 260 L200 360 Z"/>
-    <path d="M600 350 L640 215 L680 350 Z"/><path d="M690 355 L720 265 L750 355 Z"/>
-    <path d="M545 355 L572 280 L599 355 Z"/><path d="M205 362 L228 295 L251 362 Z"/>
-  </g>
+  <rect width="800" height="600" fill="url(#sky)"/>
+  <circle cx="160" cy="112" r="44" fill="#fdf8ec"/>
+  <!-- canopy layers -->
+  <path d="M0 230 Q120 176 240 214 Q360 252 480 198 Q600 148 720 206 Q760 224 800 214 L800 420 L0 420 Z" fill="#647e1b"/>
+  <path d="M0 292 Q140 244 280 284 Q420 322 560 272 Q680 230 800 280 L800 460 L0 460 Z" fill="#536917"/>
+  <!-- ground -->
+  <path d="M0 460 Q200 444 400 456 Q600 468 800 452 L800 600 L0 600 Z" fill="#3f5012"/>
+  <!-- lodge with wraparound deck -->
   <g>
-    <rect x="255" y="275" width="290" height="120" rx="4" fill="#7a5a3a"/>
-    <path d="M235 280 L400 185 L565 280 Z" fill="#4a3826"/>
-    <rect x="285" y="305" width="52" height="52" rx="3" fill="#f6d98a"/>
-    <rect x="368" y="305" width="52" height="52" rx="3" fill="#f6d98a"/>
-    <rect x="463" y="315" width="36" height="80" rx="2" fill="#332818"/>
-    <rect x="215" y="393" width="370" height="12" rx="3" fill="#5f4830"/>
-    <rect x="215" y="405" width="8" height="24" fill="#5f4830"/><rect x="577" y="405" width="8" height="24" fill="#5f4830"/>
+    <rect x="250" y="340" width="300" height="105" fill="#b98d4f"/>
+    <polygon points="230,340 400,268 570,340" fill="#4a4a45"/>
+    <rect x="274" y="364" width="44" height="32" fill="#4a4a45"/>
+    <rect x="344" y="364" width="44" height="32" fill="#4a4a45"/>
+    <rect x="482" y="364" width="44" height="32" fill="#4a4a45"/>
+    <rect x="418" y="380" width="36" height="65" fill="#4a4a45"/>
+    <!-- deck -->
+    <rect x="204" y="445" width="392" height="14" fill="#b98d4f"/>
+    <rect x="204" y="420" width="392" height="5" fill="#4a4a45"/>
+    <rect x="204" y="420" width="5" height="25" fill="#4a4a45"/>
+    <rect x="300" y="420" width="5" height="25" fill="#4a4a45"/>
+    <rect x="495" y="420" width="5" height="25" fill="#4a4a45"/>
+    <rect x="591" y="420" width="5" height="25" fill="#4a4a45"/>
+    <rect x="222" y="459" width="8" height="18" fill="#4a4a45"/>
+    <rect x="570" y="459" width="8" height="18" fill="#4a4a45"/>
   </g>
-  <path d="M0 468 Q400 442 800 462 V500 H0 Z" fill="#3f6330"/>
+  <!-- flanking trees -->
+  <g fill="#3f5012">
+    <circle cx="92" cy="344" r="72"/>
+    <rect x="84" y="396" width="16" height="96"/>
+    <circle cx="716" cy="352" r="66"/>
+    <rect x="708" y="402" width="16" height="90"/>
+  </g>
+  <g fill="#536917">
+    <circle cx="176" cy="412" r="32"/>
+    <circle cx="638" cy="416" r="30"/>
+  </g>
 </svg>

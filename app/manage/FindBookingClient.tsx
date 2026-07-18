@@ -39,64 +39,62 @@ export function FindBookingClient() {
   }
 
   const inputClass =
-    "mt-1 w-full rounded-lg border border-forest/20 px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-forest/40";
+    "mt-1 w-full rounded-md border border-[#cccccc] bg-white px-3 py-2.5 text-base text-ink focus:outline-none focus:ring-2 focus:ring-navy";
 
   return (
     <div className="mx-auto max-w-md px-5 py-12">
-      <h1 className="font-display text-3xl text-forest">
-        Find your <em>booking</em>
-      </h1>
-      <p className="mt-1 text-sm text-foreground/60">
-        Enter your booking reference and the lead guest&apos;s email, both on
-        your confirmation.
-      </p>
+      <div className="rounded-lg border border-line bg-white p-6">
+        <h1 className="font-display text-3xl font-bold text-ink">
+          Find your <em>booking</em>
+        </h1>
+        <p className="mt-2 text-sm text-foreground">
+          Enter your booking reference and the lead guest&apos;s email, both on
+          your confirmation.
+        </p>
 
-      <form onSubmit={submit} className="mt-8 grid gap-5">
-        <label>
-          <span className="text-xs font-medium text-foreground/60 uppercase tracking-wide">
-            Booking reference
-          </span>
-          <input
-            required
-            value={form.reference}
-            onChange={(e) => setForm((f) => ({ ...f, reference: e.target.value }))}
-            className={`${inputClass} uppercase font-mono tracking-widest`}
-            placeholder="ABCDEFGH"
-          />
-        </label>
+        <form onSubmit={submit} className="mt-6 grid gap-5">
+          <label>
+            <span className="text-sm font-semibold text-foreground">Booking reference</span>
+            <input
+              required
+              value={form.reference}
+              onChange={(e) => setForm((f) => ({ ...f, reference: e.target.value }))}
+              className={`${inputClass} uppercase font-mono tracking-widest`}
+              placeholder="ABCDEFGH"
+            />
+          </label>
 
-        <label>
-          <span className="text-xs font-medium text-foreground/60 uppercase tracking-wide">
-            Lead guest email
-          </span>
-          <input
-            type="email"
-            required
-            value={form.email}
-            onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-            className={inputClass}
-            placeholder="you@example.com"
-          />
-        </label>
+          <label>
+            <span className="text-sm font-semibold text-foreground">Lead guest email</span>
+            <input
+              type="email"
+              required
+              value={form.email}
+              onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+              className={inputClass}
+              placeholder="you@example.com"
+            />
+          </label>
 
-        {error && (
-          <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">
-            {error}
-          </div>
-        )}
+          {error && (
+            <div className="rounded-md border border-[#b3261e]/30 bg-red-50 px-4 py-3 text-sm text-[#b3261e]">
+              {error}
+            </div>
+          )}
 
-        <button
-          type="submit"
-          disabled={busy}
-          className="rounded-lg bg-forest text-white px-6 py-3 text-sm font-semibold hover:bg-forest-light disabled:opacity-60"
-        >
-          {busy ? "Looking…" : "Find my booking"}
-        </button>
-      </form>
+          <button type="submit" disabled={busy} className="btn-primary w-full">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+              <circle cx="11" cy="11" r="7" />
+              <path d="m20 20-3.5-3.5" />
+            </svg>
+            {busy ? "Looking…" : "Find my booking"}
+          </button>
+        </form>
+      </div>
 
-      <p className="mt-6 text-sm text-foreground/60">
+      <p className="mt-6 text-sm text-foreground">
         Have an account?{" "}
-        <Link href="/login?next=/account" className="text-forest underline underline-offset-2">
+        <Link href="/login?next=/account" className="font-semibold text-navy underline underline-offset-2">
           Sign in
         </Link>{" "}
         to see all your breaks instead.

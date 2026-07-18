@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 600" role="img" aria-hidden="true">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f6edd9"/>
+      <stop offset="1" stop-color="#e9d9b8"/>
+    </linearGradient>
+  </defs>
+  <rect width="900" height="600" fill="url(#sky)"/>
+  <!-- high canopy -->
+  <path d="M0 0 L900 0 L900 200 Q750 250 600 210 Q450 172 300 216 Q150 258 0 212 Z" fill="#647e1b"/>
+  <path d="M0 160 Q150 120 300 158 Q450 194 600 152 Q750 114 900 156 L900 260 Q740 300 580 262 Q430 228 280 268 Q140 304 0 264 Z" fill="#536917" opacity="0.9"/>
+  <!-- trunks -->
+  <g fill="#3f5012">
+    <rect x="110" y="200" width="26" height="260"/>
+    <rect x="242" y="230" width="20" height="230"/>
+    <rect x="640" y="222" width="22" height="238"/>
+    <rect x="782" y="196" width="28" height="264"/>
+  </g>
+  <!-- forest floor -->
+  <path d="M0 448 Q225 432 450 444 Q675 456 900 440 L900 600 L0 600 Z" fill="#536917"/>
+  <path d="M0 520 Q225 504 450 516 Q675 528 900 512 L900 600 L0 600 Z" fill="#3f5012"/>
+  <!-- winding trail -->
+  <path d="M400 600 Q370 540 430 502 Q490 466 448 442 Q420 426 452 410 L512 410 Q476 428 512 448 Q560 476 494 512 Q436 546 500 600 Z" fill="#e9d9b8"/>
+  <!-- parked bicycle -->
+  <g stroke="#4a4a45" stroke-width="6" fill="none" stroke-linecap="round">
+    <circle cx="620" cy="530" r="24"/>
+    <circle cx="694" cy="530" r="24"/>
+    <path d="M620 530 L648 492 L694 530 M648 492 L676 492 M676 492 L694 530 M632 488 L662 488 M700 486 L688 486"/>
+    <path d="M648 492 L636 530"/>
+  </g>
+  <!-- understory bushes -->
+  <g fill="#3f5012">
+    <circle cx="160" cy="470" r="34"/>
+    <circle cx="812" cy="478" r="38"/>
+    <circle cx="300" cy="486" r="26"/>
+  </g>
+</svg>

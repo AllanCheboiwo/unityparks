@@ -26,6 +26,9 @@ type GuestRow = {
   email: string;
 };
 
+const guestInputClass =
+  "rounded-md border border-[#cccccc] bg-white px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-navy";
+
 export function ManageClient({ bookingId }: { bookingId: string }) {
   // Proof of access rides the URL: ?session= fresh from checkout, ?email=
   // from the find-my-booking challenge. Signed-in owners need neither.
@@ -77,6 +80,7 @@ export function ManageClient({ bookingId }: { bookingId: string }) {
   }
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bookingId]);
@@ -84,22 +88,16 @@ export function ManageClient({ bookingId }: { bookingId: string }) {
   if (needsProof) {
     return (
       <div className="mx-auto max-w-lg text-center py-20 px-5">
-        <p className="font-display text-2xl text-forest">This booking is private</p>
-        <p className="mt-2 text-sm text-foreground/60">
+        <p className="font-display text-2xl font-bold text-ink">This booking is private</p>
+        <p className="mt-2 text-sm text-foreground">
           Sign in to your account, or find the booking with its reference and
           the lead guest&apos;s email.
         </p>
         <div className="mt-6 flex justify-center gap-3">
-          <Link
-            href={`/login?next=/manage/${bookingId}`}
-            className="rounded-lg bg-forest text-white px-6 py-2.5 text-sm font-semibold hover:bg-forest-light"
-          >
+          <Link href={`/login?next=/manage/${bookingId}`} className="btn-primary">
             Sign in
           </Link>
-          <Link
-            href="/manage"
-            className="rounded-lg border border-forest/25 px-6 py-2.5 text-sm font-semibold text-forest hover:bg-forest/5"
-          >
+          <Link href="/manage" className="btn-dark-outline">
             Find my booking
           </Link>
         </div>
@@ -107,11 +105,11 @@ export function ManageClient({ bookingId }: { bookingId: string }) {
     );
   }
   if (error && !booking) {
-    return <p className="mx-auto max-w-2xl px-5 py-20 text-center text-red-700">{error}</p>;
+    return <p className="mx-auto max-w-2xl px-5 py-20 text-center text-[#b3261e]">{error}</p>;
   }
   if (!booking) {
     return (
-      <p className="mx-auto max-w-2xl px-5 py-20 text-center text-foreground/50">
+      <p className="mx-auto max-w-2xl px-5 py-20 text-center text-foreground/60">
         Fetching your booking…
       </p>
     );
@@ -158,33 +156,40 @@ export function ManageClient({ bookingId }: { bookingId: string }) {
 
   return (
     <div className="mx-auto max-w-xl px-5 py-10">
-      <h1 className="font-display text-3xl text-forest">
+      <h1 className="font-display text-3xl font-bold text-ink">
         Manage your <em>booking</em>
       </h1>
-      <p className="mt-1 text-sm text-foreground/60">
-        Reference <span className="font-mono tracking-widest">{booking.bookingId}</span>
+      <p className="mt-2 text-sm text-foreground">
+        Reference{" "}
+        <span className="font-mono font-semibold tracking-widest text-navy">
+          {booking.bookingId}
+        </span>
       </p>
 
-      <div className="mt-6 rounded-2xl bg-white ring-1 ring-forest/10 shadow-sm p-5">
-        <p className="text-xs uppercase tracking-wide text-foreground/50">
-          {multi ? `Current break · ${booking.lodges.length} lodges` : "Current stay"}
+      <div className="mt-6 rounded-lg border border-line bg-white p-6">
+        <p className="font-display text-xl font-bold text-ink">
+          {multi ? `Your break · ${booking.lodges.length} lodges` : "Your stay"}
         </p>
-        <p className="text-sm text-foreground/60 mt-1">
-          {formatDate(booking.stay.arrival)} → {formatDate(booking.stay.departure)} ·{" "}
+        <p className="mt-1 flex items-center gap-1.5 text-sm text-foreground">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <rect x="3" y="5" width="18" height="16" rx="2" />
+            <path d="M3 10h18M8 3v4M16 3v4" />
+          </svg>
+          {formatDate(booking.stay.arrival)} to {formatDate(booking.stay.departure)} ·{" "}
           {nightsLabel(nights)}
         </p>
         <div className="mt-2 grid gap-1">
           {booking.lodges.map((l) => {
             const lodge = l.unitGroupCode ? LODGES[l.unitGroupCode] : null;
             return (
-              <p key={l.slot} className="text-sm text-forest">
-                <span className="font-medium">
+              <p key={l.slot} className="text-sm">
+                <span className="font-semibold text-navy">
                   {multi ? `Lodge ${l.slot + 1}: ` : ""}
                   {lodge?.name ?? "Lodge"}
                 </span>
-                <span className="text-foreground/55"> · {l.partyLabel}</span>
+                <span className="text-foreground"> · {l.partyLabel}</span>
                 {l.assignedUnitName && (
-                  <span className="text-foreground/55"> · {l.assignedUnitName}</span>
+                  <span className="text-foreground"> · {l.assignedUnitName}</span>
                 )}
               </p>
             );
@@ -194,8 +199,8 @@ export function ManageClient({ bookingId }: { bookingId: string }) {
           <span
             className={`rounded-full px-3 py-1 text-xs font-semibold ${
               booking.folioBalance === 0
-                ? "bg-moss/15 text-moss"
-                : "bg-amber-100 text-amber-900"
+                ? "bg-leaf text-white"
+                : "border border-bronze bg-white text-bronze"
             }`}
           >
             {booking.folioBalance === 0
@@ -205,9 +210,9 @@ export function ManageClient({ bookingId }: { bookingId: string }) {
         </div>
       </div>
 
-      <form onSubmit={move} className="mt-8 rounded-2xl bg-white ring-1 ring-forest/10 shadow-sm p-5">
-        <p className="font-display text-lg text-forest">Move your break</p>
-        <p className="mt-1 text-sm text-foreground/60">
+      <form onSubmit={move} className="mt-8 rounded-lg border border-line bg-white p-6">
+        <p className="font-display text-xl font-bold text-ink">Move your break</p>
+        <p className="mt-1 text-sm text-foreground">
           Your whole {nights}-night break
           {multi ? `, all ${booking.lodges.length} lodges,` : ""} moves to a new
           start date. New dates still start on a Friday or Monday, the same
@@ -217,7 +222,7 @@ export function ManageClient({ bookingId }: { bookingId: string }) {
         </p>
 
         <div className="mt-4 flex flex-wrap items-start gap-4">
-          <div className="rounded-xl border border-forest/15 bg-white p-3 w-full max-w-xs">
+          <div className="w-full max-w-xs rounded-lg border border-line bg-white p-3">
             <TurnoverCalendar
               value={newArrival || null}
               onChange={(iso) => {
@@ -230,43 +235,44 @@ export function ManageClient({ bookingId }: { bookingId: string }) {
               onDisabledPick={(reason) => setRefusal(reason)}
             />
           </div>
-          <button
-            type="submit"
-            disabled={busy || !newArrival}
-            className="rounded-lg bg-forest text-white px-6 py-2.5 text-sm font-semibold hover:bg-forest-light disabled:opacity-60"
-          >
+          <button type="submit" disabled={busy || !newArrival} className="btn-primary">
             {busy ? "Moving…" : "Move break"}
           </button>
         </div>
 
         {newArrival && (
-          <p className="mt-2 text-xs text-foreground/50">
-            New stay: {formatDate(newArrival)} → {formatDate(addDays(newArrival, nights))}
+          <p className="mt-2 text-xs text-foreground/70">
+            New stay: {formatDate(newArrival)} to {formatDate(addDays(newArrival, nights))}
           </p>
         )}
 
         {refusal && (
-          <div className="mt-4 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-900">
+          <div className="mt-4 rounded-md border border-bronze bg-mist px-4 py-3 text-sm text-ink">
             {refusal}
           </div>
         )}
         {error && (
-          <div className="mt-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">
+          <div className="mt-4 rounded-md border border-[#b3261e]/30 bg-red-50 px-4 py-3 text-sm text-[#b3261e]">
             {error}
           </div>
         )}
         {moved && (
-          <div className="mt-4 rounded-lg bg-moss/10 border border-moss/30 px-4 py-3 text-sm text-forest">
-            Break moved. {multi ? "Every lodge is" : "Your reservation is"}{" "}
-            updated in the reservation system and the folio is still settled.
+          <div className="mt-4 flex items-start gap-2 rounded-md border border-leaf/40 bg-mist px-4 py-3 text-sm text-olive">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="mt-0.5 shrink-0" aria-hidden>
+              <path d="M4 12.5 9.5 18 20 6.5" />
+            </svg>
+            <span>
+              Break moved. {multi ? "Every lodge is" : "Your reservation is"}{" "}
+              updated in the reservation system and the folio is still settled.
+            </span>
           </div>
         )}
       </form>
 
       {guestRows && (
-        <div className="mt-8 rounded-2xl bg-white ring-1 ring-forest/10 shadow-sm p-5">
-          <p className="font-display text-lg text-forest">Who&apos;s coming</p>
-          <p className="mt-1 text-sm text-foreground/60">
+        <div className="mt-8 rounded-lg border border-line bg-white p-6">
+          <p className="font-display text-xl font-bold text-ink">Who&apos;s coming</p>
+          <p className="mt-1 text-sm text-foreground">
             Name everyone in your party so activity passes and wristbands are
             ready at the gate. Only we store this; nothing changes on the
             reservation.
@@ -274,12 +280,12 @@ export function ManageClient({ bookingId }: { bookingId: string }) {
 
           <div className="mt-4 grid gap-4">
             {guestRows.map((row) => (
-              <div key={`${row.slot}-${row.position}`} className="rounded-xl ring-1 ring-forest/10 p-4">
-                <p className="text-sm font-semibold text-forest">
+              <div key={`${row.slot}-${row.position}`} className="rounded-lg border border-line p-4">
+                <p className="text-sm font-semibold text-navy">
                   {multi ? `Lodge ${row.slot + 1} · ` : ""}
                   {BAND_LABELS[row.band] ?? row.band}
                   {row.slot === 0 && row.position === 0 && (
-                    <span className="ml-2 rounded-full bg-forest/10 px-2 py-0.5 text-xs font-semibold text-forest">
+                    <span className="ml-2 rounded-full bg-mist px-2 py-0.5 text-xs font-semibold text-olive">
                       Lead booker
                     </span>
                   )}
@@ -298,7 +304,7 @@ export function ManageClient({ bookingId }: { bookingId: string }) {
                         ),
                       )
                     }
-                    className="rounded-lg border border-forest/20 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-forest/40"
+                    className={guestInputClass}
                   />
                   <input
                     aria-label="Last name"
@@ -313,7 +319,7 @@ export function ManageClient({ bookingId }: { bookingId: string }) {
                         ),
                       )
                     }
-                    className="rounded-lg border border-forest/20 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-forest/40"
+                    className={guestInputClass}
                   />
                 </div>
                 {row.band !== "adult" && (
@@ -330,7 +336,7 @@ export function ManageClient({ bookingId }: { bookingId: string }) {
                         ),
                       )
                     }
-                    className="mt-3 rounded-lg border border-forest/20 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-forest/40"
+                    className={`mt-3 ${guestInputClass}`}
                   />
                 )}
               </div>
@@ -338,12 +344,15 @@ export function ManageClient({ bookingId }: { bookingId: string }) {
           </div>
 
           {guestsError && (
-            <div className="mt-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">
+            <div className="mt-4 rounded-md border border-[#b3261e]/30 bg-red-50 px-4 py-3 text-sm text-[#b3261e]">
               {guestsError}
             </div>
           )}
           {guestsSaved && (
-            <div className="mt-4 rounded-lg bg-moss/10 border border-moss/30 px-4 py-3 text-sm text-forest">
+            <div className="mt-4 flex items-center gap-2 rounded-md border border-leaf/40 bg-mist px-4 py-3 text-sm text-olive">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0" aria-hidden>
+                <path d="M4 12.5 9.5 18 20 6.5" />
+              </svg>
               Party saved.
             </div>
           )}
@@ -380,7 +389,7 @@ export function ManageClient({ bookingId }: { bookingId: string }) {
               setGuestsBusy(false);
               setGuestsSaved(true);
             }}
-            className="mt-4 rounded-lg bg-forest text-white px-6 py-2.5 text-sm font-semibold hover:bg-forest-light disabled:opacity-60"
+            className="btn-primary mt-4"
           >
             {guestsBusy ? "Saving…" : "Save party"}
           </button>
@@ -390,7 +399,7 @@ export function ManageClient({ bookingId }: { bookingId: string }) {
       <div className="mt-8 text-center">
         <Link
           href={`/confirmation/${booking.bookingId}${proofQuery}`}
-          className="text-sm text-lake underline underline-offset-2"
+          className="text-sm font-semibold text-navy underline underline-offset-2"
         >
           View confirmation
         </Link>

@@ -9,6 +9,8 @@ import type { SessionSummary } from "@/lib/types";
 import { Stepper } from "@/components/Stepper";
 import { BookingSummary } from "@/components/BookingSummary";
 import { ExpiredNotice } from "@/components/ExpiredNotice";
+import { CheckoutBreadcrumb } from "../Breadcrumb";
+import { AlertIcon } from "../icons";
 
 type CheckoutResponse =
   | { status: "redirect"; redirectUrl: string }
@@ -58,7 +60,9 @@ export function PayClient({ provider }: { provider: "simulated" | "pesapal" }) {
 
   if (!sessionId || expired) return <ExpiredNotice />;
   if (error && !session) {
-    return <p className="mx-auto max-w-2xl px-5 py-20 text-center text-red-700">{error}</p>;
+    return (
+      <p className="mx-auto max-w-2xl px-5 py-20 text-center text-[#b3261e]">{error}</p>
+    );
   }
   if (!session) {
     return (
@@ -74,19 +78,18 @@ export function PayClient({ provider }: { provider: "simulated" | "pesapal" }) {
   // Guests can land here by URL before every lodge has been chosen.
   if (!allChosen) {
     return (
-      <div className="mx-auto max-w-lg text-center py-20 px-5">
-        <p className="font-display text-2xl text-forest">
-          {multi ? "Finish choosing your lodges" : "Your basket is empty"}
-        </p>
-        <p className="mt-2 text-sm text-foreground/60">
-          Choose {multi ? "every lodge" : "a lodge"} first, then come back to pay.
-        </p>
-        <a
-          href={`/lodges?session=${sessionId}`}
-          className="inline-block mt-6 rounded-lg bg-forest text-white px-6 py-2.5 text-sm font-semibold hover:bg-forest-light"
-        >
-          {multi ? "Back to lodges" : "Choose a lodge"}
-        </a>
+      <div className="mx-auto max-w-lg px-5 py-20">
+        <div className="rounded-lg bg-mist border border-line px-6 py-10 text-center">
+          <p className="font-display text-2xl font-bold text-ink">
+            {multi ? "Finish choosing your lodges" : "Your basket is empty"}
+          </p>
+          <p className="mt-2 text-sm text-foreground/70">
+            Choose {multi ? "every lodge" : "a lodge"} first, then come back to pay.
+          </p>
+          <a href={`/lodges?session=${sessionId}`} className="btn-primary mt-6">
+            {multi ? "Back to lodges" : "Choose a lodge"}
+          </a>
+        </div>
       </div>
     );
   }
@@ -129,47 +132,46 @@ export function PayClient({ provider }: { provider: "simulated" | "pesapal" }) {
 
   if (soldOut) {
     return (
-      <div className="mx-auto max-w-lg text-center py-20 px-5">
-        <p className="font-display text-2xl text-forest">
-          Someone beat you to that lodge
-        </p>
-        <p className="mt-2 text-sm text-foreground/60">
-          It was booked while you were checking out. Your dates are still
-          good. Pick another lodge.
-        </p>
-        <a
-          href={`/lodges?session=${sessionId}`}
-          className="inline-block mt-6 rounded-lg bg-forest text-white px-6 py-2.5 text-sm font-semibold hover:bg-forest-light"
-        >
-          Back to lodges
-        </a>
+      <div className="mx-auto max-w-lg px-5 py-20">
+        <div className="rounded-lg bg-mist border border-line px-6 py-10 text-center">
+          <p className="font-display text-2xl font-bold text-ink">
+            Someone beat you to that lodge
+          </p>
+          <p className="mt-2 text-sm text-foreground/70">
+            It was booked while you were checking out. Your dates are still
+            good. Pick another lodge.
+          </p>
+          <a href={`/lodges?session=${sessionId}`} className="btn-primary mt-6">
+            Back to lodges
+          </a>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="mx-auto max-w-5xl px-5 py-8">
+      <CheckoutBreadcrumb />
+      <h1 className="font-display text-[34px] leading-tight font-bold text-ink mb-5">
+        Pay for your break
+      </h1>
       <Stepper current="Payment" />
 
-      <h1 className="font-display text-3xl text-forest">
-        Your <em>break</em>
-      </h1>
-
-      <div className="mt-6 lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-8 lg:items-start">
+      <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-8 lg:items-start">
         {/* On mobile the summary sits above the button - nobody should press
-            Buy now without the total in view. */}
-        <aside className="lg:order-2 lg:sticky lg:top-20">
+            pay without the total in view. */}
+        <aside className="lg:order-2 lg:sticky lg:top-6">
           <BookingSummary summary={session} />
         </aside>
 
         <div className="mt-6 lg:mt-0 lg:order-1 max-w-xl">
-          <div className="rounded-2xl bg-white ring-1 ring-forest/10 shadow-sm divide-y divide-forest/10">
+          <div className="rounded-lg bg-white border border-line divide-y divide-line">
             <div className="p-5">
-              <p className="text-xs uppercase tracking-wide text-foreground/50">
-                {multi ? `Your break · ${session.lodges.length} lodges` : "Your stay"}
+              <p className="text-xl font-bold text-ink">
+                {multi ? `Your break, ${session.lodges.length} lodges` : "Your stay"}
               </p>
               <p className="text-sm text-foreground/60 mt-1">
-                {formatDate(session.arrival)} → {formatDate(session.departure)} ·{" "}
+                {formatDate(session.arrival)} to {formatDate(session.departure)} ·{" "}
                 {nightsLabel(session.nights)}
               </p>
             </div>
@@ -183,7 +185,7 @@ export function PayClient({ provider }: { provider: "simulated" | "pesapal" }) {
                       Lodge {l.slot + 1}
                     </p>
                   )}
-                  <p className="mt-0.5 font-medium text-forest">
+                  <p className="mt-0.5 font-semibold text-navy">
                     {lodge?.name ?? l.lodge?.unitGroupCode}
                   </p>
                   <p className="text-sm text-foreground/60">
@@ -218,35 +220,45 @@ export function PayClient({ provider }: { provider: "simulated" | "pesapal" }) {
           </div>
 
           {paymentNotice && !error && (
-            <div className="mt-4 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-900">
+            <div className="mt-4 rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-900">
               {paymentNotice}
             </div>
           )}
 
           {error && (
-            <div className="mt-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">
-              {error}
+            <div className="mt-4 flex items-start gap-2 rounded-md border border-[#b3261e]/30 bg-[#b3261e]/5 px-4 py-3 text-sm text-[#b3261e]">
+              <AlertIcon />
+              <span>{error}</span>
             </div>
           )}
 
-          <button
-            onClick={buyNow}
-            disabled={busy}
-            className="mt-6 w-full rounded-lg bg-forest text-white px-6 py-3.5 text-base font-semibold hover:bg-forest-light disabled:opacity-60"
-          >
-            {busy
-              ? provider === "pesapal"
-                ? "One moment…"
-                : "Confirming your booking…"
-              : provider === "pesapal"
-                ? `Pay securely · ${formatKes(bookingTotal)}`
-                : `Buy now · ${formatKes(bookingTotal)}`}
-          </button>
-          <p className="mt-3 text-center text-xs text-foreground/50">
-            {provider === "pesapal"
-              ? "You'll finish paying on Pesapal's secure page (sandbox). Card and M-Pesa test payments only - no real money moves."
-              : "Demo environment: your booking is real in our reservation system, but no money moves."}
-          </p>
+          {/* The payment handoff card */}
+          <div className="mt-6 rounded-lg bg-white border border-line p-6">
+            <p className="text-xl font-bold text-ink">Pay securely</p>
+            <p className="mt-2 text-sm text-foreground/70">
+              {provider === "pesapal"
+                ? "One payment covers your whole break. We'll hold your lodge while you pay on Pesapal's secure page, then bring you straight back for your confirmation."
+                : "One payment covers your whole break. Confirm below and your lodge is booked straight away."}
+            </p>
+            <button
+              onClick={buyNow}
+              disabled={busy}
+              className="btn-primary btn-hero mt-4 w-full"
+            >
+              {busy
+                ? provider === "pesapal"
+                  ? "One moment…"
+                  : "Confirming your booking…"
+                : provider === "pesapal"
+                  ? `Continue to payment · ${formatKes(bookingTotal)}`
+                  : `Confirm booking · ${formatKes(bookingTotal)}`}
+            </button>
+            <p className="mt-3 text-center text-xs text-foreground/50">
+              {provider === "pesapal"
+                ? "You'll finish paying on Pesapal's secure page (sandbox). Card and M-Pesa test payments only - no real money moves."
+                : "Demo environment: your booking is real in our reservation system, but no money moves."}
+            </p>
+          </div>
         </div>
       </div>
     </div>

@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1260 540" preserveAspectRatio="xMidYMid slice" role="img" aria-hidden="true">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f6edd9"/>
+      <stop offset="1" stop-color="#e9d9b8"/>
+    </linearGradient>
+  </defs>
+  <rect width="1260" height="540" fill="url(#sky)"/>
+  <circle cx="1000" cy="118" r="54" fill="#fdf8ec"/>
+  <!-- far ridge -->
+  <path d="M0 262 Q158 232 315 254 Q472 276 630 250 Q788 224 945 252 Q1102 280 1260 248 L1260 360 L0 360 Z" fill="#647e1b"/>
+  <!-- mid ridge -->
+  <path d="M0 300 Q210 272 420 294 Q630 316 840 288 Q1050 260 1260 296 L1260 372 L0 372 Z" fill="#536917"/>
+  <!-- far-shore lodges -->
+  <g>
+    <rect x="500" y="312" width="56" height="30" fill="#b98d4f"/>
+    <polygon points="494,312 528,292 562,312" fill="#4a4a45"/>
+    <rect x="522" y="324" width="12" height="18" fill="#4a4a45"/>
+    <rect x="592" y="308" width="62" height="34" fill="#b98d4f"/>
+    <polygon points="586,308 623,286 660,308" fill="#4a4a45"/>
+    <rect x="616" y="322" width="13" height="20" fill="#4a4a45"/>
+    <rect x="690" y="312" width="56" height="30" fill="#b98d4f"/>
+    <polygon points="684,312 718,292 752,312" fill="#4a4a45"/>
+    <rect x="712" y="324" width="12" height="18" fill="#4a4a45"/>
+  </g>
+  <!-- lake -->
+  <rect x="0" y="342" width="1260" height="110" fill="#3d7391"/>
+  <rect x="0" y="402" width="1260" height="50" fill="#2c5670"/>
+  <rect x="140" y="362" width="180" height="4" rx="2" fill="#2c5670"/>
+  <rect x="520" y="378" width="140" height="4" rx="2" fill="#2c5670"/>
+  <rect x="900" y="358" width="200" height="4" rx="2" fill="#2c5670"/>
+  <rect x="300" y="416" width="160" height="4" rx="2" fill="#3d7391"/>
+  <rect x="760" y="430" width="190" height="4" rx="2" fill="#3d7391"/>
+  <!-- near shore -->
+  <path d="M0 452 Q180 432 360 446 Q540 460 720 440 Q900 420 1080 444 Q1170 456 1260 442 L1260 540 L0 540 Z" fill="#3f5012"/>
+  <!-- foreground trees -->
+  <g fill="#3f5012">
+    <ellipse cx="130" cy="392" rx="78" ry="20"/>
+    <polygon points="122,470 136,470 133,406 125,406"/>
+    <circle cx="880" cy="430" r="34"/>
+    <rect x="875" y="452" width="10" height="26"/>
+    <circle cx="1148" cy="424" r="48"/>
+    <circle cx="1214" cy="404" r="60"/>
+    <rect x="1142" y="456" width="12" height="34"/>
+    <rect x="1208" y="450" width="12" height="40"/>
+  </g>
+  <circle cx="52" cy="428" r="40" fill="#536917"/>
+</svg>

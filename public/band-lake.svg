@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1260 540" preserveAspectRatio="xMidYMid slice" role="img" aria-hidden="true">
+  <defs>
+    <linearGradient id="dusk" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e9d9b8"/>
+      <stop offset="1" stop-color="#f6edd9"/>
+    </linearGradient>
+  </defs>
+  <rect width="1260" height="540" fill="url(#dusk)"/>
+  <circle cx="630" cy="248" r="64" fill="#fdf6e3"/>
+  <!-- far ridge at dusk -->
+  <path d="M0 252 Q210 264 420 246 Q630 228 840 250 Q1050 272 1260 244 L1260 300 L0 300 Z" fill="#536917"/>
+  <!-- distant lodge -->
+  <rect x="972" y="252" width="44" height="24" fill="#b98d4f"/>
+  <polygon points="966,252 994,236 1022,252" fill="#4a4a45"/>
+  <!-- lake -->
+  <rect x="0" y="276" width="1260" height="264" fill="#2c5670"/>
+  <rect x="0" y="276" width="1260" height="64" fill="#3d7391"/>
+  <!-- sun reflection -->
+  <g fill="#f6edd9" opacity="0.45">
+    <rect x="570" y="300" width="120" height="6" rx="3"/>
+    <rect x="585" y="320" width="90" height="5" rx="2.5"/>
+    <rect x="560" y="342" width="140" height="6" rx="3"/>
+    <rect x="595" y="368" width="70" height="5" rx="2.5"/>
+    <rect x="575" y="396" width="110" height="6" rx="3"/>
+  </g>
+  <rect x="160" y="356" width="180" height="4" rx="2" fill="#3d7391"/>
+  <rect x="890" y="386" width="210" height="4" rx="2" fill="#3d7391"/>
+  <rect x="300" y="440" width="150" height="4" rx="2" fill="#3d7391"/>
+  <!-- foreground headlands -->
+  <path d="M0 540 L0 470 Q120 452 220 476 Q300 494 380 540 Z" fill="#3f5012"/>
+  <path d="M1260 540 L1260 458 Q1150 448 1050 480 Q980 500 920 540 Z" fill="#3f5012"/>
+  <g fill="#3f5012">
+    <ellipse cx="140" cy="452" rx="60" ry="14"/>
+    <polygon points="134,500 146,500 143,462 137,462"/>
+    <circle cx="1180" cy="446" r="36"/>
+    <rect x="1174" y="470" width="10" height="24"/>
+  </g>
+</svg>

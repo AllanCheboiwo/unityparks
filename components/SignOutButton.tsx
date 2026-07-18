@@ -19,7 +19,9 @@ export function SignOutButton() {
     <button
       onClick={signOut}
       disabled={busy}
-      className="text-xs text-foreground/60 hover:text-forest underline underline-offset-2 disabled:opacity-60"
+      // Small-size take on .btn-outline: same bronze outline language, but
+      // compact enough to sit beside the name chip in the header.
+      className="rounded-md border border-bronze bg-white px-3 py-1 text-xs font-semibold text-bronze hover:bg-[#f7f3ec] disabled:opacity-60"
     >
       Sign out
     </button>
