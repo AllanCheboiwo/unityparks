@@ -69,9 +69,8 @@ export function ConfirmationClient({ bookingId }: { bookingId: string }) {
   );
   const settled = booking.folioBalance === 0;
   const multi = booking.lodges.length > 1;
-  // The memories moment: every guest, every night, one memory in the making.
-  const guestCount = booking.lodges.reduce((sum, l) => sum + l.bands.length, 0);
-  const memories = guestCount * nights;
+  // The memories moment: every guest, one memory per stay in the making.
+  const memories = booking.lodges.reduce((sum, l) => sum + l.bands.length, 0);
 
   return (
     <div className="mx-auto max-w-xl px-5 py-10">
@@ -113,7 +112,7 @@ export function ConfirmationClient({ bookingId }: { bookingId: string }) {
 
         <div className="mt-6 rounded-lg border border-line contour-bg px-6 py-5">
           <p className="font-display text-lg font-bold text-olive">
-            That is {memories} new memories on the way.
+            That is {memories} new {memories === 1 ? "memory" : "memories"} on the way.
           </p>
           <p className="mt-1 text-sm text-foreground">
             Thank you for helping us reach a billion.

@@ -281,7 +281,7 @@ export default async function HomePage() {
             memories made so far, counting our way to a billion
           </p>
           <p className="mt-2 text-sm text-foreground/60">
-            One memory is one guest, one night in the forest. Just{" "}
+            One memory is one guest, one stay in the forest. Just{" "}
             {(MEMORIES_GOAL - memories).toLocaleString("en-GB")} to go.
           </p>
         </div>
