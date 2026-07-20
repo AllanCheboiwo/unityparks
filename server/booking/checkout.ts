@@ -21,6 +21,7 @@ import { PublicError } from "../api-helpers";
 import { paymentsProvider } from "./provider";
 import { getSession, parseChildrenAges, parseExtras } from "./session";
 import { loadGuests } from "./guests";
+import { sendBookingConfirmation } from "../email/bookingConfirmation";
 
 type RecordWithReservations = BookingRecord & { reservations: BookingReservation[] };
 type SessionForCheckout = NonNullable<Awaited<ReturnType<typeof getSession>>>;
@@ -763,6 +764,10 @@ async function settleBooking(
     where: { id: session.id },
     data: { state: "completed" },
   });
+
+  // Confirmation email, once per booking (the module owns the once-only
+  // claim and swallows every failure - email never disturbs a paid booking).
+  await sendBookingConfirmation(paid.id);
 
   return paid;
 }

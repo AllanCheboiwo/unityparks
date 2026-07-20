@@ -88,6 +88,16 @@ function monthLabel(value: string): string {
   return `${MONTH_NAMES[m - 1]} ${y}`;
 }
 
+/** "Mon 20 Jul" - the one-line date used where the stacked pair won't fit. */
+function compactDate(iso: string): string {
+  return new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    timeZone: "UTC",
+  });
+}
+
 type PanelName = "dates" | "lodges" | "guests";
 
 type SearchResponse = { sessionId: string };
@@ -214,10 +224,12 @@ function DateStack({ iso, showYear = true }: { iso: string; showYear?: boolean }
     ...(showYear ? { year: "numeric" as const } : {}),
     timeZone: "UTC",
   });
+  // leading-[1.2], not leading-none: the tight line box was clipping the
+  // descenders of Monday and Friday against the field's overflow edge.
   return (
     <span className="flex flex-col">
-      <span className="text-[11px] leading-none text-foreground/55 mb-[6px]">{weekday}</span>
-      <span className="text-[15px] font-semibold leading-none text-ink whitespace-nowrap">{date}</span>
+      <span className="text-[11px] leading-[1.2] text-foreground/55 mb-[2px]">{weekday}</span>
+      <span className="text-[15px] font-semibold leading-[1.2] text-ink whitespace-nowrap">{date}</span>
     </span>
   );
 }
@@ -578,10 +590,12 @@ export function BookingBar({ initial }: { initial?: BookingBarInitial }) {
       : `${totalGuests} guests`;
   const lodgesLabel = `${lodgeCount} ${lodgeCount === 1 ? "lodge" : "lodges"}`;
 
-  // Dates carries the widest content (two stacked dates and an arrow), so it
-  // gets more of the row; min-w-0 lets every field shrink instead of spill.
-  const field = "relative flex-1 min-w-0 sm:min-w-[150px]";
-  const dateField = "relative flex-[1.4] min-w-0 sm:min-w-[210px]";
+  // The row is shared by content width: village and dates carry long text
+  // (full village name, two stacked dates with an arrow), lodges and guests
+  // hold short counts. min-w-0 lets every field shrink instead of spill.
+  const field = "relative flex-[0.75] min-w-0 lg:min-w-[120px]";
+  const villageField = "relative flex-[1.15] min-w-0 lg:min-w-[200px]";
+  const dateField = "relative flex-[1.35] min-w-0 lg:min-w-[210px]";
   const chip =
     "relative w-full h-full text-left pl-4 pr-10 py-3.5 hover:bg-mist/60 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-navy/40";
   const chipInner = "flex items-center gap-3";
@@ -615,10 +629,10 @@ export function BookingBar({ initial }: { initial?: BookingBarInitial }) {
       )}
 
       {/* The bar */}
-      <div className="relative z-30 rounded-xl bg-white shadow-xl shadow-black/10 ring-1 ring-line flex flex-col sm:flex-row items-stretch divide-y sm:divide-y-0 sm:divide-x divide-[#e5e2da]">
+      <div className="relative z-30 rounded-xl bg-white shadow-xl shadow-black/10 ring-1 ring-line flex flex-col lg:flex-row items-stretch divide-y lg:divide-y-0 lg:divide-x divide-[#e5e2da]">
         {/* Village - one village in this demo, shown fixed */}
-        <div className={field}>
-          <div className={`${chipInner} pl-4 pr-5 py-3.5 h-full sm:rounded-l-xl`}>
+        <div className={villageField}>
+          <div className={`${chipInner} pl-4 pr-5 py-3.5 h-full lg:rounded-l-xl`}>
             <PinIcon className={chipIcon} />
             <span className="min-w-0">
               <span className={chipLabel}>Village</span>
@@ -653,16 +667,26 @@ export function BookingBar({ initial }: { initial?: BookingBarInitial }) {
                     </>
                   )
                 ) : arrival ? (
-                  // Year only on departure when both fall in the same year,
-                  // so the pair fits the field instead of overflowing it.
-                  <span className="flex items-center gap-2 overflow-hidden">
-                    <DateStack
-                      iso={arrival}
-                      showYear={arrival.slice(0, 4) !== departure.slice(0, 4)}
-                    />
-                    <ArrowRightIcon className="shrink-0 text-ink/60" />
-                    <DateStack iso={departure} />
-                  </span>
+                  <>
+                    {/* Wide screens: the stacked weekday-over-date pair.
+                        Year only on departure when both share it, so the
+                        pair fits the field instead of overflowing it. */}
+                    <span className="hidden xl:flex items-center gap-2">
+                      <DateStack
+                        iso={arrival}
+                        showYear={arrival.slice(0, 4) !== departure.slice(0, 4)}
+                      />
+                      <ArrowRightIcon className="shrink-0 text-ink/60" />
+                      <DateStack iso={departure} />
+                    </span>
+                    {/* Narrower screens: one compact line. */}
+                    <span className="xl:hidden">
+                      <span className={chipLabel}>Dates</span>
+                      <span className={chipValue}>
+                        {compactDate(arrival)} → {compactDate(departure)}
+                      </span>
+                    </span>
+                  </>
                 ) : (
                   <>
                     <span className={chipLabel}>Dates</span>
@@ -976,12 +1000,14 @@ export function BookingBar({ initial }: { initial?: BookingBarInitial }) {
           )}
         </div>
 
-        {/* Search */}
+        {/* Search. Corners spelled out one by one: the rounded-b-* and
+            rounded-r-* shorthands both set bottom-right, and whichever loses
+            paints a square ochre corner outside the bar's rounded outline. */}
         <button
           type="button"
           onClick={() => (dateMode === "month" ? runMonthSearch() : runSearch(arrival, nights))}
           disabled={busy}
-          className="shrink-0 flex items-center justify-center gap-2 bg-ochre text-white px-8 text-base font-bold hover:bg-ochre-dark transition-colors disabled:opacity-60 py-4 sm:py-0 rounded-b-xl sm:rounded-b-none sm:rounded-r-xl"
+          className="shrink-0 flex items-center justify-center gap-2 bg-ochre text-white px-8 text-base font-bold hover:bg-ochre-dark transition-colors disabled:opacity-60 py-4 lg:py-0 rounded-bl-xl rounded-br-xl lg:rounded-bl-none lg:rounded-tr-xl"
         >
           <MagnifierIcon className="shrink-0" />
           {busy ? "Searching…" : "Search"}

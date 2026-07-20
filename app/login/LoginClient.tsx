@@ -95,8 +95,14 @@ export function LoginClient() {
         </Link>{" "}
         with its reference and email instead.
       </p>
-      <p className="mt-2 text-xs text-foreground/60">
-        Forgotten your password? Password reset is not part of this demo.
+      <p className="mt-2 text-sm text-foreground">
+        Forgotten your password?{" "}
+        <Link
+          href="/forgot-password"
+          className="font-semibold text-navy underline underline-offset-2"
+        >
+          Reset it by email
+        </Link>
       </p>
     </div>
   );

@@ -16,6 +16,17 @@ type AmendResponse = {
   folioBalance: number;
 };
 
+type CancellationQuote = {
+  cancellable: boolean;
+  reason: string | null;
+  daysToArrival: number;
+  refundPercent: number;
+  refundAmount: number;
+  keptAmount: number;
+  total: number;
+  currency: string;
+};
+
 type GuestRow = {
   slot: number;
   position: number;
@@ -51,6 +62,10 @@ export function ManageClient({ bookingId }: { bookingId: string }) {
   const [guestsBusy, setGuestsBusy] = useState(false);
   const [guestsError, setGuestsError] = useState<string | null>(null);
   const [guestsSaved, setGuestsSaved] = useState(false);
+  const [quote, setQuote] = useState<CancellationQuote | null>(null);
+  const [confirmingCancel, setConfirmingCancel] = useState(false);
+  const [cancelBusy, setCancelBusy] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
 
   async function load() {
     const result = await apiFetch<BookingConfirmation>(`/api/booking/${bookingId}${proofQuery}`);
@@ -59,6 +74,14 @@ export function ManageClient({ bookingId }: { bookingId: string }) {
       return setError(result.error);
     }
     setBooking(result.data);
+    // The cancellation quote is a pure read; only paid bookings have one
+    // worth showing.
+    if (result.data.status === "paid") {
+      const q = await apiFetch<CancellationQuote>(
+        `/api/booking/${bookingId}/cancel${proofQuery}`,
+      );
+      if (q.ok) setQuote(q.data);
+    }
     setGuestRows(
       result.data.lodges.flatMap((lodge) => {
         const saved = new Map(lodge.guests.map((g) => [g.position, g]));
@@ -119,6 +142,7 @@ export function ManageClient({ bookingId }: { bookingId: string }) {
     (Date.parse(booking.stay.departure) - Date.parse(booking.stay.arrival)) / 86_400_000,
   );
   const multi = booking.lodges.length > 1;
+  const cancelled = booking.status === "cancelled";
 
   function addDays(iso: string, days: number): string {
     const d = new Date(`${iso}T00:00:00Z`);
@@ -196,20 +220,46 @@ export function ManageClient({ bookingId }: { bookingId: string }) {
           })}
         </div>
         <div className="mt-3 flex gap-2">
-          <span
-            className={`rounded-full px-3 py-1 text-xs font-semibold ${
-              booking.folioBalance === 0
-                ? "bg-leaf text-white"
-                : "border border-bronze bg-white text-bronze"
-            }`}
-          >
-            {booking.folioBalance === 0
-              ? "Folio settled"
-              : `Folio balance ${formatKes(booking.folioBalance)}`}
-          </span>
+          {cancelled ? (
+            // After a cancellation the folio balance reads as money owed
+            // (refund postings offset the payments, not the charges), so
+            // the pill would mislead; the refund line below tells the truth.
+            <span className="rounded-full bg-[#6b6b6b] px-3 py-1 text-xs font-semibold text-white">
+              Cancelled
+            </span>
+          ) : (
+            <span
+              className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                booking.folioBalance === 0
+                  ? "bg-leaf text-white"
+                  : "border border-bronze bg-white text-bronze"
+              }`}
+            >
+              {booking.folioBalance === 0
+                ? "Folio settled"
+                : `Folio balance ${formatKes(booking.folioBalance)}`}
+            </span>
+          )}
         </div>
       </div>
 
+      {cancelled && (
+        <div className="mt-6 rounded-lg border border-line bg-mist p-6">
+          <p className="font-display text-xl font-bold text-ink">This break is cancelled</p>
+          <p className="mt-2 text-sm text-foreground">
+            {booking.refundAmount && booking.refundAmount > 0
+              ? `${formatKes(booking.refundAmount)} of ${formatKes(booking.totalGrossAmount)} was refunded under the cancellation terms.`
+              : "No refund was due under the cancellation terms."}{" "}
+            The lodge{booking.lodges.length > 1 ? "s are" : " is"} back on sale
+            for other families.
+          </p>
+          <Link href="/#search" className="btn-primary mt-4 inline-block">
+            Find a new break
+          </Link>
+        </div>
+      )}
+
+      {!cancelled && (
       <form onSubmit={move} className="mt-8 rounded-lg border border-line bg-white p-6">
         <p className="font-display text-xl font-bold text-ink">Move your break</p>
         <p className="mt-1 text-sm text-foreground">
@@ -268,8 +318,9 @@ export function ManageClient({ bookingId }: { bookingId: string }) {
           </div>
         )}
       </form>
+      )}
 
-      {guestRows && (
+      {!cancelled && guestRows && (
         <div className="mt-8 rounded-lg border border-line bg-white p-6">
           <p className="font-display text-xl font-bold text-ink">Who&apos;s coming</p>
           <p className="mt-1 text-sm text-foreground">
@@ -393,6 +444,94 @@ export function ManageClient({ bookingId }: { bookingId: string }) {
           >
             {guestsBusy ? "Saving…" : "Save party"}
           </button>
+        </div>
+      )}
+
+      {!cancelled && quote && (
+        <div className="mt-8 rounded-lg border border-line bg-white p-6">
+          <p className="font-display text-xl font-bold text-ink">Cancel this break</p>
+          <p className="mt-1 text-sm text-foreground">
+            Full refund 28 or more days before arrival, half refund 8 to 27
+            days before, no refund within 7 days.
+          </p>
+
+          {quote.cancellable ? (
+            <div className="mt-4 rounded-md bg-mist px-4 py-3 text-sm text-ink">
+              Cancelling today, {quote.daysToArrival}{" "}
+              {quote.daysToArrival === 1 ? "day" : "days"} before arrival:{" "}
+              <span className="font-bold">
+                {quote.refundAmount > 0
+                  ? `we refund ${formatKes(quote.refundAmount)} of ${formatKes(quote.total)}`
+                  : "no refund is due"}
+              </span>
+              {quote.keptAmount > 0 && quote.refundAmount > 0 && (
+                <> ({formatKes(quote.keptAmount)} cancellation charge)</>
+              )}
+              .
+            </div>
+          ) : (
+            <div className="mt-4 rounded-md border border-bronze bg-mist px-4 py-3 text-sm text-ink">
+              {quote.reason}
+            </div>
+          )}
+
+          {cancelError && (
+            <div className="mt-4 rounded-md border border-[#b3261e]/30 bg-red-50 px-4 py-3 text-sm text-[#b3261e]">
+              {cancelError}
+            </div>
+          )}
+
+          {quote.cancellable &&
+            (confirmingCancel ? (
+              <div className="mt-4 rounded-md border border-[#b3261e]/40 bg-red-50 p-4">
+                <p className="text-sm font-semibold text-ink">
+                  This can&apos;t be undone. Your lodge
+                  {booking.lodges.length > 1 ? "s go" : " goes"} straight back
+                  on sale.
+                </p>
+                <div className="mt-3 flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    disabled={cancelBusy}
+                    onClick={async () => {
+                      setCancelBusy(true);
+                      setCancelError(null);
+                      const result = await apiFetch<CancellationQuote>(
+                        `/api/booking/${bookingId}/cancel${proofQuery}`,
+                        { method: "POST" },
+                      );
+                      if (!result.ok) {
+                        setCancelError(result.error);
+                        setCancelBusy(false);
+                        return;
+                      }
+                      await load();
+                      setCancelBusy(false);
+                      setConfirmingCancel(false);
+                    }}
+                    className="rounded-md bg-[#b3261e] px-5 py-2 text-sm font-semibold text-white hover:bg-[#8f1e18] disabled:opacity-60"
+                  >
+                    {cancelBusy ? "Cancelling…" : "Yes, cancel my break"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={cancelBusy}
+                    onClick={() => setConfirmingCancel(false)}
+                    className="btn-dark-outline text-sm"
+                  >
+                    Keep my break
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setConfirmingCancel(true)}
+                className="mt-4 rounded-md border border-[#b3261e] bg-white px-5 py-2 text-sm font-semibold text-[#b3261e] hover:bg-red-50"
+              >
+                Cancel this break
+              </button>
+            ))}
         </div>
       )}
 

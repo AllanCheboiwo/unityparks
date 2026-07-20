@@ -113,6 +113,9 @@ export type BookingConfirmation = {
   reservationId: string;
   status: string;
   paidAt: string | null;
+  /** Set once the break is cancelled; refundAmount is what came back. */
+  cancelledAt: string | null;
+  refundAmount: number | null;
   totalGrossAmount: number;
   currency: string;
   folioBalance: number;

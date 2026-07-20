@@ -80,7 +80,7 @@ No new vendors. Split by how much sandbox work each needs.
 
 | Feature | Shape of the work |
 |---|---|
-| Cancel my booking | Reservation cancel action + refund posting on the folio. Our layer owns the tiered charge schedule (full refund far out, partial near arrival). Best value-for-effort item on this list |
+| Cancel my booking | Built 18 Jul: tiered quote (100/50/0 percent by days to arrival), idempotent Apaleo cancel + folio refund per lodge, cancellation email, cancelled states across Manage and Account |
 | Add extras post-booking | Amend the reservation's services, settle the difference. The 12-week pre-arrival upsell window in miniature |
 | Deposit + balance schedule | Rate plans already carry 30% prepayment terms. Take the deposit via the Pesapal flow we have, track the balance in our DB. The reminder emails belong to section 4 |
 | Promo / repeat-guest codes | Discounted rate plans per tier; our layer gates which offers are shown by code |
@@ -105,7 +105,7 @@ No new vendors. Split by how much sandbox work each needs.
 | Transactional email | Resend, Postmark or SES | Confirmation emails, balance reminders, 12-week window opening. The single most impactful missing integration: today the confirmation exists only on screen |
 | SMS notifications | Africa's Talking (natural for Kenya) or Twilio | Arrival reminders, gate codes |
 | Newsletter | Any email marketing provider | The footer form is decorative today |
-| Password reset | Rides on the email integration | Explicitly out of demo scope until email exists |
+| Password reset | Built (rides on the Resend integration) | Emailed link, one hour, single use, signs out everywhere |
 | Live chat | Crisp, Intercom | CP has a chat bubble on every page |
 | Reviews | Own DB, or a Trustpilot-style widget | CP's "unforgettable moments" wall |
 | ANPR gate | Hardware/venue system | We already capture the plate; the gate is a physical integration |
@@ -206,14 +206,14 @@ list is the digital experience.
 - [x] Confirmation page with real booking reference and itemised receipt
 - [ ] Deposit now, balance due 10 weeks before arrival, reminders
 - [ ] Wallet checkout (Click to Pay) and 3DS surfaced in our own UI
-- [ ] Confirmation email
+- [x] Confirmation email (Resend, sent once when the folio settles)
 
 ### Accounts and identity
 - [x] Register, sign in, sign out
 - [x] Email-status check during checkout
 - [x] Past bookings adopted onto a new account by email
 - [x] Account page listing breaks
-- [ ] Password reset
+- [x] Password reset (emailed one-hour single-use link via Resend)
 - [ ] Passkeys (WebAuthn) and social sign-in
 - [ ] Consent management centre
 
@@ -222,7 +222,8 @@ list is the digital experience.
 - [x] View booking details and folio balance
 - [x] Move the break to new turnover dates (rule re-enforced)
 - [x] Add or edit guest names after booking
-- [ ] Self-serve cancellation with tiered charges
+- [x] Self-serve cancellation with tiered charges (full refund 28+ days,
+      half 8 to 27, none within 7; Apaleo cancel + folio refund + email)
 - [ ] Add extras after booking
 - [ ] Shared itinerary across guests
 
@@ -237,7 +238,8 @@ list is the digital experience.
 - [ ] Per-item basket holds in the pre-arrival flow
 
 ### Communications and support
-- [ ] Transactional email (confirmations, reminders, window opening)
+- [x] Transactional email (partial: Resend wired, confirmation email live;
+      reminders and window-opening emails still to come)
 - [ ] Marketing email programme
 - [x] Newsletter sign-up (partial: form exists, not wired to anything)
 - [ ] Live chat bubble on every page

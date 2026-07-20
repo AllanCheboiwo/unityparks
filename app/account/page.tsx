@@ -86,10 +86,16 @@ export default async function AccountPage() {
                     className={`mt-2 inline-block rounded-full px-3 py-1 text-xs font-semibold ${
                       record.status === "paid"
                         ? "bg-leaf text-white"
-                        : "border border-bronze bg-white text-bronze"
+                        : record.status === "cancelled"
+                          ? "bg-[#6b6b6b] text-white"
+                          : "border border-bronze bg-white text-bronze"
                     }`}
                   >
-                    {record.status === "paid" ? "Paid" : "Payment pending"}
+                    {record.status === "paid"
+                      ? "Paid"
+                      : record.status === "cancelled"
+                        ? "Cancelled"
+                        : "Payment pending"}
                   </span>
                 </div>
               </div>
