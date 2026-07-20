@@ -13,7 +13,7 @@ import { useMemo, useState } from "react";
  * (Mon→Fri), and a 7-night week on either. Invalid days stay visible but
  * disabled - clicking one explains the rule instead of silently ignoring it.
  *
- * `monthsToShow={2}` renders the Center Parcs-style two-month spread with
+ * `monthsToShow={2}` renders the two-month spread with
  * shared navigation.
  */
 
@@ -54,6 +54,21 @@ function explainDisabled(dow: number, nights: number): string {
   return "A 4-night midweek break runs Monday to Friday. Pick a Monday.";
 }
 
+/** White chevron for the round navy prev/next buttons. */
+function NavChevron({ dir }: { dir: "left" | "right" }) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d={dir === "left" ? "M15 5l-7 7 7 7" : "M9 5l7 7-7 7"}
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 type Props = {
   value: string | null;
   onChange: (iso: string) => void;
@@ -82,9 +97,9 @@ export function TurnoverCalendar({
 
   const validDows = useMemo(() => validArrivalDows(nights), [nights]);
 
-  // The picked stay, shown Center Parcs style: dark arrival and departure
-  // with a tinted band for the nights in between. Derived from the arrival,
-  // so it needs no extra props and spans month boundaries for free.
+  // The picked stay: navy arrival and departure
+  // with a pale navy band for the nights in between. Derived from the
+  // arrival, so it needs no extra props and spans month boundaries for free.
   const departureIso = value ? addDays(value, nights) : null;
 
   function monthCells(year: number, month: number) {
@@ -112,6 +127,9 @@ export function TurnoverCalendar({
     setViewMonth(d.getUTCMonth());
   }
 
+  const navBtn =
+    "w-8 h-8 rounded-full bg-navy text-white flex items-center justify-center hover:bg-teal transition-colors disabled:opacity-25 disabled:hover:bg-navy";
+
   function renderMonth(offset: number, navLeft: boolean, navRight: boolean) {
     const base = new Date(Date.UTC(viewYear, viewMonth + offset, 1));
     const year = base.getUTCFullYear();
@@ -120,21 +138,21 @@ export function TurnoverCalendar({
 
     return (
       <div className="flex-1 min-w-[240px]" key={`${year}-${month}`}>
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between mb-3">
           {navLeft ? (
             <button
               type="button"
               onClick={() => shiftMonth(-1)}
               disabled={!canGoBack}
               aria-label="Previous month"
-              className="rounded-md px-2 py-1 text-forest hover:bg-sand disabled:opacity-25"
+              className={navBtn}
             >
-              ←
+              <NavChevron dir="left" />
             </button>
           ) : (
-            <span className="w-7" />
+            <span className="w-8" />
           )}
-          <p className="text-sm font-semibold text-forest">
+          <p className="font-display text-xl font-bold text-navy text-center">
             {MONTH_NAMES[month]} {year}
           </p>
           {navRight ? (
@@ -143,16 +161,16 @@ export function TurnoverCalendar({
               onClick={() => shiftMonth(1)}
               disabled={!canGoForward}
               aria-label="Next month"
-              className="rounded-md px-2 py-1 text-forest hover:bg-sand disabled:opacity-25"
+              className={navBtn}
             >
-              →
+              <NavChevron dir="right" />
             </button>
           ) : (
-            <span className="w-7" />
+            <span className="w-8" />
           )}
         </div>
 
-        <div className="grid grid-cols-7 text-center text-[10px] font-medium text-foreground/45 uppercase tracking-wide mb-1">
+        <div className="grid grid-cols-7 text-center text-sm font-bold text-ink mb-1">
           {["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"].map((d) => (
             <span key={d}>{d}</span>
           ))}
@@ -181,14 +199,14 @@ export function TurnoverCalendar({
                 }}
                 className={
                   selected
-                    ? "my-0.5 ml-0.5 rounded-l-md bg-forest text-white text-sm py-1.5 font-semibold"
+                    ? "my-0.5 ml-0.5 rounded-l-md bg-navy text-white text-sm py-1.5 font-bold"
                     : isDeparture
-                      ? "my-0.5 mr-0.5 rounded-r-md bg-forest text-white text-sm py-1.5 font-semibold"
+                      ? "my-0.5 mr-0.5 rounded-r-md bg-navy text-white text-sm py-1.5 font-bold"
                       : inStay
-                        ? "my-0.5 bg-forest/15 text-forest text-sm py-1.5 font-medium"
+                        ? "my-0.5 bg-[#dfe8ee] text-navy text-sm py-1.5 font-semibold"
                         : pickable
-                          ? "m-0.5 rounded-md text-sm py-1.5 font-semibold text-forest ring-1 ring-forest/25 hover:bg-forest hover:text-white transition-colors"
-                          : "m-0.5 rounded-md text-sm py-1.5 text-foreground/25 cursor-not-allowed"
+                          ? "m-0.5 rounded-md text-sm py-1.5 font-bold text-ink bg-white border border-[#c9c5bc] hover:bg-navy hover:border-navy hover:text-white transition-colors"
+                          : "m-0.5 rounded-md text-sm py-1.5 text-[#c9c9c9] cursor-not-allowed"
                 }
               >
                 {cell.day}

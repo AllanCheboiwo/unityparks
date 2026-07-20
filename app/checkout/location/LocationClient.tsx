@@ -10,9 +10,11 @@ import type { LocationOffersDto, SessionSummary } from "@/lib/types";
 import { Stepper } from "@/components/Stepper";
 import { BookingSummary } from "@/components/BookingSummary";
 import { ExpiredNotice } from "@/components/ExpiredNotice";
+import { CheckoutBreadcrumb } from "../Breadcrumb";
+import { AlertIcon, TickIcon } from "../icons";
 
 /**
- * The Center Parcs-style location step, naive version: pick the exact lodge
+ * The location step, naive version: pick the exact lodge
  * you'll stay in for a flat fee (from live Apaleo unit availability), or "no
  * preference" free of charge. The choice is saved per lodge on the session;
  * the actual unit assignment happens at checkout, where a lost race falls
@@ -84,7 +86,9 @@ export function LocationClient() {
 
   if (!sessionId || expired) return <ExpiredNotice />;
   if (error && !session) {
-    return <p className="mx-auto max-w-2xl px-5 py-20 text-center text-red-700">{error}</p>;
+    return (
+      <p className="mx-auto max-w-2xl px-5 py-20 text-center text-[#b3261e]">{error}</p>
+    );
   }
   if (!session) {
     return (
@@ -117,7 +121,7 @@ export function LocationClient() {
     setChoiceBySlot((prev) => ({ ...prev, [slot]: choice }));
   }
 
-  /** Every lodge must have a decided choice, Center Parcs style. */
+  /** Every lodge must have a decided choice before continuing. */
   const allDecided = session.lodges.every((l) => {
     const c = choiceBySlot[l.slot];
     return c && (c.kind === "none" || c.unitId);
@@ -170,17 +174,18 @@ export function LocationClient() {
 
   return (
     <div className="mx-auto max-w-5xl px-5 py-8">
+      <CheckoutBreadcrumb />
+      <h1 className="font-display text-[34px] leading-tight font-bold text-ink mb-5">
+        Choose where you&apos;ll stay
+      </h1>
       <Stepper current="Location" />
 
       <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-8 lg:items-start">
         <div>
-          <h1 className="font-display text-3xl text-forest">
-            Choose where you&apos;d like to <em>stay</em>
-          </h1>
-          <p className="mt-1 text-sm text-foreground/60 max-w-xl">
-            If you&apos;d like to pick the exact lodge for your stay, take a look
-            at the village map and choose from the lodges still free for your
-            dates. Or just select no preference and let us pick for you.
+          <p className="text-sm text-foreground/70 max-w-xl">
+            Fancy a favourite spot by the lake or a quiet corner of the forest?
+            Take a look at the village map and pick the exact lodge for your
+            dates, or leave it with us and we&apos;ll choose a lovely one for you.
             {multi && " Each lodge in your break chooses separately."}
           </p>
 
@@ -196,22 +201,14 @@ export function LocationClient() {
                     key={l.slot}
                     type="button"
                     onClick={() => setActiveSlot(l.slot)}
-                    className={`rounded-lg px-4 py-2 text-sm font-semibold ring-1 transition ${
+                    className={`inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold border transition ${
                       isActive
-                        ? "bg-forest text-white ring-forest"
-                        : "text-forest ring-forest/25 hover:bg-sand"
+                        ? "bg-olive text-white border-olive"
+                        : "bg-white text-olive border-line hover:bg-mist"
                     }`}
                   >
                     Lodge {l.slot + 1}
-                    {decided && (
-                      <span
-                        className={`ml-2 rounded-full px-1.5 text-[11px] ${
-                          isActive ? "bg-white/25" : "bg-forest/10"
-                        }`}
-                      >
-                        ✓
-                      </span>
-                    )}
+                    {decided && <TickIcon className="w-3.5 h-3.5" />}
                   </button>
                 );
               })}
@@ -219,7 +216,7 @@ export function LocationClient() {
           )}
 
           {/* The village map */}
-          <div className="mt-6 rounded-2xl bg-white ring-1 ring-forest/10 shadow-sm overflow-hidden">
+          <div className="mt-6 rounded-lg bg-white border border-line overflow-hidden">
             <Image
               src="/village-map.svg"
               alt="Map of the Unity Parks Naivasha village showing the lodge areas"
@@ -231,105 +228,97 @@ export function LocationClient() {
           </div>
 
           {error && (
-            <div className="mt-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">
-              {error}
+            <div className="mt-4 flex items-start gap-2 rounded-md border border-[#b3261e]/30 bg-[#b3261e]/5 px-4 py-3 text-sm text-[#b3261e]">
+              <AlertIcon />
+              <span>{error}</span>
             </div>
           )}
 
           {staleBySlot[activeSlot] && (
-            <div className="mt-4 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-900">
+            <div className="mt-4 rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-900">
               {staleBySlot[activeSlot]} is no longer available for your dates.
               Pick another lodge below, or choose no preference.
             </div>
           )}
 
-          {/* The two options */}
-          <div className="mt-6 grid gap-4">
-            <label
-              className={`rounded-xl bg-white p-5 ring-1 transition-shadow ${
-                activeChoice?.kind === "unit"
-                  ? "ring-2 ring-forest shadow-md"
-                  : "ring-forest/10 shadow-sm"
-              } ${canPickUnit ? "cursor-pointer" : "opacity-60"}`}
-            >
-              <div className="flex items-start gap-3">
-                <input
-                  type="radio"
-                  name={`location-${activeSlot}`}
-                  checked={activeChoice?.kind === "unit"}
-                  disabled={!canPickUnit}
-                  onChange={() => setChoice(activeSlot, { kind: "unit", unitId: null })}
-                  className="mt-1 accent-[#1e3a29]"
-                />
-                <div className="flex-1">
-                  <div className="flex items-baseline justify-between gap-3">
-                    <p className="font-display text-lg text-forest">Select lodge number</p>
-                    {activeOffers?.fee && (
-                      <p className="font-semibold text-forest shrink-0">
-                        {formatKes(activeOffers.fee.amount)}
-                      </p>
-                    )}
-                  </div>
-                  <p className="mt-1 text-sm text-foreground/70 max-w-md">
-                    {canPickUnit
-                      ? `Pick the exact ${activeTierName ?? "lodge"} you'll stay in, straight from live availability.`
-                      : activeOffers && activeUnits.length === 0
-                        ? `Every ${activeTierName ?? "lodge"} is spoken for on these dates, so we'll pick a great spot for you.`
-                        : "Lodge selection isn't available right now."}
-                  </p>
-                  {activeChoice?.kind === "unit" && canPickUnit && (
-                    <select
-                      value={activeChoice.unitId ?? ""}
-                      onChange={(e) =>
-                        setChoice(activeSlot, { kind: "unit", unitId: e.target.value || null })
-                      }
-                      className="mt-3 w-full max-w-sm rounded-lg ring-1 ring-forest/25 border-0 bg-white px-3 py-2.5 text-sm text-forest focus:outline-none focus-visible:ring-2 focus-visible:ring-forest/50"
-                    >
-                      <option value="">Please select from available lodges</option>
-                      {activeUnits.map((u) => (
-                        <option key={u.id} value={u.id}>
-                          {u.name}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                </div>
-              </div>
-            </label>
-
-            <label
-              className={`rounded-xl bg-white p-5 ring-1 transition-shadow cursor-pointer ${
-                activeChoice?.kind === "none"
-                  ? "ring-2 ring-forest shadow-md"
-                  : "ring-forest/10 shadow-sm"
-              }`}
-            >
-              <div className="flex items-start gap-3">
-                <input
-                  type="radio"
-                  name={`location-${activeSlot}`}
-                  checked={activeChoice?.kind === "none"}
-                  onChange={() => setChoice(activeSlot, { kind: "none" })}
-                  className="mt-1 accent-[#1e3a29]"
-                />
-                <div>
-                  <p className="font-display text-lg text-forest">
-                    No preference <span className="text-sm text-foreground/55">(free of charge)</span>
-                  </p>
-                  <p className="mt-1 text-sm text-foreground/70 max-w-md">
-                    We&apos;ll pick your lodge for you and tell you the number on
-                    your booking confirmation.
-                  </p>
-                </div>
-              </div>
-            </label>
+          {/* Pick an exact lodge */}
+          <div className="mt-6 flex items-baseline justify-between gap-3">
+            <h2 className="text-xl font-bold text-ink">Pick your exact lodge</h2>
+            {activeOffers?.fee && canPickUnit && (
+              <p className="text-sm text-foreground/60 shrink-0">
+                {formatKes(activeOffers.fee.amount)} per lodge
+              </p>
+            )}
           </div>
+          <p className="mt-1 text-sm text-foreground/70 max-w-xl">
+            {canPickUnit
+              ? `These ${activeTierName ?? "lodge"} spots are still free for your dates, straight from live availability.`
+              : activeOffers && activeUnits.length === 0
+                ? `Every ${activeTierName ?? "lodge"} is spoken for on these dates, so we'll pick a great spot for you.`
+                : "Lodge selection isn't available right now."}
+          </p>
+
+          {canPickUnit && (
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              {activeUnits.map((u) => {
+                const selected =
+                  activeChoice?.kind === "unit" && activeChoice.unitId === u.id;
+                return (
+                  <button
+                    key={u.id}
+                    type="button"
+                    onClick={() => setChoice(activeSlot, { kind: "unit", unitId: u.id })}
+                    aria-pressed={selected}
+                    className={`flex items-center justify-between gap-3 rounded-lg px-4 py-3.5 text-left transition ${
+                      selected
+                        ? "border border-navy ring-1 ring-navy bg-navy/5"
+                        : "border border-line bg-white hover:border-navy/40"
+                    }`}
+                  >
+                    <span className="flex items-center gap-2 min-w-0">
+                      {selected && <TickIcon className="w-4 h-4 shrink-0 text-navy" />}
+                      <span className="font-semibold text-navy truncate">{u.name}</span>
+                    </span>
+                    <span className="font-bold text-ink shrink-0">
+                      {formatKes(activeOffers!.fee!.amount)}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* No preference */}
+          <button
+            type="button"
+            onClick={() => setChoice(activeSlot, { kind: "none" })}
+            aria-pressed={activeChoice?.kind === "none"}
+            className={`mt-4 w-full flex items-start justify-between gap-3 rounded-lg px-4 py-3.5 text-left transition ${
+              activeChoice?.kind === "none"
+                ? "border border-navy ring-1 ring-navy bg-navy/5"
+                : "border border-line bg-white hover:border-navy/40"
+            }`}
+          >
+            <span className="min-w-0">
+              <span className="flex items-center gap-2">
+                {activeChoice?.kind === "none" && (
+                  <TickIcon className="w-4 h-4 shrink-0 text-navy" />
+                )}
+                <span className="font-semibold text-navy">No preference</span>
+              </span>
+              <span className="mt-1 block text-sm text-foreground/70">
+                We&apos;ll pick your lodge for you and tell you the number on
+                your booking confirmation.
+              </span>
+            </span>
+            <span className="font-bold text-leaf shrink-0">Free</span>
+          </button>
 
           <div className="mt-6 flex justify-end">
             <button
               onClick={continueToExtras}
               disabled={busy || !allDecided}
-              className="rounded-lg bg-forest text-white px-8 py-2.5 text-sm font-semibold hover:bg-forest-light disabled:opacity-40"
+              className="btn-primary"
             >
               {busy ? "Saving…" : "Continue"}
             </button>
@@ -343,7 +332,7 @@ export function LocationClient() {
           )}
         </div>
 
-        <aside className="mt-8 lg:mt-0 lg:sticky lg:top-20">
+        <aside className="mt-8 lg:mt-0 lg:sticky lg:top-6">
           <BookingSummary summary={session} locationOverrideBySlot={locationOverrideBySlot} />
         </aside>
       </div>

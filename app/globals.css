@@ -1,26 +1,60 @@
 @import "tailwindcss";
 
-/* Unity Parks brand: calm, premium, forest-and-lake. No discount stripes. */
+/*
+ * Unity Parks visual system. Sampled hues and type
+ * scale live in docs/DESIGN.md. White pages, olive brand green, ochre CTAs,
+ * navy calendar and lodge names, warm grey ink.
+ */
 :root {
-  --background: #faf8f3; /* warm cream */
-  --foreground: #1f2a20; /* deep forest ink */
-  --forest: #1e3a29;
-  --forest-light: #2e5540;
-  --moss: #4d7c0f;
-  --lake: #0e7490;
-  --sand: #f1ead9;
-  --gold: #a16207;
+  --background: #ffffff;
+  --foreground: #4c4e4b; /* body text */
+  --ink: #1d1d1d; /* display headings */
+  --olive: #536917; /* brand green: funnel band, active step */
+  --olive-light: #67821d;
+  --olive-soft: #5e6448; /* header nav links */
+  --leaf: #647e1b; /* ticks, small accents */
+  --ochre: #af6408; /* primary CTA */
+  --ochre-dark: #8a4e06;
+  --bronze: #8b7346; /* outline buttons */
+  --navy: #2c5670; /* calendar selection, lodge names */
+  --teal: #2d5f73; /* info banner */
+  --mist: #f5f3ee; /* alternating sections, panels */
+  --line: #d9d6cf; /* hairlines */
+  --footer: #333333;
+
+  /* Legacy aliases so pre-restyle classes keep rendering on-brand. */
+  --forest: var(--olive);
+  --forest-light: var(--olive-light);
+  --moss: var(--leaf);
+  --lake: var(--teal);
+  --sand: var(--mist);
+  --gold: var(--ochre);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-ink: var(--ink);
+  --color-olive: var(--olive);
+  --color-olive-light: var(--olive-light);
+  --color-olive-soft: var(--olive-soft);
+  --color-leaf: var(--leaf);
+  --color-ochre: var(--ochre);
+  --color-ochre-dark: var(--ochre-dark);
+  --color-bronze: var(--bronze);
+  --color-navy: var(--navy);
+  --color-teal: var(--teal);
+  --color-mist: var(--mist);
+  --color-line: var(--line);
+  --color-footer: var(--footer);
+
   --color-forest: var(--forest);
   --color-forest-light: var(--forest-light);
   --color-moss: var(--moss);
   --color-lake: var(--lake);
   --color-sand: var(--sand);
   --color-gold: var(--gold);
+
   --font-sans: var(--font-body);
   --font-display: var(--font-display);
 }
@@ -28,9 +62,70 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-body), Georgia, serif;
+  font-family: var(--font-body), Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
 }
 
 .font-display {
-  font-family: var(--font-display), Georgia, serif;
+  font-family: var(--font-display), Arial, sans-serif;
+}
+
+/* Buttons. The design reference uses 6px radius, 600 weight, 16px. */
+.btn-primary,
+.btn-outline,
+.btn-dark-outline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 16px;
+  padding: 9px 20px;
+  transition: background-color 0.15s ease, color 0.15s ease;
+  cursor: pointer;
+}
+
+.btn-primary {
+  background: var(--ochre);
+  color: #ffffff;
+}
+.btn-primary:hover {
+  background: var(--ochre-dark);
+}
+.btn-primary:disabled {
+  background: #cccccc;
+  cursor: not-allowed;
+}
+
+.btn-outline {
+  background: #ffffff;
+  border: 1px solid var(--bronze);
+  color: var(--bronze);
+}
+.btn-outline:hover {
+  background: #f7f3ec;
+}
+
+.btn-dark-outline {
+  background: #ffffff;
+  border: 1px solid var(--ink);
+  color: var(--ink);
+}
+.btn-dark-outline:hover {
+  background: #f2f2f2;
+}
+
+/* Large hero variant of the primary button. */
+.btn-hero {
+  font-size: 18px;
+  font-weight: 700;
+  padding: 11px 22px;
+}
+
+/* Subtle contour-line texture for feature panels (see DESIGN.md item 14). */
+.contour-bg {
+  background-color: #ffffff;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240' viewBox='0 0 240 240'%3E%3Cg fill='none' stroke='%23e8e2d4' stroke-width='1'%3E%3Cpath d='M-20 40 C 40 10, 90 70, 150 40 S 240 10, 280 40'/%3E%3Cpath d='M-20 90 C 40 60, 90 120, 150 90 S 240 60, 280 90'/%3E%3Cpath d='M-20 140 C 40 110, 90 170, 150 140 S 240 110, 280 140'/%3E%3Cpath d='M-20 190 C 40 160, 90 220, 150 190 S 240 160, 280 190'/%3E%3C/g%3E%3C/svg%3E");
 }

@@ -7,6 +7,8 @@ import type { SessionSummary } from "@/lib/types";
 import { Stepper } from "@/components/Stepper";
 import { BookingSummary } from "@/components/BookingSummary";
 import { ExpiredNotice } from "@/components/ExpiredNotice";
+import { CheckoutBreadcrumb } from "../Breadcrumb";
+import { AlertIcon } from "../icons";
 
 type KnownUser = {
   firstName: string;
@@ -18,11 +20,15 @@ type KnownUser = {
 type EmailGate = { email: string; status: "none" | "active" | "unknown" };
 
 const inputClass =
-  "mt-1 w-full rounded-lg border border-forest/20 px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-forest/40";
-const labelClass = "text-xs font-medium text-foreground/60 uppercase tracking-wide";
+  "mt-1.5 w-full rounded-md border border-[#cccccc] bg-white px-3 py-2.5 text-base text-ink focus:outline-none focus:border-navy focus:ring-2 focus:ring-navy/25";
+const labelClass = "text-sm font-semibold text-foreground";
+const cardClass = "rounded-lg bg-white border border-line p-6";
+const cardTitleClass = "text-xl font-bold text-ink";
+const errorClass =
+  "flex items-start gap-2 rounded-md border border-[#b3261e]/30 bg-[#b3261e]/5 px-4 py-3 text-sm text-[#b3261e]";
 
 /**
- * The Center Parcs details step: an email-first gate card ("Have an account
+ * The details step: an email-first gate card ("Have an account
  * with us?"), then the lead booker form, then account creation as a
  * side-effect of booking. The gate card lives OUTSIDE the main form element
  * so pressing Enter on a password can never submit the booking as a guest.
@@ -59,7 +65,7 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
   const [signinError, setSigninError] = useState<string | null>(null);
   const [declinedSignIn, setDeclinedSignIn] = useState(false);
 
-  // "Create my Unity Parks account", pre-checked like Center Parcs.
+  // "Create my Unity Parks account", pre-checked by default.
   const [createAccount, setCreateAccount] = useState(true);
   const [newPassword, setNewPassword] = useState("");
 
@@ -192,33 +198,35 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
 
   return (
     <div className="mx-auto max-w-5xl px-5 py-8">
+      <CheckoutBreadcrumb />
+      <h1 className="font-display text-[34px] leading-tight font-bold text-ink mb-5">
+        Your details
+      </h1>
       <Stepper current="Your Details" />
 
       <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-8 lg:items-start">
         <div className="max-w-xl">
-          <h1 className="font-display text-3xl text-forest">
-            Your <em>details</em>
-          </h1>
-          <p className="mt-1 text-sm text-foreground/60">
-            Lead booker details for the booking.
+          <p className="text-sm text-foreground/70">
+            Tell us about the lead booker for your break. We only ask for what
+            we need to have everything ready when you arrive.
           </p>
 
           {knownUser && (
-            <p className="mt-6 rounded-lg bg-forest/5 ring-1 ring-forest/15 px-4 py-3 text-sm text-forest">
+            <p className="mt-6 rounded-md bg-mist border border-line px-4 py-3 text-sm text-olive">
               Booking as <span className="font-semibold">{knownUser.email}</span>. Your
               details are filled in below.
             </p>
           )}
 
           {showGate && (
-            <div className="mt-6 rounded-2xl bg-white ring-1 ring-forest/10 shadow-sm p-5">
-              <p className="font-display text-lg text-forest">Have an account with us?</p>
+            <div className={`mt-6 ${cardClass}`}>
+              <p className={cardTitleClass}>Have an account with us?</p>
               {!gate ? (
                 <>
                   <p className="mt-1 text-sm text-foreground/60">
                     Enter your email address and we&apos;ll check.
                   </p>
-                  <label className="block mt-3">
+                  <label className="block mt-4">
                     <span className={labelClass}>Email</span>
                     <input
                       type="email"
@@ -236,13 +244,16 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
                     />
                   </label>
                   {gateError && (
-                    <p className="mt-2 text-sm text-red-700">{gateError}</p>
+                    <p className="mt-2 flex items-start gap-1.5 text-sm text-[#b3261e]">
+                      <AlertIcon />
+                      {gateError}
+                    </p>
                   )}
                   <button
                     type="button"
                     onClick={checkEmail}
                     disabled={checking}
-                    className="mt-3 rounded-lg bg-forest text-white px-6 py-2.5 text-sm font-semibold hover:bg-forest-light disabled:opacity-60"
+                    className="btn-primary mt-4"
                   >
                     {checking ? "Checking…" : "Continue"}
                   </button>
@@ -254,19 +265,19 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
                     <button
                       type="button"
                       onClick={changeEmail}
-                      className="text-sm text-forest underline underline-offset-2"
+                      className="text-sm text-navy underline underline-offset-2"
                     >
                       Change
                     </button>
                   </div>
 
                   {showSignInPanel && (
-                    <div className="mt-4 border-t border-forest/10 pt-4">
+                    <div className="mt-4 border-t border-line pt-4">
                       <p className="text-sm text-foreground/80">
                         Looks like you already have an account. Sign in and
                         we&apos;ll fill this in for you.
                       </p>
-                      <label className="block mt-3">
+                      <label className="block mt-4">
                         <span className={labelClass}>Password</span>
                         <input
                           type="password"
@@ -282,16 +293,17 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
                         />
                       </label>
                       {signinError && (
-                        <div className="mt-3 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">
-                          {signinError}
+                        <div className={`mt-3 ${errorClass}`}>
+                          <AlertIcon />
+                          <span>{signinError}</span>
                         </div>
                       )}
-                      <div className="mt-3 flex items-center gap-4">
+                      <div className="mt-4 flex items-center gap-4">
                         <button
                           type="button"
                           onClick={inlineSignIn}
                           disabled={signinBusy}
-                          className="rounded-lg bg-forest text-white px-6 py-2.5 text-sm font-semibold hover:bg-forest-light disabled:opacity-60"
+                          className="btn-primary"
                         >
                           {signinBusy ? "Signing in…" : "Sign in"}
                         </button>
@@ -319,102 +331,110 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
               disabled={!formUnlocked}
               className={`grid gap-5 border-0 p-0 m-0 ${formUnlocked ? "" : "opacity-40"}`}
             >
-              <label className="max-w-[10rem]">
-                <span className={labelClass}>Title</span>
-                <select
-                  value={form.title}
-                  onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-                  className={inputClass}
-                >
-                  <option value="">Select title</option>
-                  <option>Mr</option>
-                  <option>Mrs</option>
-                  <option>Ms</option>
-                  <option>Miss</option>
-                  <option>Dr</option>
-                </select>
-              </label>
+              <div className={cardClass}>
+                <p className={cardTitleClass}>Lead guest</p>
+                <div className="mt-4 grid gap-5">
+                  <label className="max-w-[10rem] block">
+                    <span className={labelClass}>Title</span>
+                    <select
+                      value={form.title}
+                      onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+                      className={inputClass}
+                    >
+                      <option value="">Select title</option>
+                      <option>Mr</option>
+                      <option>Mrs</option>
+                      <option>Ms</option>
+                      <option>Miss</option>
+                      <option>Dr</option>
+                    </select>
+                  </label>
 
-              <div className="grid grid-cols-2 gap-4">
-                <label>
-                  <span className={labelClass}>First name</span>
-                  <input required value={form.firstName} onChange={update("firstName")} className={inputClass} />
-                </label>
-                <label>
-                  <span className={labelClass}>Last name</span>
-                  <input required value={form.lastName} onChange={update("lastName")} className={inputClass} />
+                  <div className="grid grid-cols-2 gap-4">
+                    <label>
+                      <span className={labelClass}>First name</span>
+                      <input required value={form.firstName} onChange={update("firstName")} className={inputClass} />
+                    </label>
+                    <label>
+                      <span className={labelClass}>Last name</span>
+                      <input required value={form.lastName} onChange={update("lastName")} className={inputClass} />
+                    </label>
+                  </div>
+
+                  <label className="block">
+                    <span className={labelClass}>Date of birth</span>
+                    <input
+                      type="date"
+                      required
+                      value={form.dateOfBirth}
+                      onChange={update("dateOfBirth")}
+                      className={inputClass}
+                    />
+                    <span className="mt-1 block text-xs text-foreground/50">
+                      The lead booker must be over 18 at the time of arrival.
+                    </span>
+                  </label>
+
+                  {knownUser && (
+                    <label className="block">
+                      <span className={labelClass}>
+                        Email <span className="font-normal">(lead guest)</span>
+                      </span>
+                      <input
+                        type="email"
+                        required
+                        value={form.email}
+                        onChange={update("email")}
+                        className={inputClass}
+                      />
+                    </label>
+                  )}
+
+                  <label className="block">
+                    <span className={labelClass}>Mobile phone</span>
+                    <input
+                      type="tel"
+                      required
+                      minLength={7}
+                      value={form.phone}
+                      onChange={update("phone")}
+                      className={inputClass}
+                      placeholder="+254 7xx xxx xxx"
+                    />
+                  </label>
+                </div>
+              </div>
+
+              <div className={cardClass}>
+                <p className={cardTitleClass}>Your vehicle</p>
+                <label className="block mt-4">
+                  <span className={labelClass}>
+                    Vehicle number plate <span className="font-normal">(optional)</span>
+                  </span>
+                  <input
+                    value={form.vehiclePlate}
+                    onChange={update("vehiclePlate")}
+                    className={`${inputClass} uppercase`}
+                    placeholder="KDA 123A"
+                  />
+                  <span className="mt-1 block text-xs text-foreground/50">
+                    Register your plate and the gate opens automatically when you
+                    arrive. No queuing.
+                  </span>
                 </label>
               </div>
 
-              <label>
-                <span className={labelClass}>Date of birth</span>
-                <input
-                  type="date"
-                  required
-                  value={form.dateOfBirth}
-                  onChange={update("dateOfBirth")}
-                  className={inputClass}
-                />
-                <span className="mt-1 block text-xs text-foreground/50">
-                  The lead booker must be over 18 at the time of arrival.
-                </span>
-              </label>
-
-              {knownUser && (
-                <label>
-                  <span className={labelClass}>
-                    Email <span className="normal-case font-normal">(lead guest)</span>
-                  </span>
-                  <input
-                    type="email"
-                    required
-                    value={form.email}
-                    onChange={update("email")}
-                    className={inputClass}
-                  />
-                </label>
-              )}
-
-              <label>
-                <span className={labelClass}>Mobile phone</span>
-                <input
-                  type="tel"
-                  required
-                  minLength={7}
-                  value={form.phone}
-                  onChange={update("phone")}
-                  className={inputClass}
-                  placeholder="+254 7xx xxx xxx"
-                />
-              </label>
-
-              <label>
-                <span className={labelClass}>
-                  Vehicle number plate <span className="normal-case font-normal">(optional)</span>
-                </span>
-                <input
-                  value={form.vehiclePlate}
-                  onChange={update("vehiclePlate")}
-                  className={`${inputClass} uppercase`}
-                  placeholder="KDA 123A"
-                />
-                <span className="mt-1 block text-xs text-foreground/50">
-                  Register your plate and the gate opens automatically when you
-                  arrive. No queuing.
-                </span>
-              </label>
-
               {showCreateAccount && (
-                <div className="rounded-2xl bg-white ring-1 ring-forest/10 shadow-sm p-5">
+                <div className={cardClass}>
                   <label className="flex items-start gap-3">
                     <input
                       type="checkbox"
                       checked={createAccount}
                       onChange={(e) => setCreateAccount(e.target.checked)}
-                      className="mt-1 h-4 w-4 accent-forest"
+                      className="mt-1 h-4 w-4 accent-[#536917]"
                     />
                     <span>
-                      <span className="font-display text-lg text-forest block">
+                      <span className={`${cardTitleClass} block`}>
                         Create my Unity Parks account
                       </span>
                       <span className="text-sm text-foreground/60 block mt-0.5">
@@ -442,8 +462,9 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
                 </div>
               )}
 
-              <div className="rounded-2xl bg-white ring-1 ring-forest/10 shadow-sm p-5 text-sm text-foreground/70">
-                <p>
+              <div className={`${cardClass} text-sm text-foreground/70`}>
+                <p className={cardTitleClass}>Keeping in touch</p>
+                <p className="mt-2">
                   To hear about the latest Unity Parks news, including repeat
                   guest offers, tick below.
                 </p>
@@ -453,7 +474,7 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
                       type="checkbox"
                       checked={marketingEmail}
                       onChange={(e) => setMarketingEmail(e.target.checked)}
-                      className="h-4 w-4 accent-forest"
+                      className="h-4 w-4 accent-[#536917]"
                     />
                     Email
                   </label>
@@ -462,7 +483,7 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
                       type="checkbox"
                       checked={marketingSms}
                       onChange={(e) => setMarketingSms(e.target.checked)}
-                      className="h-4 w-4 accent-forest"
+                      className="h-4 w-4 accent-[#536917]"
                     />
                     SMS
                   </label>
@@ -475,7 +496,7 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
                   required
                   checked={termsAccepted}
                   onChange={(e) => setTermsAccepted(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 accent-forest"
+                  className="mt-0.5 h-4 w-4 accent-[#536917]"
                 />
                 <span>
                   I have read and accept the booking terms and conditions and
@@ -484,16 +505,13 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
               </label>
 
               {error && (
-                <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">
-                  {error}
+                <div className={errorClass}>
+                  <AlertIcon />
+                  <span>{error}</span>
                 </div>
               )}
 
-              <button
-                type="submit"
-                disabled={busy}
-                className="rounded-lg bg-forest text-white px-6 py-3 text-sm font-semibold hover:bg-forest-light disabled:opacity-60"
-              >
+              <button type="submit" disabled={busy} className="btn-primary">
                 {busy ? "Saving…" : "Continue"}
               </button>
             </fieldset>
@@ -501,7 +519,7 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
         </div>
 
         {summary && (
-          <aside className="mt-8 lg:mt-0 lg:sticky lg:top-20">
+          <aside className="mt-8 lg:mt-0 lg:sticky lg:top-6">
             <BookingSummary summary={summary} />
           </aside>
         )}

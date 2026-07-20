@@ -25,21 +25,20 @@ export default async function AccountPage() {
 
   return (
     <div className="mx-auto max-w-xl px-5 py-10">
-      <h1 className="font-display text-3xl text-forest">
-        Your <em>breaks</em>
+      <h1 className="font-display text-3xl font-bold text-ink">
+        Welcome back, <em>{user.firstName}</em>
       </h1>
-      <p className="mt-1 text-sm text-foreground/60">
-        Signed in as {user.email}. Bookings made with this email land here
+      <p className="mt-2 text-sm text-foreground">
+        Signed in as {user.email}. Breaks booked with this email land here
         automatically.
       </p>
 
       {records.length === 0 && (
-        <div className="mt-8 rounded-2xl bg-white ring-1 ring-forest/10 shadow-sm p-8 text-center">
-          <p className="text-foreground/60">No breaks yet.</p>
-          <Link
-            href="/"
-            className="mt-4 inline-block rounded-lg bg-forest text-white px-6 py-3 text-sm font-semibold hover:bg-forest-light"
-          >
+        <div className="mt-8 rounded-lg border border-line contour-bg p-8 text-center">
+          <p className="text-foreground">
+            No breaks yet. Your first happy memories are waiting by the lake.
+          </p>
+          <Link href="/" className="btn-primary mt-4">
             Plan your first break
           </Link>
         </div>
@@ -55,44 +54,57 @@ export default async function AccountPage() {
             .join(", ");
           const nights = nightsBetween(s.arrival, s.departure);
           return (
-            <Link
-              key={record.id}
-              href={`/manage/${record.apaleoBookingId}`}
-              className="block rounded-2xl bg-white ring-1 ring-forest/10 shadow-sm p-5 hover:ring-forest/30 transition"
-            >
+            <div key={record.id} className="rounded-lg border border-line bg-white p-5">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="font-medium text-forest">
+                  <p className="font-display text-lg font-bold text-navy">
                     {multi ? `${s.lodges.length} lodges` : (lodgeNames || "Lodge")}
                   </p>
-                  <p className="mt-0.5 text-sm text-foreground/60">
-                    {formatDate(s.arrival)} → {formatDate(s.departure)}
+                  <p className="mt-1 flex items-center gap-1.5 text-sm text-foreground">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                      <rect x="3" y="5" width="18" height="16" rx="2" />
+                      <path d="M3 10h18M8 3v4M16 3v4" />
+                    </svg>
+                    {formatDate(s.arrival)} to {formatDate(s.departure)}
                   </p>
-                  <p className="text-sm text-foreground/60">
+                  <p className="mt-0.5 text-sm text-foreground">
                     {nightsLabel(nights)} ·{" "}
                     {multi ? lodgeNames : partyLabel(s.adults, parseChildrenAges(s))}
                   </p>
-                  <p className="mt-2 text-xs text-foreground/50">
+                  <p className="mt-2 text-xs text-foreground/70">
                     Reference{" "}
-                    <span className="font-mono tracking-widest">{record.apaleoBookingId}</span>
+                    <span className="font-mono font-semibold tracking-widest text-navy">
+                      {record.apaleoBookingId}
+                    </span>
                   </p>
                 </div>
-                <div className="text-right shrink-0">
-                  <p className="text-sm font-semibold text-forest">
+                <div className="shrink-0 text-right">
+                  <p className="text-sm font-semibold text-ink">
                     {formatKes(record.totalGrossAmount)}
                   </p>
                   <span
                     className={`mt-2 inline-block rounded-full px-3 py-1 text-xs font-semibold ${
                       record.status === "paid"
-                        ? "bg-moss/15 text-moss"
-                        : "bg-amber-100 text-amber-900"
+                        ? "bg-leaf text-white"
+                        : record.status === "cancelled"
+                          ? "bg-[#6b6b6b] text-white"
+                          : "border border-bronze bg-white text-bronze"
                     }`}
                   >
-                    {record.status === "paid" ? "Paid" : "Payment pending"}
+                    {record.status === "paid"
+                      ? "Paid"
+                      : record.status === "cancelled"
+                        ? "Cancelled"
+                        : "Payment pending"}
                   </span>
                 </div>
               </div>
-            </Link>
+              <div className="mt-4 border-t border-line pt-4">
+                <Link href={`/manage/${record.apaleoBookingId}`} className="btn-outline text-sm">
+                  Manage
+                </Link>
+              </div>
+            </div>
           );
         })}
       </div>

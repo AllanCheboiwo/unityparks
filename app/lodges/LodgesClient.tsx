@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { apiFetch, isExpired } from "@/lib/api";
 import { formatDate, formatKes, formatShortDate, nightsLabel } from "@/lib/format";
@@ -32,6 +33,62 @@ function agesToBands(adults: number, ages: number[]) {
     toddlers: ages.filter((a) => a >= 2 && a <= 5).length,
     infants: ages.filter((a) => a < 2).length,
   };
+}
+
+/* Small inline icons, stroke currentColor, per the house iconography. */
+
+function TickIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden className="mt-1 shrink-0 text-leaf">
+      <path d="M4 13l5 5L20 7" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function CalendarIcon({ className }: { className?: string }) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden className={className}>
+      <rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M3 10h18M8 3v4M16 3v4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function PersonIcon({ className }: { className?: string }) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden className={className}>
+      <circle cx="12" cy="8" r="3.5" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M5 20c1.2-3.4 3.9-5 7-5s5.8 1.6 7 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/** Funnel hero band: scenic image, soft dark overlay, centred white title. */
+function FunnelHero({ title }: { title: string }) {
+  return (
+    <div
+      className="relative h-[240px] md:h-[300px] bg-cover bg-center"
+      style={{ backgroundImage: "url(/photos/band-lake.jpg)" }}
+    >
+      <div className="absolute inset-0 bg-black/25" />
+      <div className="relative flex h-full items-center justify-center px-5">
+        <h1 className="font-display text-4xl md:text-[44px] font-bold text-white text-center">{title}</h1>
+      </div>
+    </div>
+  );
+}
+
+/** Breadcrumb line: olive links, current page grey. */
+function Breadcrumb({ current }: { current: string }) {
+  return (
+    <nav aria-label="Breadcrumb" className="mx-auto max-w-5xl px-5 pt-4 text-sm">
+      <Link href="/" className="text-olive hover:underline">
+        Unity Parks
+      </Link>
+      <span className="mx-2 text-foreground/40">/</span>
+      <span className="text-foreground/60">{current}</span>
+    </nav>
+  );
 }
 
 export function LodgesClient() {
@@ -122,13 +179,30 @@ export function LodgesClient() {
   // Only a failed initial load takes over the page. Later errors (a date hop
   // or lodge pick going wrong) show in the inline box beside the results.
   if (error && !session) {
-    return <p className="mx-auto max-w-2xl px-5 py-20 text-center text-red-700">{error}</p>;
+    return (
+      <div>
+        <FunnelHero title="Choose your lodge" />
+        <div className="mx-auto max-w-lg px-5 py-16">
+          <div className="rounded-lg bg-mist border border-line px-6 py-10 text-center">
+            <CalendarIcon className="mx-auto h-8 w-8 text-olive" />
+            <p className="mt-3 font-display text-xl font-bold text-ink">We could not load your search</p>
+            <p className="mt-1 text-sm text-foreground/60">{error}</p>
+            <Link href="/" className="btn-outline mt-5">
+              Back to search
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
   }
   if (!session) {
     return (
-      <p className="mx-auto max-w-2xl px-5 py-20 text-center text-foreground/50">
-        Checking live availability…
-      </p>
+      <div>
+        <FunnelHero title="Choose your lodge" />
+        <p className="mx-auto max-w-2xl px-5 py-20 text-center text-foreground/50">
+          Checking live availability…
+        </p>
+      </div>
     );
   }
 
@@ -220,7 +294,7 @@ export function LodgesClient() {
     : null;
 
   // The bar mirrors this search so the guest can change any part of it in
-  // place, Center Parcs style. Bands are recovered from the stored ages;
+  // place. Bands are recovered from the stored ages;
   // bedrooms re-derive from each party, except a manually raised preference
   // (?bedrooms=, single-lodge only) which must survive a re-search.
   const barInitial: BookingBarInitial = {
@@ -237,255 +311,277 @@ export function LodgesClient() {
     }),
   };
 
+  const pageTitle = multi ? "Choose your lodges" : "Choose your lodge";
+
   return (
-    <div className="mx-auto max-w-5xl px-5 py-8">
-      {/* keyed by session: a re-search swaps the session, and the fresh
-          mount re-seeds the bar from the new search */}
-      <div className="relative z-30 mb-8">
-        <BookingBar key={session.sessionId} initial={barInitial} />
-      </div>
+    <div>
+      <FunnelHero title={pageTitle} />
 
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h1 className="font-display text-3xl text-forest">
-          {multi ? (
-            <>
-              Choose your <em>lodges</em>
-            </>
-          ) : (
-            <>
-              Choose your <em>lodge</em>
-            </>
-          )}
-        </h1>
-      </div>
-      <p className="mt-1 text-sm text-foreground/60">
-        {formatDate(session.arrival)} → {formatDate(session.departure)} ·{" "}
-        {nightsLabel(session.nights)}
-        {!multi && <> · {activeLodge.partyLabel}</>}
-        {!multi && bedroomsPref > 1 && ` · ${bedroomsPref}+ bedrooms preferred`}
-      </p>
-
-      {/* Whole-month price strip: every start date in the searched month,
-          cheapest tagged, sold-out unclickable. Prices follow lodge 1. */}
-      {month && monthDates && monthDates.length > 0 && (
-        <div className="mt-6 flex gap-2 overflow-x-auto pb-1">
-          {monthDates.map((d) => {
-            const isSelected = d.arrival === session.arrival;
-            const isCheapest = d.arrival === cheapestArrival;
-            return (
-              <button
-                key={d.arrival}
-                type="button"
-                disabled={!d.available || isSelected || dateSwitching}
-                onClick={() => switchDate(d)}
-                className={`relative shrink-0 min-w-[10.5rem] rounded-xl px-4 pb-3 text-left transition ${
-                  isCheapest ? "pt-7" : "pt-3"
-                } ${
-                  isSelected
-                    ? "bg-forest ring-2 ring-forest"
-                    : d.available
-                      ? "bg-white ring-1 ring-forest/15 hover:ring-forest/40 disabled:opacity-60"
-                      : "bg-sand/40 ring-1 ring-forest/10 opacity-60 cursor-not-allowed"
-                }`}
-              >
-                {isCheapest && (
-                  <span className="absolute top-1.5 left-4 rounded-full bg-gold text-forest text-[10px] font-semibold px-2 py-0.5">
-                    Lowest price
-                  </span>
-                )}
-                <span className={`block text-sm font-semibold ${isSelected ? "text-white" : "text-forest"}`}>
-                  {formatShortDate(d.arrival)}
-                </span>
-                <span className={`block text-[11px] ${isSelected ? "text-white/70" : "text-foreground/55"}`}>
-                  {session.nights} nights
-                </span>
-                <span
-                  className={`block mt-0.5 text-sm font-semibold ${
-                    isSelected ? "text-white" : d.available ? "text-forest" : "text-foreground/45"
-                  }`}
-                >
-                  {d.available
-                    ? `${multi ? "lodge 1 from" : "from"} ${formatKes(d.fromPrice!)}`
-                    : "Sold out"}
-                </span>
-              </button>
-            );
-          })}
+      {/* Search-again band: the same booking bar, seeded with this search,
+          on the full-width olive funnel band. Keyed by session: a re-search
+          swaps the session, and the fresh mount re-seeds the bar. */}
+      <div className="bg-olive py-4 md:py-5">
+        <div className="relative z-30 mx-auto max-w-5xl px-5">
+          <BookingBar key={session.sessionId} initial={barInitial} />
         </div>
-      )}
+      </div>
 
-      {/* Basket strip (multi-lodge only) */}
-      {multi && (
-        <div className="mt-6 rounded-2xl bg-white ring-1 ring-forest/10 shadow-sm p-4">
-          <div className="flex flex-wrap gap-2">
-            {session.lodges.map((l) => {
-              const chosen = l.lodge ? LODGES[l.lodge.unitGroupCode] : null;
-              const isActive = l.slot === activeSlot;
+      <Breadcrumb current={pageTitle} />
+
+      <div className="mx-auto max-w-5xl px-5 pb-12 pt-3">
+        <p className="flex items-center gap-2 text-sm text-foreground/60">
+          <CalendarIcon className="text-olive" />
+          {formatDate(session.arrival)} to {formatDate(session.departure)} ·{" "}
+          {nightsLabel(session.nights)}
+          {!multi && <> · {activeLodge.partyLabel}</>}
+          {!multi && bedroomsPref > 1 && ` · ${bedroomsPref}+ bedrooms preferred`}
+        </p>
+
+        {/* Whole-month price strip: a pill per start date in the searched
+            month, cheapest tagged, sold-out greyed. Prices follow lodge 1. */}
+        {month && monthDates && monthDates.length > 0 && (
+          <div className="mt-5 flex gap-2 overflow-x-auto pb-1">
+            {monthDates.map((d) => {
+              const isSelected = d.arrival === session.arrival;
+              const isCheapest = d.arrival === cheapestArrival;
               return (
                 <button
-                  key={l.slot}
+                  key={d.arrival}
                   type="button"
-                  onClick={() => setActiveSlot(l.slot)}
-                  className={`flex-1 min-w-[150px] text-left rounded-xl px-4 py-3 ring-1 transition ${
-                    isActive
-                      ? "ring-2 ring-forest bg-sand/40"
-                      : "ring-forest/15 hover:ring-forest/30"
+                  disabled={!d.available || isSelected || dateSwitching}
+                  onClick={() => switchDate(d)}
+                  className={`relative shrink-0 min-w-[10rem] rounded-lg border px-4 pb-3 text-left transition ${
+                    isCheapest ? "pt-7" : "pt-3"
+                  } ${
+                    isSelected
+                      ? "bg-navy border-navy"
+                      : d.available
+                        ? "bg-white border-line hover:border-navy disabled:opacity-60"
+                        : "bg-mist border-line opacity-60 cursor-not-allowed"
                   }`}
                 >
-                  <p className="text-[11px] uppercase tracking-wide text-foreground/50">
-                    Lodge {l.slot + 1} · {l.partyLabel}
-                  </p>
-                  {chosen ? (
-                    <p className="text-sm font-semibold text-forest mt-0.5">
-                      {chosen.name} · {formatKes(l.lodge!.stayGrossAmount ?? 0)}
-                    </p>
-                  ) : (
-                    <p className="text-sm font-medium text-foreground/45 mt-0.5">Not chosen yet</p>
+                  {isCheapest && (
+                    <span className="absolute top-1.5 left-4 rounded-full bg-ochre text-white text-[10px] font-semibold px-2 py-0.5">
+                      Lowest price
+                    </span>
                   )}
+                  <span className={`block text-sm font-semibold ${isSelected ? "text-white" : "text-ink"}`}>
+                    {formatShortDate(d.arrival)}
+                  </span>
+                  <span className={`block text-[11px] ${isSelected ? "text-white/70" : "text-foreground/55"}`}>
+                    {nightsLabel(session.nights)}
+                  </span>
+                  <span
+                    className={`block mt-0.5 text-sm font-semibold ${
+                      isSelected ? "text-white" : d.available ? "text-navy" : "text-foreground/45"
+                    }`}
+                  >
+                    {d.available
+                      ? `${multi ? "lodge 1 from" : "from"} ${formatKes(d.fromPrice!)}`
+                      : "Sold out"}
+                  </span>
                 </button>
               );
             })}
           </div>
-          <div className="mt-4 flex items-center justify-between border-t border-forest/10 pt-3">
-            <div className="text-sm">
-              <span className="text-foreground/60">Booking total </span>
-              <span className="font-display text-lg text-forest">{formatKes(basketTotal)}</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => router.push(`/checkout/location?session=${sessionId}`)}
-              disabled={!allChosen}
-              className="rounded-lg bg-forest text-white px-6 py-2.5 text-sm font-semibold hover:bg-forest-light disabled:opacity-40"
-            >
-              {allChosen ? "Continue" : "Choose every lodge to continue"}
-            </button>
-          </div>
-        </div>
-      )}
+        )}
 
-      {multi && (
-        <p className="mt-6 text-sm font-semibold text-forest">
-          Choosing for Lodge {activeSlot + 1} of {session.lodges.length}{" "}
-          <span className="font-normal text-foreground/55">· {activeLodge.partyLabel}</span>
-        </p>
-      )}
-
-      {activeOffers.length === 0 && (
-        <div className="mt-6 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-900">
-          Nothing is on sale for these dates and party. Breaks are released about
-          three months ahead. Try dates a little closer to today.
-        </div>
-      )}
-
-      {error && (
-        <div className="mt-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">
-          {error}
-        </div>
-      )}
-
-      <div className={`mt-6 grid gap-6 ${dateSwitching ? "opacity-50 pointer-events-none" : ""}`}>
-        {TIER_ORDER.map((code) => {
-          const lodge = LODGES[code];
-          const rawOffer = offersByCode.get(code);
-          const taken = takenElsewhere.get(code) ?? 0;
-          const remainingUnits = rawOffer ? rawOffer.availableUnits - taken : 0;
-          const offer = rawOffer && remainingUnits > 0 ? rawOffer : undefined;
-          const tooSmall = !offer && activePartySize > lodge.sleeps;
-          const takenByOther = !offer && rawOffer !== undefined && remainingUnits <= 0;
-          const belowBedroomsPref = !multi && bedroomsPref > 0 && lodge.bedrooms < bedroomsPref;
-          const isChosenHere = activeLodge.lodge?.unitGroupCode === code;
-
-          return (
-            <div
-              key={code}
-              className={`rounded-2xl bg-white ring-1 shadow-sm overflow-hidden sm:flex ${
-                isChosenHere ? "ring-2 ring-forest" : "ring-forest/10"
-              } ${offer ? "" : "opacity-60"}`}
-            >
-              {/* Unavailable tiers go black-and-white, Center Parcs style. */}
-              <div className="relative h-44 sm:h-auto sm:w-64 shrink-0">
-                <Image
-                  src={lodge.image}
-                  alt={lodge.name}
-                  fill
-                  className={`object-cover ${offer ? "" : "grayscale"}`}
-                />
-              </div>
-
-              <div className="p-5 flex-1 flex flex-col sm:flex-row sm:items-center gap-5">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3">
-                    <h2 className="font-display text-xl text-forest">{lodge.name}</h2>
-                    {offer && offer.availableUnits > 0 && remainingUnits <= 2 && (
-                      <span className="rounded-full bg-amber-100 text-amber-900 text-[11px] font-semibold px-2.5 py-0.5">
-                        Only {remainingUnits} left
-                      </span>
+        {/* Basket strip (multi-lodge only): one navy pill per lodge slot. */}
+        {multi && (
+          <div className="mt-6 rounded-lg bg-white border border-line p-4">
+            <div className="flex flex-wrap gap-2">
+              {session.lodges.map((l) => {
+                const chosen = l.lodge ? LODGES[l.lodge.unitGroupCode] : null;
+                const isActive = l.slot === activeSlot;
+                return (
+                  <button
+                    key={l.slot}
+                    type="button"
+                    onClick={() => setActiveSlot(l.slot)}
+                    className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                      isActive
+                        ? "bg-navy border-navy text-white"
+                        : "bg-white border-navy text-navy hover:bg-navy/5"
+                    }`}
+                  >
+                    {chosen && (
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden className={isActive ? "text-white" : "text-leaf"}>
+                        <path d="M4 13l5 5L20 7" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
                     )}
-                    {isChosenHere && (
-                      <span className="rounded-full bg-moss/15 text-moss text-[11px] font-semibold px-2.5 py-0.5">
-                        Chosen
-                      </span>
+                    <span>
+                      Lodge {l.slot + 1}:{" "}
+                      {chosen ? (
+                        <>
+                          {chosen.name} · {formatKes(l.lodge!.stayGrossAmount ?? 0)}
+                        </>
+                      ) : (
+                        <span className={isActive ? "text-white/80 font-normal" : "text-foreground/50 font-normal"}>
+                          not chosen yet
+                        </span>
+                      )}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3">
+              <div className="text-sm">
+                <span className="text-foreground/60">Booking total </span>
+                <span className="font-display text-lg font-bold text-ink">{formatKes(basketTotal)}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => router.push(`/checkout/location?session=${sessionId}`)}
+                disabled={!allChosen}
+                className="btn-primary"
+              >
+                {allChosen ? "Continue" : "Choose every lodge to continue"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {multi && (
+          <p className="mt-6 text-sm font-semibold text-ink">
+            Choosing for Lodge {activeSlot + 1} of {session.lodges.length}{" "}
+            <span className="font-normal text-foreground/55">· {activeLodge.partyLabel}</span>
+          </p>
+        )}
+
+        {activeOffers.length === 0 && (
+          <div className="mt-6 rounded-lg bg-mist border border-line px-6 py-10 text-center">
+            <CalendarIcon className="mx-auto h-8 w-8 text-olive" />
+            <p className="mt-3 font-display text-xl font-bold text-ink">
+              Nothing is on sale for these dates and party
+            </p>
+            <p className="mx-auto mt-1 max-w-md text-sm text-foreground/60">
+              Breaks are released about three months ahead. Try dates a little
+              closer to today.
+            </p>
+            <Link href="/" className="btn-outline mt-5">
+              Back to search
+            </Link>
+          </div>
+        )}
+
+        {error && (
+          <div className="mt-4 flex items-start gap-3 rounded-lg bg-mist border border-line px-4 py-3 text-sm">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden className="mt-0.5 shrink-0 text-ochre-dark">
+              <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8" />
+              <path d="M12 7.5v5.5M12 16.5v.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+            <p className="text-ink">{error}</p>
+          </div>
+        )}
+
+        <div className={`mt-6 grid gap-6 ${dateSwitching ? "opacity-50 pointer-events-none" : ""}`}>
+          {TIER_ORDER.map((code) => {
+            const lodge = LODGES[code];
+            const rawOffer = offersByCode.get(code);
+            const taken = takenElsewhere.get(code) ?? 0;
+            const remainingUnits = rawOffer ? rawOffer.availableUnits - taken : 0;
+            const offer = rawOffer && remainingUnits > 0 ? rawOffer : undefined;
+            const tooSmall = !offer && activePartySize > lodge.sleeps;
+            const takenByOther = !offer && rawOffer !== undefined && remainingUnits <= 0;
+            const belowBedroomsPref = !multi && bedroomsPref > 0 && lodge.bedrooms < bedroomsPref;
+            const isChosenHere = activeLodge.lodge?.unitGroupCode === code;
+
+            return (
+              <div
+                key={code}
+                className={`overflow-hidden rounded-lg bg-white border sm:flex ${
+                  isChosenHere ? "border-olive ring-1 ring-olive" : "border-line"
+                } ${offer ? "" : "opacity-60"}`}
+              >
+                {/* Unavailable tiers go black-and-white. */}
+                <div className="relative aspect-[4/3] sm:aspect-auto sm:w-[38%] shrink-0">
+                  <Image
+                    src={lodge.image}
+                    alt={lodge.name}
+                    fill
+                    className={`object-cover ${offer ? "" : "grayscale"}`}
+                  />
+                </div>
+
+                <div className="flex flex-1 flex-col gap-5 p-6 sm:flex-row">
+                  <div className="flex-1">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <h2 className="font-display text-[22px] font-bold text-navy">{lodge.name}</h2>
+                      {offer && offer.availableUnits > 0 && remainingUnits <= 2 && (
+                        <span className="rounded-full bg-ochre/10 text-ochre-dark text-[11px] font-semibold px-2.5 py-0.5">
+                          Only {remainingUnits} left
+                        </span>
+                      )}
+                      {isChosenHere && (
+                        <span className="rounded-full bg-leaf/15 text-leaf text-[11px] font-semibold px-2.5 py-0.5">
+                          Chosen
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm italic text-foreground/60">{lodge.tagline}</p>
+                    <p className="mt-2 max-w-lg text-sm text-foreground/70">{lodge.blurb}</p>
+                    <ul className="mt-3 grid gap-x-6 gap-y-1 sm:grid-cols-2">
+                      {lodge.features.map((f) => (
+                        <li key={f} className="flex items-start gap-2 text-sm text-foreground/80">
+                          <TickIcon />
+                          {f}
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="mt-3 flex items-center gap-2 text-sm text-foreground/70">
+                      <PersonIcon className="text-olive" />
+                      Sleeps {lodge.sleeps} · {lodge.bedrooms} bedrooms
+                    </p>
+                    {belowBedroomsPref && (
+                      <p className="mt-2 text-[13px] text-ochre-dark">
+                        Fewer bedrooms than you asked for
+                      </p>
                     )}
                   </div>
-                  <p className="text-sm text-foreground/60 italic">{lodge.tagline}</p>
-                  <p className="mt-2 text-sm text-foreground/70 max-w-lg">{lodge.blurb}</p>
-                  <ul className="mt-3 flex flex-wrap gap-1.5">
-                    <li className="rounded-full bg-sand px-2.5 py-0.5 text-[11px] text-forest font-medium">
-                      {lodge.bedrooms} bedrooms · sleeps {lodge.sleeps}
-                    </li>
-                    {belowBedroomsPref && (
-                      <li className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] text-amber-900">
-                        Fewer bedrooms than you asked for
-                      </li>
-                    )}
-                    {lodge.features.map((f) => (
-                      <li key={f} className="rounded-full bg-sand px-2.5 py-0.5 text-[11px] text-forest">
-                        {f}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
 
-                <div className="sm:text-right shrink-0">
-                  {offer ? (
-                    <>
-                      <p className="text-[11px] uppercase tracking-wide text-foreground/50">
-                        Total for your break
+                  <div className="flex shrink-0 flex-col justify-center sm:w-48 sm:items-end sm:border-l sm:border-line sm:pl-6 sm:text-right">
+                    {offer ? (
+                      <>
+                        <p className="text-[13px] text-foreground/60">
+                          {nightsLabel(session.nights)} from
+                        </p>
+                        <p className="text-[26px] font-bold text-ink">
+                          {formatKes(offer.totalGrossAmount)}
+                        </p>
+                        <p className="text-[13px] text-foreground/60">per lodge</p>
+                        <p className="mt-1 text-xs text-foreground/50">
+                          {offer.cancellationName ?? "flexible"} rate
+                        </p>
+                        <button
+                          onClick={() => choose(offer)}
+                          disabled={selecting !== null}
+                          className="btn-primary mt-4 whitespace-nowrap"
+                        >
+                          {selecting === code
+                            ? "Holding…"
+                            : isChosenHere
+                              ? "Chosen"
+                              : multi
+                                ? "Add to basket"
+                                : "Choose this lodge"}
+                        </button>
+                      </>
+                    ) : (
+                      <p className="max-w-[180px] text-sm font-medium text-foreground/50">
+                        {tooSmall
+                          ? `Sleeps up to ${lodge.sleeps}, too small for this lodge's party`
+                          : takenByOther
+                            ? "Taken by another lodge in your break"
+                            : "Sold out for these dates"}
                       </p>
-                      <p className="font-display text-2xl text-forest">
-                        {formatKes(offer.totalGrossAmount)}
-                      </p>
-                      <p className="text-[11px] text-foreground/50">
-                        whole lodge · {offer.cancellationName ?? "flexible"} rate
-                      </p>
-                      <button
-                        onClick={() => choose(offer)}
-                        disabled={selecting !== null}
-                        className="mt-3 rounded-lg bg-forest text-white px-6 py-2 text-sm font-semibold hover:bg-forest-light disabled:opacity-60"
-                      >
-                        {selecting === code
-                          ? "Holding…"
-                          : isChosenHere
-                            ? "Chosen"
-                            : multi
-                              ? "Add to basket"
-                              : "Select"}
-                      </button>
-                    </>
-                  ) : (
-                    <p className="text-sm font-medium text-foreground/50 max-w-[160px]">
-                      {tooSmall
-                        ? `Sleeps up to ${lodge.sleeps}, too small for this lodge's party`
-                        : takenByOther
-                          ? "Taken by another lodge in your break"
-                          : "Sold out for these dates"}
-                    </p>
-                  )}
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
     </div>
   );

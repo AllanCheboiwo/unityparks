@@ -37,22 +37,16 @@ export function ConfirmationClient({ bookingId }: { bookingId: string }) {
   if (needsProof) {
     return (
       <div className="mx-auto max-w-lg text-center py-20 px-5">
-        <p className="font-display text-2xl text-forest">This booking is private</p>
-        <p className="mt-2 text-sm text-foreground/60">
+        <p className="font-display text-2xl font-bold text-ink">This booking is private</p>
+        <p className="mt-2 text-sm text-foreground">
           Sign in to your account, or find the booking with its reference and
           the lead guest&apos;s email.
         </p>
         <div className="mt-6 flex justify-center gap-3">
-          <Link
-            href={`/login?next=/confirmation/${bookingId}`}
-            className="rounded-lg bg-forest text-white px-6 py-2.5 text-sm font-semibold hover:bg-forest-light"
-          >
+          <Link href={`/login?next=/confirmation/${bookingId}`} className="btn-primary">
             Sign in
           </Link>
-          <Link
-            href="/manage"
-            className="rounded-lg border border-forest/25 px-6 py-2.5 text-sm font-semibold text-forest hover:bg-forest/5"
-          >
+          <Link href="/manage" className="btn-dark-outline">
             Find my booking
           </Link>
         </div>
@@ -60,11 +54,11 @@ export function ConfirmationClient({ bookingId }: { bookingId: string }) {
     );
   }
   if (error) {
-    return <p className="mx-auto max-w-2xl px-5 py-20 text-center text-red-700">{error}</p>;
+    return <p className="mx-auto max-w-2xl px-5 py-20 text-center text-[#b3261e]">{error}</p>;
   }
   if (!booking) {
     return (
-      <p className="mx-auto max-w-2xl px-5 py-20 text-center text-foreground/50">
+      <p className="mx-auto max-w-2xl px-5 py-20 text-center text-foreground/60">
         Fetching your booking…
       </p>
     );
@@ -75,38 +69,40 @@ export function ConfirmationClient({ bookingId }: { bookingId: string }) {
   );
   const settled = booking.folioBalance === 0;
   const multi = booking.lodges.length > 1;
+  // The memories moment: every guest, every night, one memory in the making.
+  const guestCount = booking.lodges.reduce((sum, l) => sum + l.bands.length, 0);
+  const memories = guestCount * nights;
 
   return (
     <div className="mx-auto max-w-xl px-5 py-10">
       <div className="text-center">
-        <div className="mx-auto w-14 h-14 rounded-full bg-moss/15 flex items-center justify-center">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden>
-            <path d="M4 12.5 L9.5 18 L20 6.5" stroke="#4d7c0f" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-leaf text-white">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M4 12.5 9.5 18 20 6.5" />
           </svg>
         </div>
-        <h1 className="mt-4 font-display text-3xl text-forest">
+        <h1 className="mt-4 font-display text-4xl font-bold text-ink">
           Your break is <em>booked</em>
         </h1>
-        <p className="mt-2 text-sm text-foreground/60">
-          Booking reference
-        </p>
-        <p className="font-mono text-2xl tracking-[0.3em] text-forest mt-1">
-          {booking.bookingId}
-        </p>
 
-        <div className="mt-4 flex justify-center gap-2 flex-wrap">
+        <div className="mx-auto mt-5 max-w-xs rounded-lg bg-navy px-6 py-4 text-white">
+          <p className="text-xs uppercase tracking-wide text-white/80">Booking reference</p>
+          <p className="mt-1 font-mono text-2xl tracking-[0.3em]">{booking.bookingId}</p>
+        </div>
+
+        <div className="mt-4 flex flex-wrap justify-center gap-2">
           <span
             className={`rounded-full px-3 py-1 text-xs font-semibold ${
               booking.status === "paid"
-                ? "bg-moss/15 text-moss"
-                : "bg-amber-100 text-amber-900"
+                ? "bg-leaf text-white"
+                : "border border-bronze bg-white text-bronze"
             }`}
           >
             {booking.status === "paid" ? "Paid in full" : booking.status}
           </span>
           <span
             className={`rounded-full px-3 py-1 text-xs font-semibold ${
-              settled ? "bg-moss/15 text-moss" : "bg-amber-100 text-amber-900"
+              settled ? "bg-leaf text-white" : "border border-bronze bg-white text-bronze"
             }`}
           >
             {settled
@@ -114,45 +110,59 @@ export function ConfirmationClient({ bookingId }: { bookingId: string }) {
               : `Folio balance ${formatKes(booking.folioBalance)}`}
           </span>
         </div>
+
+        <div className="mt-6 rounded-lg border border-line contour-bg px-6 py-5">
+          <p className="font-display text-lg font-bold text-olive">
+            That is {memories} new memories on the way.
+          </p>
+          <p className="mt-1 text-sm text-foreground">
+            Thank you for helping us reach a billion.
+          </p>
+        </div>
       </div>
 
-      <div className="mt-8 rounded-2xl bg-white ring-1 ring-forest/10 shadow-sm divide-y divide-forest/10">
-        <div className="p-5">
-          <p className="text-xs uppercase tracking-wide text-foreground/50">
+      <div className="mt-8 divide-y divide-line rounded-lg border border-line bg-white">
+        <div className="p-6">
+          <p className="font-display text-xl font-bold text-ink">
             {multi ? `Your break · ${booking.lodges.length} lodges` : "Your stay"}
           </p>
-          <p className="text-sm text-foreground/60 mt-1">
-            {formatDate(booking.stay.arrival)} → {formatDate(booking.stay.departure)} ·{" "}
+          <p className="mt-1 flex items-center gap-1.5 text-sm text-foreground">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <rect x="3" y="5" width="18" height="16" rx="2" />
+              <path d="M3 10h18M8 3v4M16 3v4" />
+            </svg>
+            {formatDate(booking.stay.arrival)} to {formatDate(booking.stay.departure)} ·{" "}
             {nightsLabel(nights)}
           </p>
         </div>
 
-        <div className="p-5">
+        <div className="p-6">
           {booking.lodges.map((l) => {
             const lodge = l.unitGroupCode ? LODGES[l.unitGroupCode] : null;
             return (
               <div key={l.slot} className="mt-3 first:mt-0">
                 <div className="flex justify-between text-sm">
-                  <span className="font-medium text-forest">
+                  <span className="font-semibold text-navy">
                     {multi ? `Lodge ${l.slot + 1}: ` : ""}
                     {lodge?.name ?? "Lodge"}
-                    <span className="font-normal text-foreground/55"> · {l.partyLabel}</span>
+                    <span className="font-normal text-foreground"> · {l.partyLabel}</span>
                   </span>
-                  <span className="font-medium">{formatKes(l.stayGrossAmount ?? 0)}</span>
+                  <span className="font-semibold text-ink">{formatKes(l.stayGrossAmount ?? 0)}</span>
                 </div>
                 {l.assignedUnitName && (
-                  <p className="text-sm mt-1 pl-3 text-foreground/70">
-                    You&apos;re staying in <span className="font-medium text-forest">{l.assignedUnitName}</span>
+                  <p className="mt-1 pl-3 text-sm text-foreground">
+                    You&apos;re staying in{" "}
+                    <span className="font-semibold text-navy">{l.assignedUnitName}</span>
                   </p>
                 )}
                 {l.locationFee != null && (
-                  <div className="flex justify-between text-sm mt-1 pl-3 text-foreground/70">
+                  <div className="mt-1 flex justify-between pl-3 text-sm text-foreground">
                     <span>Lodge location choice</span>
                     <span>{formatKes(l.locationFee)}</span>
                   </div>
                 )}
                 {l.locationFeeDropped && (
-                  <p className="mt-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-900">
+                  <p className="mt-2 rounded-md border border-bronze bg-mist px-3 py-2 text-xs text-ink">
                     {l.requestedUnitName ?? "Your chosen lodge"} was booked by
                     another guest moments before you finished checking out.
                     {l.assignedUnitName
@@ -162,7 +172,7 @@ export function ConfirmationClient({ bookingId }: { bookingId: string }) {
                   </p>
                 )}
                 {l.extras.map((extra) => (
-                  <div key={extra.serviceId} className="flex justify-between text-sm mt-1 pl-3 text-foreground/70">
+                  <div key={extra.serviceId} className="mt-1 flex justify-between pl-3 text-sm text-foreground">
                     <span>
                       {extra.name}
                       {extra.count > 1 ? ` ×${extra.count}` : ""}
@@ -173,19 +183,15 @@ export function ConfirmationClient({ bookingId }: { bookingId: string }) {
               </div>
             );
           })}
-          <div className="flex justify-between mt-4 pt-4 border-t border-forest/10">
-            <span className="font-display text-forest">Paid</span>
-            <span className="font-display text-forest">
-              {formatKes(booking.totalGrossAmount)}
-            </span>
+          <div className="mt-4 flex justify-between border-t border-line pt-4 text-lg font-bold text-ink">
+            <span className="font-display">Paid</span>
+            <span className="font-display">{formatKes(booking.totalGrossAmount)}</span>
           </div>
         </div>
 
-        <div className="p-5 text-sm text-foreground/60">
-          <p className="text-xs uppercase tracking-wide text-foreground/50 mb-1">
-            Lead guest
-          </p>
-          <p>
+        <div className="p-6 text-sm text-foreground">
+          <p className="font-display text-base font-bold text-ink">Lead guest</p>
+          <p className="mt-1">
             {booking.guest.firstName} {booking.guest.lastName} · {booking.guest.email}
           </p>
           {booking.guest.vehiclePlate && (
@@ -196,11 +202,9 @@ export function ConfirmationClient({ bookingId }: { bookingId: string }) {
           )}
         </div>
 
-        <div className="p-5 text-sm text-foreground/60">
-          <p className="text-xs uppercase tracking-wide text-foreground/50 mb-1">
-            What happens next
-          </p>
-          <p>
+        <div className="p-6 text-sm text-foreground">
+          <p className="font-display text-base font-bold text-ink">What happens next</p>
+          <p className="mt-1">
             A confirmation email lands shortly. Twelve weeks before you arrive,
             we&apos;ll open your pre-arrival window to book activities, hire cycles
             and stock your lodge before you get here.
@@ -208,27 +212,27 @@ export function ConfirmationClient({ bookingId }: { bookingId: string }) {
         </div>
 
         {booking.account.status === "ownedByYou" && (
-          <div className="p-5 text-sm text-forest bg-forest/5">
+          <div className="bg-mist p-6 text-sm text-foreground">
             Saved to your account.{" "}
-            <Link href="/account" className="underline underline-offset-2">
+            <Link href="/account" className="font-semibold text-navy underline underline-offset-2">
               See all your breaks
             </Link>
           </div>
         )}
         {booking.account.status === "existingAccount" && (
-          <div className="p-5 text-sm text-forest bg-forest/5">
+          <div className="bg-mist p-6 text-sm text-foreground">
             This email has a Unity Parks account.{" "}
             <Link
               href={`/login?email=${encodeURIComponent(booking.guest.email ?? "")}&next=/account`}
-              className="underline underline-offset-2"
+              className="font-semibold text-navy underline underline-offset-2"
             >
               Sign in to see all your breaks
             </Link>
           </div>
         )}
         {booking.account.status === "none" && (
-          <div className="p-5 text-sm text-forest bg-forest/5">
-            <Link href="/register" className="underline underline-offset-2">
+          <div className="bg-mist p-6 text-sm text-foreground">
+            <Link href="/register" className="font-semibold text-navy underline underline-offset-2">
               Create a Unity Parks account
             </Link>{" "}
             with this email to see and manage your breaks any time.
@@ -236,14 +240,14 @@ export function ConfirmationClient({ bookingId }: { bookingId: string }) {
         )}
       </div>
 
-      <div className="mt-8 text-center flex justify-center gap-6">
+      <div className="mt-8 flex justify-center gap-6 text-center">
         <Link
           href={`/manage/${booking.bookingId}${proofQuery}`}
-          className="text-sm text-lake underline underline-offset-2"
+          className="text-sm font-semibold text-navy underline underline-offset-2"
         >
           Manage this booking
         </Link>
-        <Link href="/" className="text-sm text-lake underline underline-offset-2">
+        <Link href="/" className="text-sm font-semibold text-navy underline underline-offset-2">
           Back to Unity Parks
         </Link>
       </div>

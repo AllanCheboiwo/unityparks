@@ -20,7 +20,8 @@ model User {
   lastName     String
   phone        String?
 
-  authSessions    AuthSession[]
+  authSessions        AuthSession[]
+  passwordResetTokens PasswordResetToken[]
   bookingSessions BookingSession[]
   bookingRecords  BookingRecord[]
 }
@@ -29,6 +30,19 @@ model User {
 // cookie (256 random bits). Fixed expiry, no sliding refresh, so reads never
 // write. Not to be confused with BookingSession, the shopping funnel state.
 model AuthSession {
+  id        String   @id
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// A password-reset link. Same shape as AuthSession (the row id IS the token
+// in the emailed link) but short-lived and single-use: consumed rows are
+// deleted, and issuing a new token deletes the user's older ones, so at
+// most one reset link works at any time.
+model PasswordResetToken {
   id        String   @id
   createdAt DateTime @default(now())
   expiresAt DateTime
@@ -172,9 +186,22 @@ model BookingRecord {
   totalGrossAmount Float // demo: JS number is fine; production would use integer minor units
   currency         String
 
-  status    String    @default("created") // created | paid | failed
+  status    String    @default("created") // created | paid | failed | cancelled
   paidAt    DateTime?
   paymentId String? // Apaleo payment id returned by the folio post
+
+  // When the booking-confirmation email was handed to Resend. Claimed
+  // atomically before sending so the callback/IPN settle race can never
+  // produce two emails; null means not sent (or a failed attempt was
+  // released for a later retry).
+  confirmationEmailAt DateTime?
+
+  // Cancellation outcome. refundAmount is what our tier policy refunded
+  // across every folio (0 for a no-refund window); the emailed-once stamp
+  // works exactly like confirmationEmailAt.
+  cancelledAt         DateTime?
+  refundAmount        Float?
+  cancellationEmailAt DateTime?
 
   // Ownership. Copied from the session at creation, or adopted later by the
   // claim backfill when an account registers/logs in with the guest email.

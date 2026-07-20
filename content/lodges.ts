@@ -28,8 +28,8 @@ export const LODGES: Record<string, LodgeContent> = {
     sleeps: 4,
     bedrooms: 3,
     features: ["Private timber deck", "Full kitchen", "Trail access", "Free Wi-Fi"],
-    accent: "#4d7c0f",
-    image: "/lodges/wdl.svg",
+    accent: "#536917",
+    image: "/photos/lodge-wdl.jpg",
   },
   FST: {
     code: "FST",
@@ -40,8 +40,8 @@ export const LODGES: Record<string, LodgeContent> = {
     sleeps: 6,
     bedrooms: 3,
     features: ["Wraparound deck", "Upgraded kitchen", "Blackout blinds", "Free Wi-Fi"],
-    accent: "#166534",
-    image: "/lodges/fst.svg",
+    accent: "#3f5012",
+    image: "/photos/lodge-fst.jpg",
   },
   LKV: {
     code: "LKV",
@@ -52,8 +52,8 @@ export const LODGES: Record<string, LodgeContent> = {
     sleeps: 8,
     bedrooms: 4,
     features: ["Lake views", "Floor-to-ceiling glazing", "Games room", "Furnished terrace"],
-    accent: "#0e7490",
-    image: "/lodges/lkv.svg",
+    accent: "#2c5670",
+    image: "/photos/lodge-lkv.jpg",
   },
   EXC: {
     code: "EXC",
@@ -64,8 +64,8 @@ export const LODGES: Record<string, LodgeContent> = {
     sleeps: 8,
     bedrooms: 4,
     features: ["Private hot tub", "Cedar sauna", "Cinema room", "Set apart for privacy"],
-    accent: "#92400e",
-    image: "/lodges/exc.svg",
+    accent: "#8b7346",
+    image: "/photos/lodge-exc.jpg",
   },
 };
 

@@ -94,6 +94,8 @@ export async function GET(
       reservationId: record.apaleoReservationId,
       status: record.status,
       paidAt: record.paidAt,
+      cancelledAt: record.cancelledAt,
+      refundAmount: record.refundAmount,
       totalGrossAmount: record.totalGrossAmount,
       currency: record.currency,
       folioBalance,

@@ -34,75 +34,75 @@ export function LoginClient() {
   }
 
   const inputClass =
-    "mt-1 w-full rounded-lg border border-forest/20 px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-forest/40";
+    "mt-1 w-full rounded-md border border-[#cccccc] bg-white px-3 py-2.5 text-base text-ink focus:outline-none focus:ring-2 focus:ring-navy";
 
   return (
     <div className="mx-auto max-w-md px-5 py-12">
-      <h1 className="font-display text-3xl text-forest">
-        Welcome <em>back</em>
-      </h1>
-      <p className="mt-1 text-sm text-foreground/60">
-        Sign in to see and manage your breaks.
-      </p>
+      <div className="rounded-lg border border-line bg-white p-6">
+        <h1 className="font-display text-3xl font-bold text-ink">
+          Welcome <em>back</em>
+        </h1>
+        <p className="mt-2 text-sm text-foreground">
+          Sign in to see and manage your breaks at Unity Parks Naivasha.
+        </p>
 
-      <form onSubmit={submit} className="mt-8 grid gap-5">
-        <label>
-          <span className="text-xs font-medium text-foreground/60 uppercase tracking-wide">
-            Email
-          </span>
-          <input
-            type="email"
-            required
-            value={form.email}
-            onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-            className={inputClass}
-            placeholder="you@example.com"
-          />
-        </label>
+        <form onSubmit={submit} className="mt-6 grid gap-5">
+          <label>
+            <span className="text-sm font-semibold text-foreground">Email</span>
+            <input
+              type="email"
+              required
+              value={form.email}
+              onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+              className={inputClass}
+              placeholder="you@example.com"
+            />
+          </label>
 
-        <label>
-          <span className="text-xs font-medium text-foreground/60 uppercase tracking-wide">
-            Password
-          </span>
-          <input
-            type="password"
-            required
-            value={form.password}
-            onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
-            className={inputClass}
-          />
-        </label>
+          <label>
+            <span className="text-sm font-semibold text-foreground">Password</span>
+            <input
+              type="password"
+              required
+              value={form.password}
+              onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
+              className={inputClass}
+            />
+          </label>
 
-        {error && (
-          <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">
-            {error}
-          </div>
-        )}
+          {error && (
+            <div className="rounded-md border border-[#b3261e]/30 bg-red-50 px-4 py-3 text-sm text-[#b3261e]">
+              {error}
+            </div>
+          )}
 
-        <button
-          type="submit"
-          disabled={busy}
-          className="rounded-lg bg-forest text-white px-6 py-3 text-sm font-semibold hover:bg-forest-light disabled:opacity-60"
-        >
-          {busy ? "Signing in…" : "Sign in"}
-        </button>
-      </form>
+          <button type="submit" disabled={busy} className="btn-primary w-full">
+            {busy ? "Signing in…" : "Sign in"}
+          </button>
+        </form>
+      </div>
 
-      <p className="mt-6 text-sm text-foreground/60">
+      <p className="mt-6 text-sm text-foreground">
         New to Unity Parks?{" "}
-        <Link href="/register" className="text-forest underline underline-offset-2">
+        <Link href="/register" className="font-semibold text-navy underline underline-offset-2">
           Create an account
         </Link>
       </p>
-      <p className="mt-2 text-sm text-foreground/60">
+      <p className="mt-2 text-sm text-foreground">
         No account?{" "}
-        <Link href="/manage" className="text-forest underline underline-offset-2">
+        <Link href="/manage" className="font-semibold text-navy underline underline-offset-2">
           Find your booking
         </Link>{" "}
         with its reference and email instead.
       </p>
-      <p className="mt-2 text-xs text-foreground/50">
-        Forgotten your password? Password reset is not part of this demo.
+      <p className="mt-2 text-sm text-foreground">
+        Forgotten your password?{" "}
+        <Link
+          href="/forgot-password"
+          className="font-semibold text-navy underline underline-offset-2"
+        >
+          Reset it by email
+        </Link>
       </p>
     </div>
   );

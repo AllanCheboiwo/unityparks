@@ -10,10 +10,10 @@ export type LocationLine = { unitName: string; fee: number } | null;
 /**
  * The persistent right-rail summary shown through the whole checkout, Center
  * Parcs style. One block per lodge (name, party, price, location choice, its
- * extras) over a dark booking-total bar. Pure props, no fetching. The extras
- * step passes its in-progress selection per lodge as extrasOverrideBySlot so
- * the numbers move as items are added; the location step does the same with
- * locationOverrideBySlot.
+ * extras) under a mist "Your break" header, closing on a bold total row.
+ * Pure props, no fetching. The extras step passes its in-progress selection
+ * per lodge as extrasOverrideBySlot so the numbers move as items are added;
+ * the location step does the same with locationOverrideBySlot.
  */
 export function BookingSummary({
   summary,
@@ -48,26 +48,28 @@ export function BookingSummary({
     return sum + (l.lodge?.stayGrossAmount ?? 0) + extras + (locationFor(l)?.fee ?? 0);
   }, 0);
 
-  const sectionHeader =
-    "flex items-center justify-between px-4 py-3 text-sm font-semibold text-forest bg-forest/5";
+  const row = "flex justify-between gap-3 text-sm";
+  const label = "text-foreground/60";
+  const value = "font-semibold text-ink text-right";
 
   return (
-    <div className="rounded-2xl bg-white ring-1 ring-forest/10 shadow-sm overflow-hidden">
-      <p className="px-4 py-3 font-display text-lg text-forest">Your booking summary</p>
+    <div className="rounded-lg bg-white border border-line overflow-hidden">
+      {/* Mist header strip */}
+      <p className="px-4 py-3 bg-mist font-display font-bold text-olive">Your break</p>
 
       {/* Shared trip facts */}
-      <div className="px-4 py-3 text-sm border-b border-forest/10">
-        <p className="text-xs uppercase tracking-wide text-foreground/50">Location</p>
-        <p className="text-foreground/80">Naivasha</p>
-        <div className="mt-2 grid grid-cols-2 gap-2">
-          <div>
-            <p className="text-xs uppercase tracking-wide text-foreground/50">Check in</p>
-            <p className="text-foreground/80">{formatDate(summary.arrival)}</p>
-          </div>
-          <div>
-            <p className="text-xs uppercase tracking-wide text-foreground/50">Check out</p>
-            <p className="text-foreground/80">{formatDate(summary.departure)}</p>
-          </div>
+      <div className="px-4 py-3 grid gap-1.5 border-b border-line">
+        <div className={row}>
+          <span className={label}>Village</span>
+          <span className={value}>Unity Parks Naivasha</span>
+        </div>
+        <div className={row}>
+          <span className={label}>Check in</span>
+          <span className={value}>{formatDate(summary.arrival)}</span>
+        </div>
+        <div className={row}>
+          <span className={label}>Check out</span>
+          <span className={value}>{formatDate(summary.departure)}</span>
         </div>
       </div>
 
@@ -76,41 +78,38 @@ export function BookingSummary({
         const extras = extrasFor(l.slot, l.extras);
         const location = locationFor(l);
         return (
-          <div key={l.slot}>
-            <div className={sectionHeader}>
-              <span>{multi ? `Lodge ${l.slot + 1}` : "Accommodation"}</span>
-              <span>{formatKes(l.lodge?.stayGrossAmount ?? 0)}</span>
+          <div key={l.slot} className="px-4 py-3 grid gap-1.5 border-b border-line">
+            <div className={row}>
+              <span className="font-semibold text-ink">
+                {multi ? `Lodge ${l.slot + 1}: ` : ""}
+                {lodge?.name ?? "Lodge not chosen"}
+              </span>
+              <span className={value}>{formatKes(l.lodge?.stayGrossAmount ?? 0)}</span>
             </div>
-            <div className="px-4 py-3 text-sm border-b border-forest/10">
-              <p className="text-foreground/80 font-medium">{lodge?.name ?? "Lodge not chosen"}</p>
-              <p className="text-xs text-foreground/55 mt-0.5">{l.partyLabel}</p>
-              {location && (
-                <div className="mt-2 pt-2 border-t border-forest/10 flex justify-between gap-3">
-                  <span className="text-foreground/80">Lodge choice: {location.unitName}</span>
-                  <span className="font-medium shrink-0">{formatKes(location.fee)}</span>
-                </div>
-              )}
-              {extras.length > 0 && (
-                <div className="mt-2 pt-2 border-t border-forest/10">
-                  {extras.map((e) => (
-                    <div key={e.serviceId} className="flex justify-between gap-3 mt-1 first:mt-0">
-                      <span className="text-foreground/80">
-                        {e.count > 1 ? `${e.count} ` : ""}
-                        {e.name}
-                      </span>
-                      <span className="font-medium shrink-0">{formatKes(e.grossAmount)}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            <p className="text-sm text-foreground/60">{l.partyLabel}</p>
+            {location && (
+              <div className={row}>
+                <span className={label}>Lodge choice: {location.unitName}</span>
+                <span className={value}>{formatKes(location.fee)}</span>
+              </div>
+            )}
+            {extras.map((e) => (
+              <div key={e.serviceId} className={row}>
+                <span className={label}>
+                  {e.count > 1 ? `${e.count} x ` : ""}
+                  {e.name}
+                </span>
+                <span className={value}>{formatKes(e.grossAmount)}</span>
+              </div>
+            ))}
           </div>
         );
       })}
 
-      <div className="flex items-center justify-between px-4 py-3.5 bg-forest text-white">
-        <span className="font-semibold">Booking total</span>
-        <span className="font-display text-lg">{formatKes(total)}</span>
+      {/* Total row */}
+      <div className="flex items-center justify-between px-4 py-3.5">
+        <span className="text-lg font-bold text-ink">Total</span>
+        <span className="text-lg font-bold text-ink">{formatKes(total)}</span>
       </div>
     </div>
   );
