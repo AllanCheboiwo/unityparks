@@ -20,6 +20,26 @@ model User {
   lastName     String
   phone        String?
 
+  // The account profile, Center Parcs style: the details form prefills from
+  // here for signed-in guests, and edits there write back. All nullable -
+  // accounts created before these fields existed simply have gaps.
+  title       String?
+  dateOfBirth String? // ISO YYYY-MM-DD
+
+  // Postal address (welcome-pack story). Stored here and on the booking
+  // session snapshot only - never sent to Apaleo.
+  addressLine1 String?
+  addressLine2 String?
+  townCity     String?
+  county       String?
+  postcode     String?
+  country      String?
+
+  // Durable marketing consent; the session columns keep the per-booking
+  // record of what was ticked at the time.
+  marketingEmail Boolean @default(false)
+  marketingSms   Boolean @default(false)
+
   authSessions        AuthSession[]
   passwordResetTokens PasswordResetToken[]
   bookingSessions BookingSession[]
@@ -94,6 +114,15 @@ model BookingSession {
   guestPhone       String?
   guestDateOfBirth String? // ISO YYYY-MM-DD
   vehiclePlate     String?
+
+  // Lead booker's postal address, snapshotted per booking (welcome-pack
+  // story). Local only - never sent to Apaleo.
+  guestAddressLine1 String?
+  guestAddressLine2 String?
+  guestTownCity     String?
+  guestCounty       String?
+  guestPostcode     String?
+  guestCountry      String?
 
   // Marketing consent, captured with the details form like Center Parcs.
   marketingEmail Boolean @default(false)

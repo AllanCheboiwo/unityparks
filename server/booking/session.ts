@@ -197,6 +197,12 @@ export async function setGuestDetails(
     vehiclePlate?: string;
     marketingEmail?: boolean;
     marketingSms?: boolean;
+    addressLine1?: string;
+    addressLine2?: string;
+    townCity?: string;
+    county?: string;
+    postcode?: string;
+    country?: string;
   },
   // Identity snapshot: whoever is signed in NOW owns this walk (null when
   // signed out). Written unconditionally so a sign-out mid-funnel on a
@@ -215,6 +221,12 @@ export async function setGuestDetails(
       vehiclePlate: guest.vehiclePlate ?? null,
       marketingEmail: guest.marketingEmail ?? false,
       marketingSms: guest.marketingSms ?? false,
+      guestAddressLine1: guest.addressLine1 ?? null,
+      guestAddressLine2: guest.addressLine2 ?? null,
+      guestTownCity: guest.townCity ?? null,
+      guestCounty: guest.county ?? null,
+      guestPostcode: guest.postcode ?? null,
+      guestCountry: guest.country ?? null,
       userId,
       state: "checkout",
       expiresAt: freshExpiry(),

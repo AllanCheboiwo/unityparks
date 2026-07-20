@@ -14,8 +14,137 @@ type KnownUser = {
   firstName: string;
   lastName: string;
   email: string;
-  phone: string;
+  phone: string | null;
+  // Profile fields arrive empty ("" from the server page, null from the
+  // login API) for accounts created before they existed.
+  title?: string | null;
+  dateOfBirth?: string | null;
+  addressLine1?: string | null;
+  addressLine2?: string | null;
+  townCity?: string | null;
+  county?: string | null;
+  postcode?: string | null;
+  country?: string | null;
+  marketingEmail?: boolean;
+  marketingSms?: boolean;
 };
+
+// Every ITU calling code, ISO alpha-3 labelled, alphabetical. The select is
+// keyed by label (unique) rather than code: many countries share a code
+// (+1, +44, +7...) and duplicate <option> values make a controlled select
+// snap to the first match.
+const PHONE_CODES = [
+  { label: "AFG", code: "+93" }, { label: "AGO", code: "+244" }, { label: "AIA", code: "+1" },
+  { label: "ALB", code: "+355" }, { label: "AND", code: "+376" }, { label: "ARE", code: "+971" },
+  { label: "ARG", code: "+54" }, { label: "ARM", code: "+374" }, { label: "ASM", code: "+1" },
+  { label: "ATG", code: "+1" }, { label: "AUS", code: "+61" }, { label: "AUT", code: "+43" },
+  { label: "AZE", code: "+994" }, { label: "BDI", code: "+257" }, { label: "BEL", code: "+32" },
+  { label: "BEN", code: "+229" }, { label: "BES", code: "+599" }, { label: "BFA", code: "+226" },
+  { label: "BGD", code: "+880" }, { label: "BGR", code: "+359" }, { label: "BHR", code: "+973" },
+  { label: "BHS", code: "+1" }, { label: "BIH", code: "+387" }, { label: "BLM", code: "+590" },
+  { label: "BLR", code: "+375" }, { label: "BLZ", code: "+501" }, { label: "BMU", code: "+1" },
+  { label: "BOL", code: "+591" }, { label: "BRA", code: "+55" }, { label: "BRB", code: "+1" },
+  { label: "BRN", code: "+673" }, { label: "BTN", code: "+975" }, { label: "BWA", code: "+267" },
+  { label: "CAF", code: "+236" }, { label: "CAN", code: "+1" }, { label: "CHE", code: "+41" },
+  { label: "CHL", code: "+56" }, { label: "CHN", code: "+86" }, { label: "CIV", code: "+225" },
+  { label: "CMR", code: "+237" }, { label: "COD", code: "+243" }, { label: "COG", code: "+242" },
+  { label: "COK", code: "+682" }, { label: "COL", code: "+57" }, { label: "COM", code: "+269" },
+  { label: "CPV", code: "+238" }, { label: "CRI", code: "+506" }, { label: "CUB", code: "+53" },
+  { label: "CUW", code: "+599" }, { label: "CYM", code: "+1" }, { label: "CYP", code: "+357" },
+  { label: "CZE", code: "+420" }, { label: "DEU", code: "+49" }, { label: "DJI", code: "+253" },
+  { label: "DMA", code: "+1" }, { label: "DNK", code: "+45" }, { label: "DOM", code: "+1" },
+  { label: "DZA", code: "+213" }, { label: "ECU", code: "+593" }, { label: "EGY", code: "+20" },
+  { label: "ERI", code: "+291" }, { label: "ESP", code: "+34" }, { label: "EST", code: "+372" },
+  { label: "ETH", code: "+251" }, { label: "FIN", code: "+358" }, { label: "FJI", code: "+679" },
+  { label: "FLK", code: "+500" }, { label: "FRA", code: "+33" }, { label: "FRO", code: "+298" },
+  { label: "FSM", code: "+691" }, { label: "GAB", code: "+241" }, { label: "GBR", code: "+44" },
+  { label: "GEO", code: "+995" }, { label: "GGY", code: "+44" }, { label: "GHA", code: "+233" },
+  { label: "GIB", code: "+350" }, { label: "GIN", code: "+224" }, { label: "GLP", code: "+590" },
+  { label: "GMB", code: "+220" }, { label: "GNB", code: "+245" }, { label: "GNQ", code: "+240" },
+  { label: "GRC", code: "+30" }, { label: "GRD", code: "+1" }, { label: "GRL", code: "+299" },
+  { label: "GTM", code: "+502" }, { label: "GUF", code: "+594" }, { label: "GUM", code: "+1" },
+  { label: "GUY", code: "+592" }, { label: "HKG", code: "+852" }, { label: "HND", code: "+504" },
+  { label: "HRV", code: "+385" }, { label: "HTI", code: "+509" }, { label: "HUN", code: "+36" },
+  { label: "IDN", code: "+62" }, { label: "IMN", code: "+44" }, { label: "IND", code: "+91" },
+  { label: "IRL", code: "+353" }, { label: "IRN", code: "+98" }, { label: "IRQ", code: "+964" },
+  { label: "ISL", code: "+354" }, { label: "ISR", code: "+972" }, { label: "ITA", code: "+39" },
+  { label: "JAM", code: "+1" }, { label: "JEY", code: "+44" }, { label: "JOR", code: "+962" },
+  { label: "JPN", code: "+81" }, { label: "KAZ", code: "+7" }, { label: "KEN", code: "+254" },
+  { label: "KGZ", code: "+996" }, { label: "KHM", code: "+855" }, { label: "KIR", code: "+686" },
+  { label: "KNA", code: "+1" }, { label: "KOR", code: "+82" }, { label: "KWT", code: "+965" },
+  { label: "LAO", code: "+856" }, { label: "LBN", code: "+961" }, { label: "LBR", code: "+231" },
+  { label: "LBY", code: "+218" }, { label: "LCA", code: "+1" }, { label: "LIE", code: "+423" },
+  { label: "LKA", code: "+94" }, { label: "LSO", code: "+266" }, { label: "LTU", code: "+370" },
+  { label: "LUX", code: "+352" }, { label: "LVA", code: "+371" }, { label: "MAC", code: "+853" },
+  { label: "MAF", code: "+590" }, { label: "MAR", code: "+212" }, { label: "MCO", code: "+377" },
+  { label: "MDA", code: "+373" }, { label: "MDG", code: "+261" }, { label: "MDV", code: "+960" },
+  { label: "MEX", code: "+52" }, { label: "MHL", code: "+692" }, { label: "MKD", code: "+389" },
+  { label: "MLI", code: "+223" }, { label: "MLT", code: "+356" }, { label: "MMR", code: "+95" },
+  { label: "MNE", code: "+382" }, { label: "MNG", code: "+976" }, { label: "MNP", code: "+1" },
+  { label: "MOZ", code: "+258" }, { label: "MRT", code: "+222" }, { label: "MSR", code: "+1" },
+  { label: "MTQ", code: "+596" }, { label: "MUS", code: "+230" }, { label: "MWI", code: "+265" },
+  { label: "MYS", code: "+60" }, { label: "MYT", code: "+262" }, { label: "NAM", code: "+264" },
+  { label: "NCL", code: "+687" }, { label: "NER", code: "+227" }, { label: "NFK", code: "+672" },
+  { label: "NGA", code: "+234" }, { label: "NIC", code: "+505" }, { label: "NIU", code: "+683" },
+  { label: "NLD", code: "+31" }, { label: "NOR", code: "+47" }, { label: "NPL", code: "+977" },
+  { label: "NRU", code: "+674" }, { label: "NZL", code: "+64" }, { label: "OMN", code: "+968" },
+  { label: "PAK", code: "+92" }, { label: "PAN", code: "+507" }, { label: "PER", code: "+51" },
+  { label: "PHL", code: "+63" }, { label: "PLW", code: "+680" }, { label: "PNG", code: "+675" },
+  { label: "POL", code: "+48" }, { label: "PRI", code: "+1" }, { label: "PRK", code: "+850" },
+  { label: "PRT", code: "+351" }, { label: "PRY", code: "+595" }, { label: "PSE", code: "+970" },
+  { label: "PYF", code: "+689" }, { label: "QAT", code: "+974" }, { label: "REU", code: "+262" },
+  { label: "ROU", code: "+40" }, { label: "RUS", code: "+7" }, { label: "RWA", code: "+250" },
+  { label: "SAU", code: "+966" }, { label: "SDN", code: "+249" }, { label: "SEN", code: "+221" },
+  { label: "SGP", code: "+65" }, { label: "SHN", code: "+290" }, { label: "SLB", code: "+677" },
+  { label: "SLE", code: "+232" }, { label: "SLV", code: "+503" }, { label: "SMR", code: "+378" },
+  { label: "SOM", code: "+252" }, { label: "SPM", code: "+508" }, { label: "SRB", code: "+381" },
+  { label: "SSD", code: "+211" }, { label: "STP", code: "+239" }, { label: "SUR", code: "+597" },
+  { label: "SVK", code: "+421" }, { label: "SVN", code: "+386" }, { label: "SWE", code: "+46" },
+  { label: "SWZ", code: "+268" }, { label: "SXM", code: "+1" }, { label: "SYC", code: "+248" },
+  { label: "SYR", code: "+963" }, { label: "TCA", code: "+1" }, { label: "TCD", code: "+235" },
+  { label: "TGO", code: "+228" }, { label: "THA", code: "+66" }, { label: "TJK", code: "+992" },
+  { label: "TKL", code: "+690" }, { label: "TKM", code: "+993" }, { label: "TLS", code: "+670" },
+  { label: "TON", code: "+676" }, { label: "TTO", code: "+1" }, { label: "TUN", code: "+216" },
+  { label: "TUR", code: "+90" }, { label: "TUV", code: "+688" }, { label: "TWN", code: "+886" },
+  { label: "TZA", code: "+255" }, { label: "UGA", code: "+256" }, { label: "UKR", code: "+380" },
+  { label: "URY", code: "+598" }, { label: "USA", code: "+1" }, { label: "UZB", code: "+998" },
+  { label: "VAT", code: "+39" }, { label: "VCT", code: "+1" }, { label: "VEN", code: "+58" },
+  { label: "VGB", code: "+1" }, { label: "VIR", code: "+1" }, { label: "VNM", code: "+84" },
+  { label: "VUT", code: "+678" }, { label: "WLF", code: "+681" }, { label: "WSM", code: "+685" },
+  { label: "XKX", code: "+383" }, { label: "YEM", code: "+967" }, { label: "ZAF", code: "+27" },
+  { label: "ZMB", code: "+260" }, { label: "ZWE", code: "+263" },
+];
+
+const CODE_BY_LABEL = new Map(PHONE_CODES.map((c) => [c.label, c.code]));
+
+// Shared codes prefill as the country a stored number most likely belongs to.
+const CANONICAL_LABEL: Record<string, string> = {
+  "+1": "USA", "+7": "RUS", "+39": "ITA", "+44": "GBR", "+47": "NOR",
+  "+61": "AUS", "+212": "MAR", "+262": "REU", "+290": "SHN", "+358": "FIN",
+  "+590": "GLP", "+599": "CUW", "+672": "NFK",
+};
+
+/** Split a stored phone ("+254717464236") back into dropdown + number for
+ * prefill, longest code first so "+25..." never steals "+254...".
+ * Unrecognised values keep Kenya and land whole in the number box. */
+function splitPhone(stored: string): { country: string; number: string } {
+  const compact = stored.replace(/[\s-]/g, "");
+  const codes = [...new Set(PHONE_CODES.map((c) => c.code))].sort(
+    (a, b) => b.length - a.length,
+  );
+  const code = codes.find((c) => compact.startsWith(c));
+  if (!code) return { country: "KEN", number: compact.replace(/^\+/, "") };
+  const country =
+    CANONICAL_LABEL[code] ?? PHONE_CODES.find((c) => c.code === code)!.label;
+  return { country, number: compact.slice(code.length) };
+}
+
+/** One E.164-ish string for storage: code + digits, local leading zero
+ * dropped ("0717..." dialled from abroad needs "+254717..."). */
+function joinPhone(country: string, number: string): string {
+  const code = CODE_BY_LABEL.get(country) ?? "+254";
+  return `${code}${number.replace(/\D/g, "").replace(/^0+/, "")}`;
+}
 
 type EmailGate = { email: string; status: "none" | "active" | "unknown" };
 
@@ -41,17 +170,25 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
   // an inline sign-in at the gate card.
   const [knownUser, setKnownUser] = useState<KnownUser | null>(initialUser);
 
+  const initialPhone = splitPhone(initialUser?.phone ?? "");
   const [form, setForm] = useState({
-    title: "",
+    title: initialUser?.title ?? "",
     firstName: initialUser?.firstName ?? "",
     lastName: initialUser?.lastName ?? "",
     email: initialUser?.email ?? "",
-    phone: initialUser?.phone ?? "",
-    dateOfBirth: "",
+    phoneCountry: initialPhone.country,
+    phoneNumber: initialPhone.number,
+    dateOfBirth: initialUser?.dateOfBirth ?? "",
+    addressLine1: initialUser?.addressLine1 ?? "",
+    addressLine2: initialUser?.addressLine2 ?? "",
+    townCity: initialUser?.townCity ?? "",
+    county: initialUser?.county ?? "",
+    postcode: initialUser?.postcode ?? "",
+    country: initialUser?.country || "Kenya",
     vehiclePlate: "",
   });
-  const [marketingEmail, setMarketingEmail] = useState(false);
-  const [marketingSms, setMarketingSms] = useState(false);
+  const [marketingEmail, setMarketingEmail] = useState(initialUser?.marketingEmail ?? false);
+  const [marketingSms, setMarketingSms] = useState(initialUser?.marketingSms ?? false);
   const [termsAccepted, setTermsAccepted] = useState(false);
 
   // The email gate (signed-out guests only). null = not checked yet.
@@ -140,13 +277,26 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
     const u = result.data;
     setKnownUser(u);
     // Prefill only what the guest has not already typed.
+    const savedPhone = splitPhone(u.phone ?? "");
     setForm((f) => ({
       ...f,
+      title: f.title || (u.title ?? ""),
       firstName: f.firstName || u.firstName,
       lastName: f.lastName || u.lastName,
       email: u.email,
-      phone: f.phone || (u.phone ?? ""),
+      phoneCountry: f.phoneNumber ? f.phoneCountry : savedPhone.country,
+      phoneNumber: f.phoneNumber || savedPhone.number,
+      dateOfBirth: f.dateOfBirth || (u.dateOfBirth ?? ""),
+      addressLine1: f.addressLine1 || (u.addressLine1 ?? ""),
+      addressLine2: f.addressLine2 || (u.addressLine2 ?? ""),
+      townCity: f.townCity || (u.townCity ?? ""),
+      county: f.county || (u.county ?? ""),
+      postcode: f.postcode || (u.postcode ?? ""),
+      country: u.country || f.country,
     }));
+    // Consent is account state, so the account's answer wins.
+    setMarketingEmail(u.marketingEmail ?? false);
+    setMarketingSms(u.marketingSms ?? false);
     // Header chip appears without leaving the page.
     router.refresh();
   }
@@ -157,14 +307,19 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
     setError(null);
     const wantsAccount =
       !knownUser && gate?.status === "none" && createAccount && newPassword.length >= 8;
+    const { phoneCountry, phoneNumber, ...fields } = form;
     const result = await apiFetch<{ ok: boolean; accountCreated: boolean }>(
       `/api/session/${sessionId}/details`,
       {
         method: "POST",
         body: JSON.stringify({
-          ...form,
+          ...fields,
+          phone: joinPhone(phoneCountry, phoneNumber),
           title: form.title || undefined,
           vehiclePlate: form.vehiclePlate.trim() || undefined,
+          addressLine2: form.addressLine2.trim() || undefined,
+          county: form.county.trim() || undefined,
+          postcode: form.postcode.trim() || undefined,
           marketingEmail,
           marketingSms,
           termsAccepted,
@@ -390,16 +545,107 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
                     </label>
                   )}
 
-                  <label className="block">
+                  <div>
                     <span className={labelClass}>Mobile phone</span>
+                    <div className="flex gap-3">
+                      <label className="w-36 shrink-0">
+                        <span className="sr-only">Country code</span>
+                        <select
+                          value={form.phoneCountry}
+                          onChange={(e) =>
+                            setForm((f) => ({ ...f, phoneCountry: e.target.value }))
+                          }
+                          className={inputClass}
+                        >
+                          {PHONE_CODES.map((c) => (
+                            <option key={c.label} value={c.label}>
+                              {c.label} {c.code}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="flex-1">
+                        <span className="sr-only">Phone number</span>
+                        <input
+                          type="tel"
+                          required
+                          minLength={7}
+                          value={form.phoneNumber}
+                          onChange={update("phoneNumber")}
+                          className={inputClass}
+                          placeholder="717 464 236"
+                        />
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className={cardClass}>
+                <p className={cardTitleClass}>Postal address</p>
+                <p className="mt-1 text-sm text-foreground/60">
+                  We ask for your address so we can send a welcome pack with
+                  all of your break details.
+                </p>
+                <div className="mt-4 grid gap-5">
+                  <label className="block max-w-[14rem]">
+                    <span className={labelClass}>Country</span>
                     <input
-                      type="tel"
                       required
-                      minLength={7}
-                      value={form.phone}
-                      onChange={update("phone")}
+                      value={form.country}
+                      onChange={update("country")}
                       className={inputClass}
-                      placeholder="+254 7xx xxx xxx"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className={labelClass}>Address line 1</span>
+                    <input
+                      required
+                      value={form.addressLine1}
+                      onChange={update("addressLine1")}
+                      className={inputClass}
+                    />
+                  </label>
+                  <label className="block">
+                    <span className={labelClass}>
+                      Address line 2 <span className="font-normal">(optional)</span>
+                    </span>
+                    <input
+                      value={form.addressLine2}
+                      onChange={update("addressLine2")}
+                      className={inputClass}
+                    />
+                  </label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <label>
+                      <span className={labelClass}>Town/City</span>
+                      <input
+                        required
+                        value={form.townCity}
+                        onChange={update("townCity")}
+                        className={inputClass}
+                      />
+                    </label>
+                    <label>
+                      <span className={labelClass}>
+                        County / State / Region{" "}
+                        <span className="font-normal">(optional)</span>
+                      </span>
+                      <input
+                        value={form.county}
+                        onChange={update("county")}
+                        className={inputClass}
+                      />
+                    </label>
+                  </div>
+                  <label className="block max-w-[14rem]">
+                    <span className={labelClass}>
+                      Postcode <span className="font-normal">(optional)</span>
+                    </span>
+                    <input
+                      value={form.postcode}
+                      onChange={update("postcode")}
+                      className={inputClass}
                     />
                   </label>
                 </div>

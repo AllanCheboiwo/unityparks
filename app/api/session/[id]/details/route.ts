@@ -17,6 +17,15 @@ const DetailsBody = z.object({
   phone: z.string().min(7),
   dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   vehiclePlate: z.string().optional(),
+  // Postal address (welcome-pack story). Stays local: session snapshot and
+  // account profile, never Apaleo. Line 2, county and postcode are optional -
+  // postcodes are patchy in Kenya.
+  addressLine1: z.string().trim().min(1),
+  addressLine2: z.string().trim().optional(),
+  townCity: z.string().trim().min(1),
+  county: z.string().trim().optional(),
+  postcode: z.string().trim().optional(),
+  country: z.string().trim().min(1),
   marketingEmail: z.boolean().optional(),
   marketingSms: z.boolean().optional(),
   // The client gates submit on the checkbox; the server enforces it too.
@@ -24,6 +33,29 @@ const DetailsBody = z.object({
   // Present when the guest ticked "Create my Unity Parks account".
   password: z.string().min(8).optional(),
 });
+
+/** The profile columns shared by account creation and write-back. Email is
+ * deliberately absent: the lead-guest email edits the booking, never the
+ * account. */
+function profileData(
+  guest: Omit<z.infer<typeof DetailsBody>, "password" | "termsAccepted">,
+) {
+  return {
+    firstName: guest.firstName.trim(),
+    lastName: guest.lastName.trim(),
+    phone: guest.phone,
+    title: guest.title ?? null,
+    dateOfBirth: guest.dateOfBirth,
+    addressLine1: guest.addressLine1,
+    addressLine2: guest.addressLine2 ?? null,
+    townCity: guest.townCity,
+    county: guest.county ?? null,
+    postcode: guest.postcode ?? null,
+    country: guest.country,
+    marketingEmail: guest.marketingEmail ?? false,
+    marketingSms: guest.marketingSms ?? false,
+  };
+}
 
 /** True when someone born on dob is 18 or older on the arrival date. Pure
  * ISO string arithmetic - no timezones to get wrong. */
@@ -82,9 +114,7 @@ export async function POST(
           data: {
             email,
             passwordHash: await hashPassword(password),
-            firstName: guest.firstName.trim(),
-            lastName: guest.lastName.trim(),
-            phone: guest.phone,
+            ...profileData(guest),
           },
         });
       } catch (err) {
@@ -105,6 +135,14 @@ export async function POST(
       // Signs the response: the guest reaches the pay step already signed in.
       await createAuthSession(user.id);
       accountCreated = true;
+    }
+
+    // Center Parcs semantics: for a signed-in guest this form is a view of
+    // their account, and edits write back. A just-created account already
+    // carries these fields; email is never touched (the lead-guest email
+    // edits the booking, not the account).
+    if (user && !accountCreated) {
+      await prisma.user.update({ where: { id: user.id }, data: profileData(guest) });
     }
 
     await setGuestDetails(id, guest, user?.id ?? null);
