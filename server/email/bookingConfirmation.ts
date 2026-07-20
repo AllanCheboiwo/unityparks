@@ -66,11 +66,8 @@ export async function sendBookingConfirmation(recordId: string): Promise<void> {
       return `${tier}${unit ? ` (${unit})` : ""} · ${party} ${party === 1 ? "guest" : "guests"}`;
     });
 
-    const nights = Math.round(
-      (Date.parse(`${session.departure}T00:00:00Z`) - Date.parse(`${session.arrival}T00:00:00Z`)) / 86_400_000,
-    );
-    const totalGuests = lodges.reduce((sum, l) => sum + l.adults + parseChildrenAges(l).length, 0);
-    const memories = totalGuests * nights;
+    // One memory per guest per stay, regardless of how many nights it runs.
+    const memories = lodges.reduce((sum, l) => sum + l.adults + parseChildrenAges(l).length, 0);
 
     const greeting = session.guestFirstName ? `Hello ${session.guestFirstName},` : "Hello,";
     const reference = record.apaleoBookingId;

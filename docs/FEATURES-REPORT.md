@@ -43,8 +43,9 @@ The full inventory of the site as it stands on the `cp-restyle` branch.
 
 **Brand**
 - Full Center Parcs-style visual system (docs/DESIGN.md)
-- The memories counter: 1 memory = 1 guest, 1 night, paid. Homepage band,
-  footer line, confirmation moment. Goal: a billion.
+- The memories counter: 1 memory = 1 guest, 1 stay, paid (party size, any
+  length of stay). Homepage band, footer line, confirmation moment. Goal: a
+  billion.
 
 ---
 
@@ -247,7 +248,7 @@ list is the digital experience.
 - [ ] Mobile apps (iOS and Android) wrapping My Booking
 
 ### Unity Parks only (no Center Parcs equivalent)
-- [x] The memories counter: real guest-nights counting toward a billion
+- [x] The memories counter: real paid guests, one per stay, counting toward a billion
 - [x] ANPR gate story via plate capture at booking
 
 Tally: roughly 40 of 90 checklist items done. The whole core booking spine
