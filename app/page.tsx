@@ -70,50 +70,35 @@ export default async function HomePage() {
           Naivasha, Kenya. Every lodge, trail and splash of the lagoon is part
           of one village built for time together.
         </p>
-        <div className="mt-8 grid gap-6 md:grid-cols-3">
-          <div className="overflow-hidden rounded-lg border border-line bg-white">
-            <div className="relative aspect-[3/2]">
-              <Image
-                src="/village-map.svg"
-                alt="Illustrated map of the Unity Parks Naivasha village"
-                fill
-                className="object-cover"
-              />
-            </div>
-            <div className="p-5">
-              <h3 className="font-display text-xl font-bold text-navy">
-                Unity Parks Naivasha
-              </h3>
-              <p className="mt-1 flex items-center gap-1.5 text-sm">
-                <PinIcon />
-                Lake Naivasha, Kenya
-              </p>
-              <p className="mt-2 text-sm">
-                Lakeside forest, four lodge styles, one swimming lagoon and
-                room for the whole family.
-              </p>
-              <a
-                href="#lodges"
-                className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-navy"
-              >
-                Explore the village
-                <ChevronIcon />
-              </a>
-            </div>
+        <div className="mt-8 grid items-center gap-8 overflow-hidden rounded-lg border border-line bg-white p-5 sm:p-6 md:grid-cols-2">
+          <div className="relative aspect-[3/2] overflow-hidden rounded-md">
+            <Image
+              src="/village-map.svg"
+              alt="Illustrated map of the Unity Parks Naivasha village"
+              fill
+              className="object-cover"
+            />
           </div>
-          {["Our next village", "And one more after that"].map((title) => (
-            <div
-              key={title}
-              className="flex flex-col justify-center rounded-lg border border-dashed border-line bg-mist p-5 text-center"
+          <div>
+            <h3 className="font-display text-2xl font-bold text-navy">
+              Unity Parks Naivasha
+            </h3>
+            <p className="mt-1 flex items-center gap-1.5 text-sm">
+              <PinIcon />
+              Lake Naivasha, Kenya
+            </p>
+            <p className="mt-3 text-base">
+              Lakeside forest, four lodge styles, one swimming lagoon and
+              room for the whole family.
+            </p>
+            <a
+              href="#lodges"
+              className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-navy"
             >
-              <h3 className="font-display text-xl font-bold text-ink/40">
-                {title}
-              </h3>
-              <p className="mt-1 text-sm text-foreground/50">
-                Coming in time. A billion memories need more than one forest.
-              </p>
-            </div>
-          ))}
+              Explore the village
+              <ChevronIcon />
+            </a>
+          </div>
         </div>
       </section>
 
