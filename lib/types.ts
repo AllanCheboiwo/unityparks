@@ -92,7 +92,8 @@ export type SessionSummary = {
     lastName: string | null;
     email: string | null;
     phone: string | null;
-    vehiclePlate: string | null;
+    /** One entry per car; "" for a car the guest didn't know the plate of. */
+    vehiclePlates: string[];
   } | null;
   total: number | null;
 };
@@ -151,6 +152,7 @@ export type BookingConfirmation = {
     firstName: string | null;
     lastName: string | null;
     email: string | null;
-    vehiclePlate: string | null;
+    /** One entry per car; "" for a car the guest didn't know the plate of. */
+    vehiclePlates: string[];
   };
 };

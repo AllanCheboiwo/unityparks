@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { getSession } from "@/server/booking/session";
+import { getSession, parseVehiclePlates } from "@/server/booking/session";
 import { guestRowDto, loadGuests, partyBands, saveGuests } from "@/server/booking/guests";
 import { handleRoute, jsonError } from "@/server/api-helpers";
 
@@ -43,6 +43,8 @@ export async function GET(
         lastName: session.guestLastName,
         email: session.guestEmail,
       },
+      // Break-level car registrations, for prefilling the vehicle card.
+      vehiclePlates: parseVehiclePlates(session),
     });
   });
 }

@@ -113,7 +113,10 @@ model BookingSession {
   guestEmail       String?
   guestPhone       String?
   guestDateOfBirth String? // ISO YYYY-MM-DD
-  vehiclePlate     String?
+  // One entry per car (JSON string array), each the plate or "" for "don't
+  // know the registration"; "[]" means no car. Captured on the Guest Details
+  // step, Center Parcs style.
+  vehiclePlates    String  @default("[]")
 
   // Lead booker's postal address, snapshotted per booking (welcome-pack
   // story). Local only - never sent to Apaleo.

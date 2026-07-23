@@ -185,7 +185,6 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
     county: initialUser?.county ?? "",
     postcode: initialUser?.postcode ?? "",
     country: initialUser?.country || "Kenya",
-    vehiclePlate: "",
   });
   const [marketingEmail, setMarketingEmail] = useState(initialUser?.marketingEmail ?? false);
   const [marketingSms, setMarketingSms] = useState(initialUser?.marketingSms ?? false);
@@ -316,7 +315,6 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
           ...fields,
           phone: joinPhone(phoneCountry, phoneNumber),
           title: form.title || undefined,
-          vehiclePlate: form.vehiclePlate.trim() || undefined,
           addressLine2: form.addressLine2.trim() || undefined,
           county: form.county.trim() || undefined,
           postcode: form.postcode.trim() || undefined,
@@ -649,25 +647,6 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
                     />
                   </label>
                 </div>
-              </div>
-
-              <div className={cardClass}>
-                <p className={cardTitleClass}>Your vehicle</p>
-                <label className="block mt-4">
-                  <span className={labelClass}>
-                    Vehicle number plate <span className="font-normal">(optional)</span>
-                  </span>
-                  <input
-                    value={form.vehiclePlate}
-                    onChange={update("vehiclePlate")}
-                    className={`${inputClass} uppercase`}
-                    placeholder="KDA 123A"
-                  />
-                  <span className="mt-1 block text-xs text-foreground/50">
-                    Register your plate and the gate opens automatically when you
-                    arrive. No queuing.
-                  </span>
-                </label>
               </div>
 
               {showCreateAccount && (

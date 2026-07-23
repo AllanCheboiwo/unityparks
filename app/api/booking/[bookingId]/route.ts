@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/server/db";
 import { getFolioForReservation } from "@/server/apaleo/bookings";
-import { parseChildrenAges, parseExtras } from "@/server/booking/session";
+import { parseChildrenAges, parseExtras, parseVehiclePlates } from "@/server/booking/session";
 import { partyLabel } from "@/server/booking/party";
 import { guestRowDto, loadGuests, partyBands } from "@/server/booking/guests";
 import { assertBookingAccess } from "@/server/booking/access";
@@ -113,7 +113,7 @@ export async function GET(
         firstName: record.session.guestFirstName,
         lastName: record.session.guestLastName,
         email: record.session.guestEmail,
-        vehiclePlate: record.session.vehiclePlate,
+        vehiclePlates: parseVehiclePlates(record.session),
       },
     });
   });

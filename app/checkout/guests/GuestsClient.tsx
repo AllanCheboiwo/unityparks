@@ -14,6 +14,7 @@ import { AlertIcon } from "../icons";
 type GuestsPayload = {
   lodges: Array<{ slot: number; bands: string[]; guests: GuestRowDto[] }>;
   lead: { firstName: string | null; lastName: string | null; email: string | null };
+  vehiclePlates: string[];
 };
 
 type Row = {
@@ -25,6 +26,10 @@ type Row = {
   dateOfBirth: string;
   email: string;
 };
+
+/** One car on the break. dontKnow mirrors Center Parcs' "I don't know the
+ *  registration" checkbox, which locks the plate box empty. */
+type Car = { plate: string; dontKnow: boolean };
 
 const inputClass =
   "mt-1.5 w-full rounded-md border border-[#cccccc] bg-white px-3 py-2.5 text-base text-ink focus:outline-none focus:border-navy focus:ring-2 focus:ring-navy/25";
@@ -39,6 +44,7 @@ export function GuestsClient() {
   const router = useRouter();
   const sessionId = useSearchParams().get("session");
   const [rows, setRows] = useState<Row[] | null>(null);
+  const [cars, setCars] = useState<Car[]>([]);
   const [lodgeSlots, setLodgeSlots] = useState<number[]>([]);
   const [summary, setSummary] = useState<SessionSummary | null>(null);
   const [expired, setExpired] = useState(false);
@@ -77,6 +83,9 @@ export function GuestsClient() {
           });
         }),
       );
+      setCars(
+        g.data.vehiclePlates.map((plate) => ({ plate, dontKnow: plate === "" })),
+      );
     })();
   }, [sessionId]);
 
@@ -95,6 +104,19 @@ export function GuestsClient() {
   }
 
   const multi = lodgeSlots.length > 1;
+  // Center Parcs gates Continue until every car is either given a plate or
+  // marked "I don't know the registration". No cars is always resolved.
+  const carsResolved = cars.every((c) => c.dontKnow || c.plate.trim() !== "");
+
+  function setCarCount(count: number) {
+    setCars((prev) =>
+      Array.from({ length: count }, (_, i) => prev[i] ?? { plate: "", dontKnow: false }),
+    );
+  }
+
+  function updateCar(index: number, patch: Partial<Car>) {
+    setCars((prev) => prev.map((c, i) => (i === index ? { ...c, ...patch } : c)));
+  }
 
   function update(
     slot: number,
@@ -135,6 +157,20 @@ export function GuestsClient() {
         setBusy(false);
         return;
       }
+    }
+    // Cars are break-level: one set for the whole party, saved once. "Don't
+    // know" cars go as "" so their slot is kept; plates are stored uppercase.
+    const vehicles = await apiFetch(`/api/session/${sessionId}/vehicles`, {
+      method: "PUT",
+      body: JSON.stringify({
+        plates: cars.map((c) => (c.dontKnow ? "" : c.plate.trim().toUpperCase())),
+      }),
+    });
+    if (isExpired(vehicles)) return setExpired(true);
+    if (!vehicles.ok) {
+      setError(vehicles.error);
+      setBusy(false);
+      return;
     }
     router.push(`/checkout/pay?session=${sessionId}`);
   }
@@ -229,6 +265,63 @@ export function GuestsClient() {
             );
           })}
 
+          <div className="mt-8">
+            <p className="font-display text-xl font-bold text-ink mb-3">
+              Vehicle details
+            </p>
+            <div className="rounded-lg bg-white border border-line p-6">
+              <p className="text-sm text-foreground/70">
+                Register a number plate and the gate reads it as you arrive, so
+                you drive straight in. No queuing.
+              </p>
+              <label className="block mt-4 max-w-xs">
+                <span className={labelClass}>How many cars are you bringing?</span>
+                <select
+                  value={cars.length}
+                  onChange={(e) => setCarCount(Number(e.target.value))}
+                  className={inputClass}
+                >
+                  <option value={0}>I&apos;m not bringing a car</option>
+                  <option value={1}>1</option>
+                  <option value={2}>2</option>
+                  <option value={3}>3</option>
+                  <option value={4}>4</option>
+                </select>
+              </label>
+
+              {cars.map((car, i) => (
+                <div key={i} className="mt-5">
+                  <label className="block max-w-xs">
+                    <span className={labelClass}>
+                      Car {i + 1} registration number
+                    </span>
+                    <input
+                      value={car.plate}
+                      disabled={car.dontKnow}
+                      onChange={(e) => updateCar(i, { plate: e.target.value })}
+                      className={`${inputClass} uppercase disabled:bg-mist disabled:text-foreground/40`}
+                      placeholder="KDA 123A"
+                    />
+                  </label>
+                  <label className="mt-2 flex items-center gap-2 text-sm text-foreground/70">
+                    <input
+                      type="checkbox"
+                      checked={car.dontKnow}
+                      onChange={(e) =>
+                        updateCar(i, {
+                          dontKnow: e.target.checked,
+                          plate: e.target.checked ? "" : car.plate,
+                        })
+                      }
+                      className="h-4 w-4 accent-[#536917]"
+                    />
+                    I don&apos;t know the registration
+                  </label>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {error && (
             <div className="mt-4 flex items-start gap-2 rounded-md border border-[#b3261e]/30 bg-[#b3261e]/5 px-4 py-3 text-sm text-[#b3261e]">
               <AlertIcon />
@@ -237,7 +330,11 @@ export function GuestsClient() {
           )}
 
           <div className="mt-6 flex items-center gap-4">
-            <button onClick={saveAndContinue} disabled={busy} className="btn-primary">
+            <button
+              onClick={saveAndContinue}
+              disabled={busy || !carsResolved}
+              className="btn-primary"
+            >
               {busy ? "Saving…" : "Save and continue"}
             </button>
             <button

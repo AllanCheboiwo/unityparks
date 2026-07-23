@@ -16,7 +16,6 @@ const DetailsBody = z.object({
   email: z.string().trim().email(),
   phone: z.string().min(7),
   dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  vehiclePlate: z.string().optional(),
   // Postal address (welcome-pack story). Stays local: session snapshot and
   // account profile, never Apaleo. Line 2, county and postcode are optional -
   // postcodes are patchy in Kenya.

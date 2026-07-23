@@ -30,7 +30,8 @@ export type CreateBookingInput = {
   /** One entry per lodge; a single-lodge break is one entry. */
   reservations: ReservationInput[];
   guest: { firstName: string; lastName: string; email: string; phone: string };
-  vehiclePlate?: string;
+  /** One entry per car; "" is a car whose plate the guest didn't know. */
+  vehiclePlates?: string[];
   /** Persisted per checkout attempt so a retry can never double-book. */
   idempotencyKey: string;
 };
@@ -45,8 +46,11 @@ export async function createBooking(input: CreateBookingInput): Promise<{
   reservationIds: string[];
 }> {
   const nights = nightsBetween(input.arrival, input.departure);
-  const guestComment = input.vehiclePlate
-    ? `Vehicle plate for ANPR gate: ${input.vehiclePlate}`
+  // Only registrations the guest actually gave open the gate; "don't know"
+  // cars ("") carry no plate to register.
+  const knownPlates = (input.vehiclePlates ?? []).map((p) => p.trim()).filter(Boolean);
+  const guestComment = knownPlates.length
+    ? `Vehicle plates for ANPR gate: ${knownPlates.join(", ")}`
     : undefined;
 
   const body = {
