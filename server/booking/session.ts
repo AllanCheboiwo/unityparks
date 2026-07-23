@@ -194,7 +194,6 @@ export async function setGuestDetails(
     email: string;
     phone: string;
     dateOfBirth?: string;
-    vehiclePlate?: string;
     marketingEmail?: boolean;
     marketingSms?: boolean;
     addressLine1?: string;
@@ -218,7 +217,6 @@ export async function setGuestDetails(
       guestEmail: normalizeEmail(guest.email),
       guestPhone: guest.phone,
       guestDateOfBirth: guest.dateOfBirth ?? null,
-      vehiclePlate: guest.vehiclePlate ?? null,
       marketingEmail: guest.marketingEmail ?? false,
       marketingSms: guest.marketingSms ?? false,
       guestAddressLine1: guest.addressLine1 ?? null,
@@ -231,6 +229,19 @@ export async function setGuestDetails(
       state: "checkout",
       expiresAt: freshExpiry(),
     },
+  });
+}
+
+/**
+ * The break's car registrations, captured on the Guest Details step. One entry
+ * per car ("" for "don't know the registration"), "[]" for no car. Break-level
+ * like Center Parcs - one set of cars for the whole party. Never touches state:
+ * details has already moved the session to "checkout" by this point.
+ */
+export async function setVehicles(id: string, plates: string[]): Promise<void> {
+  await prisma.bookingSession.update({
+    where: { id },
+    data: { vehiclePlates: JSON.stringify(plates), expiresAt: freshExpiry() },
   });
 }
 
@@ -250,4 +261,10 @@ export async function stampSessionUser(id: string, userId: string): Promise<void
 /** Works on a session (slot-0 mirror) or a single lodge's own extras. */
 export function parseExtras(session: { extras: string }): ExtraSnapshot[] {
   return JSON.parse(session.extras) as ExtraSnapshot[];
+}
+
+/** The break's saved car registrations: one entry per car, "" for "don't
+ *  know the registration", "[]" for no car. */
+export function parseVehiclePlates(source: { vehiclePlates: string }): string[] {
+  return JSON.parse(source.vehiclePlates) as string[];
 }

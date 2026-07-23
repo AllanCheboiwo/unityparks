@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession, parseChildrenAges, parseExtras } from "@/server/booking/session";
+import { getSession, parseChildrenAges, parseExtras, parseVehiclePlates } from "@/server/booking/session";
 import { computeTotal, nightsBetween } from "@/server/booking/rules";
 import { partyLabel } from "@/server/booking/party";
 import { handleRoute, jsonError } from "@/server/api-helpers";
@@ -95,7 +95,7 @@ export async function GET(
             lastName: session.guestLastName,
             email: session.guestEmail,
             phone: session.guestPhone,
-            vehiclePlate: session.vehiclePlate,
+            vehiclePlates: parseVehiclePlates(session),
           }
         : null,
       total,

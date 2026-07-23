@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { apiFetch } from "@/lib/api";
-import { formatDate, formatKes, nightsLabel } from "@/lib/format";
+import { formatDate, formatKes, nightsLabel, knownPlates } from "@/lib/format";
 import { LODGES } from "@/content/lodges";
 import type { BookingConfirmation } from "@/lib/types";
 
@@ -193,9 +193,12 @@ export function ConfirmationClient({ bookingId }: { bookingId: string }) {
           <p className="mt-1">
             {booking.guest.firstName} {booking.guest.lastName} · {booking.guest.email}
           </p>
-          {booking.guest.vehiclePlate && (
+          {knownPlates(booking.guest.vehiclePlates).length > 0 && (
             <p className="mt-1">
-              Vehicle {booking.guest.vehiclePlate.toUpperCase()} is registered for
+              {knownPlates(booking.guest.vehiclePlates).length === 1
+                ? "Vehicle"
+                : "Vehicles"}{" "}
+              {knownPlates(booking.guest.vehiclePlates).join(", ")} registered for
               automatic gate entry.
             </p>
           )}

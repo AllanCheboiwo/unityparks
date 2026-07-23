@@ -19,7 +19,7 @@ import { getOrderStatus, submitOrder } from "../pesapal/orders";
 import { paymentMatchesOrder } from "../pesapal/status";
 import { PublicError } from "../api-helpers";
 import { paymentsProvider } from "./provider";
-import { getSession, parseChildrenAges, parseExtras } from "./session";
+import { getSession, parseChildrenAges, parseExtras, parseVehiclePlates } from "./session";
 import { loadGuests } from "./guests";
 import { sendBookingConfirmation } from "../email/bookingConfirmation";
 
@@ -465,7 +465,7 @@ async function ensureRecord(sessionId: string): Promise<{
       email: session.guestEmail,
       phone: session.guestPhone ?? "",
     },
-    vehiclePlate: session.vehiclePlate ?? undefined,
+    vehiclePlates: parseVehiclePlates(session),
     idempotencyKey: `up-book-${session.id}`,
   });
 

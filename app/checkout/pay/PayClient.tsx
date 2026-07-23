@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { apiFetch, isExpired } from "@/lib/api";
-import { formatDate, formatKes, nightsLabel } from "@/lib/format";
+import { formatDate, formatKes, nightsLabel, plateList } from "@/lib/format";
 import { LODGES } from "@/content/lodges";
 import type { SessionSummary } from "@/lib/types";
 import { Stepper } from "@/components/Stepper";
@@ -212,8 +212,8 @@ export function PayClient({ provider }: { provider: "simulated" | "pesapal" }) {
                 </p>
                 {session.guest.firstName} {session.guest.lastName} ·{" "}
                 {session.guest.email}
-                {session.guest.vehiclePlate && (
-                  <> · plate {session.guest.vehiclePlate.toUpperCase()}</>
+                {plateList(session.guest.vehiclePlates) && (
+                  <> · {plateList(session.guest.vehiclePlates)}</>
                 )}
               </div>
             )}

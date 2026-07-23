@@ -41,3 +41,16 @@ export function nightsLabel(nights: number): string {
   if (nights === 7) return "7-night week break";
   return `${nights}-night break`;
 }
+
+/** Known car registrations, uppercased; "" entries ("don't know") dropped. */
+export function knownPlates(plates: string[]): string[] {
+  return plates.map((p) => p.trim().toUpperCase()).filter(Boolean);
+}
+
+/** A short recap phrase for a lead-guest line: "plate KDA 123A" or
+ *  "plates KDA 123A, KBZ 456B". Empty when no plate is known. */
+export function plateList(plates: string[]): string {
+  const known = knownPlates(plates);
+  if (!known.length) return "";
+  return `${known.length === 1 ? "plate" : "plates"} ${known.join(", ")}`;
+}
