@@ -7,8 +7,10 @@ export type ReservationInput = {
   adults: number;
   childrenAges?: number[];
   ratePlanId: string;
-  /** Apaleo service ids for this lodge's extras. */
-  serviceIds: string[];
+  /** This lodge's extras: each Apaleo service id with the quantity to book.
+   *  count carries the guest's chosen quantity (e.g. 3 bikes); Apaleo prices
+   *  the service at count times its per-unit rate. */
+  services: Array<{ serviceId: string; count: number }>;
   /**
    * Named co-guests for this lodge, shown in Apaleo's "additional guests"
    * section. The lead booker is the primaryGuest, never listed here.
@@ -69,7 +71,7 @@ export async function createBooking(input: CreateBookingInput): Promise<{
       timeSlices: Array.from({ length: nights }, () => ({
         ratePlanId: reservation.ratePlanId,
       })),
-      services: reservation.serviceIds.map((serviceId) => ({ serviceId })),
+      services: reservation.services.map((s) => ({ serviceId: s.serviceId, count: s.count })),
     })),
   };
 

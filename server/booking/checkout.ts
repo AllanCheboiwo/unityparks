@@ -441,12 +441,13 @@ async function ensureRecord(sessionId: string): Promise<{
       adults: lodge.adults,
       childrenAges: parseChildrenAges(lodge),
       ratePlanId: lodge.ratePlanId!,
-      // The location fee rides along as one more service, so Apaleo prices
-      // it into the folio from birth like any extra.
-      serviceIds: [
-        ...parseExtras(lodge).map((e) => e.serviceId),
+      // The location fee rides along as one more service (count 1), so Apaleo
+      // prices it into the folio from birth like any extra. Each extra carries
+      // the guest's chosen quantity so Apaleo books that many.
+      services: [
+        ...parseExtras(lodge).map((e) => ({ serviceId: e.serviceId, count: e.count })),
         ...(lodge.locationChoice === "unit" && lodge.locationServiceId
-          ? [lodge.locationServiceId]
+          ? [{ serviceId: lodge.locationServiceId, count: 1 }]
           : []),
       ],
       additionalGuests: manifest
