@@ -5,6 +5,10 @@ import type { GlobalConfig } from "payload";
 // SiteSettings phase. Field names mirror app/(site)/page.tsx section order.
 export const HomePage: GlobalConfig = {
   slug: "home-page",
+  // Site visitors read this content anonymously; only writes need an admin.
+  access: {
+    read: () => true,
+  },
   fields: [
     {
       name: "hero",

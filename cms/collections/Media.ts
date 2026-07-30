@@ -6,6 +6,10 @@ const dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export const Media: CollectionConfig = {
   slug: "media",
+  // Site visitors read this content anonymously; only writes need an admin.
+  access: {
+    read: () => true,
+  },
   admin: {
     useAsTitle: "alt",
   },

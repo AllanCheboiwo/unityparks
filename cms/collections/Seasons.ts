@@ -5,6 +5,10 @@ import type { CollectionConfig } from "payload";
 // carries the disclaimer.
 export const Seasons: CollectionConfig = {
   slug: "seasons",
+  // Site visitors read this content anonymously; only writes need an admin.
+  access: {
+    read: () => true,
+  },
   admin: {
     useAsTitle: "title",
     defaultColumns: ["title", "fromPrice", "displayOrder"],

@@ -3,6 +3,10 @@ import type { CollectionConfig } from "payload";
 // The "Things to do" cards on the homepage.
 export const Activities: CollectionConfig = {
   slug: "activities",
+  // Site visitors read this content anonymously; only writes need an admin.
+  access: {
+    read: () => true,
+  },
   admin: {
     useAsTitle: "title",
     defaultColumns: ["title", "displayOrder"],
