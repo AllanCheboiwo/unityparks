@@ -2,7 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { BookingBar } from "@/components/BookingBar";
 import { MemoriesCounter } from "@/components/MemoriesCounter";
-import { StickySearch } from "@/app/StickySearch";
+import { StickySearch } from "./StickySearch";
 import { LODGES, TIER_ORDER } from "@/content/lodges";
 import { ACTIVITIES, DISCOVER, FAQS, SEASONS } from "@/content/home";
 import { countMemories, MEMORIES_GOAL } from "@/server/memories";
