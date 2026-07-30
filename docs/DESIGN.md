@@ -17,6 +17,27 @@ the confirmation page.
 Writing rules: no em dashes anywhere (use periods, commas, hyphens). British
 English. Prices always "from KES X" style with the asterisk footnote pattern.
 
+## Payment plan and cancellation policy (copy source of truth)
+
+Decided 23 Jul 2026, Center Parcs model with an 8-week anchor. Implementation
+spec: docs/deposit-and-cancellation-plan.md. Every guest-facing surface must
+say the policy the same way:
+
+- Booking more than 8 weeks out (57+ days): pay a 30% deposit or the full
+  amount. The balance is due 8 weeks (56 days) before arrival. At 8 weeks or
+  closer: full payment at booking.
+- Balance payments are guest-initiated from Manage my booking ("Pay
+  outstanding balance" or a set amount, minimum KES 500). We never store
+  cards and never auto-charge.
+- Cancellation wording: "Cancel more than 8 weeks before arrival and we
+  refund everything except your deposit. 6 to 8 weeks before: half of the
+  balance you have paid. 3 to 6 weeks: a quarter. Less than 3 weeks: no
+  refund. Deposits are non-refundable."
+- Status language: "Deposit paid" (bronze outline pill), "Paid" (leaf green),
+  "Balance overdue" (red outline), "Cancelled" (grey). A booking with a
+  deposit is confirmed, never "pending": celebrate it on the confirmation
+  page and show the balance panel beneath.
+
 ## Fonts
 
 - Body: Open Sans (next/font Open_Sans, var --font-body). 16px / 24px,

@@ -53,6 +53,15 @@ export default async function AccountPage() {
             .filter(Boolean)
             .join(", ");
           const nights = nightsBetween(s.arrival, s.departure);
+          const outstanding = Math.max(
+            0,
+            Math.round(record.totalGrossAmount - record.paidAmount),
+          );
+          const overdue =
+            record.status === "deposit_paid" &&
+            outstanding > 0 &&
+            record.balanceDueDate !== null &&
+            record.balanceDueDate < new Date().toISOString().slice(0, 10);
           return (
             <div key={record.id} className="rounded-lg border border-line bg-white p-5">
               <div className="flex items-start justify-between gap-4">
@@ -88,15 +97,29 @@ export default async function AccountPage() {
                         ? "bg-leaf text-white"
                         : record.status === "cancelled"
                           ? "bg-[#6b6b6b] text-white"
-                          : "border border-bronze bg-white text-bronze"
+                          : overdue
+                            ? "border border-[#b3261e] bg-white text-[#b3261e]"
+                            : "border border-bronze bg-white text-bronze"
                     }`}
                   >
                     {record.status === "paid"
                       ? "Paid"
                       : record.status === "cancelled"
                         ? "Cancelled"
-                        : "Payment pending"}
+                        : record.status === "deposit_paid"
+                          ? overdue
+                            ? "Balance overdue"
+                            : "Deposit paid"
+                          : "Payment pending"}
                   </span>
+                  {record.status === "deposit_paid" && (
+                    <p className="mt-1 text-xs text-foreground/70">
+                      {formatKes(outstanding)} still to pay
+                      {record.balanceDueDate
+                        ? ` · due ${formatDate(record.balanceDueDate)}`
+                        : ""}
+                    </p>
+                  )}
                 </div>
               </div>
               <div className="mt-4 border-t border-line pt-4">

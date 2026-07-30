@@ -55,9 +55,12 @@ export async function POST(
       email: req.nextUrl.searchParams.get("email"),
     });
 
-    // A booking awaiting payment must not change shape: a Pesapal order for
-    // the old total may be minutes from settling, and the amount collected
-    // has to match what the folios ask for at settle time.
+    // A booking that isn't fully paid must not change shape: a payment for
+    // the old total may be minutes from settling, and a move re-prices the
+    // folio, which would desync the payment plan.
+    if (record.status === "deposit_paid") {
+      return jsonError(409, "Pay your remaining balance first, then move your break.");
+    }
     if (record.status !== "paid") {
       return jsonError(409, "Finish paying for your break before changing it.");
     }

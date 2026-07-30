@@ -1,0 +1,135 @@
+import { describe, expect, it } from "vitest";
+import {
+  balanceDueDateFor,
+  computeRefund,
+  daysBetween,
+  depositAmountFor,
+  isDepositEligible,
+  isValidPartPayment,
+  refundPercentFor,
+} from "./paymentPlan";
+
+describe("depositAmountFor", () => {
+  it("takes 30% in whole KES", () => {
+    expect(depositAmountFor(100_000)).toBe(30_000);
+    expect(depositAmountFor(84_000)).toBe(25_200);
+  });
+
+  it("rounds instead of truncating", () => {
+    expect(depositAmountFor(99_999)).toBe(30_000); // 29999.7 rounds up
+  });
+});
+
+describe("balanceDueDateFor", () => {
+  it("is arrival minus 56 days", () => {
+    expect(balanceDueDateFor("2026-10-30")).toBe("2026-09-04");
+    expect(balanceDueDateFor("2026-09-18")).toBe("2026-07-24");
+  });
+
+  it("crosses year boundaries", () => {
+    expect(balanceDueDateFor("2027-01-15")).toBe("2026-11-20");
+  });
+});
+
+describe("daysBetween", () => {
+  it("counts whole days, signed", () => {
+    expect(daysBetween("2026-07-23", "2026-09-18")).toBe(57);
+    expect(daysBetween("2026-07-23", "2026-07-23")).toBe(0);
+    expect(daysBetween("2026-07-23", "2026-07-22")).toBe(-1);
+  });
+});
+
+describe("isDepositEligible", () => {
+  it("draws the line between 56 and 57 days", () => {
+    expect(isDepositEligible(57)).toBe(true);
+    expect(isDepositEligible(56)).toBe(false);
+  });
+});
+
+describe("refundPercentFor", () => {
+  it("steps down at exactly the tier boundaries", () => {
+    expect(refundPercentFor(57)).toBe(100);
+    expect(refundPercentFor(56)).toBe(50);
+    expect(refundPercentFor(42)).toBe(50);
+    expect(refundPercentFor(41)).toBe(25);
+    expect(refundPercentFor(21)).toBe(25);
+    expect(refundPercentFor(20)).toBe(0);
+    expect(refundPercentFor(1)).toBe(0);
+  });
+});
+
+describe("computeRefund", () => {
+  it("never refunds the deposit, at any tier", () => {
+    for (const daysToArrival of [90, 50, 30, 10]) {
+      const result = computeRefund({
+        total: 100_000,
+        paidAmount: 30_000, // deposit only
+        depositAmount: 30_000,
+        daysToArrival,
+      });
+      expect(result.refundAmount).toBe(0);
+      expect(result.depositKept).toBe(30_000);
+      expect(result.keptAmount).toBe(30_000);
+    }
+  });
+
+  it("refunds everything except the deposit above 56 days", () => {
+    const result = computeRefund({
+      total: 100_000,
+      paidAmount: 100_000,
+      depositAmount: 30_000,
+      daysToArrival: 60,
+    });
+    expect(result.refundAmount).toBe(70_000);
+    expect(result.keptAmount).toBe(30_000);
+  });
+
+  it("applies the tier percentage to the balance beyond the deposit", () => {
+    const halved = computeRefund({
+      total: 100_000,
+      paidAmount: 80_000, // deposit plus a 50k part payment
+      depositAmount: 30_000,
+      daysToArrival: 50,
+    });
+    expect(halved.refundPercent).toBe(50);
+    expect(halved.refundAmount).toBe(25_000);
+    expect(halved.keptAmount).toBe(55_000);
+  });
+
+  it("derives the 30% deposit for legacy records without one stored", () => {
+    const result = computeRefund({
+      total: 100_000,
+      paidAmount: 100_000,
+      depositAmount: null,
+      daysToArrival: 60,
+    });
+    expect(result.depositKept).toBe(30_000);
+    expect(result.refundAmount).toBe(70_000);
+  });
+});
+
+describe("isValidPartPayment", () => {
+  it("always allows clearing the balance exactly", () => {
+    expect(isValidPartPayment(1_000, 1_000)).toBe(true);
+    expect(isValidPartPayment(70_000, 70_000)).toBe(true);
+    expect(isValidPartPayment(499, 499)).toBe(true); // small tail is payable
+  });
+
+  it("enforces the minimum on the payment itself", () => {
+    expect(isValidPartPayment(499, 10_000)).toBe(false);
+    expect(isValidPartPayment(500, 10_000)).toBe(true);
+  });
+
+  it("refuses to strand a remainder under the minimum", () => {
+    expect(isValidPartPayment(700, 1_000)).toBe(false); // leaves 300
+    expect(isValidPartPayment(500, 1_000)).toBe(true); // leaves exactly 500
+  });
+
+  it("refuses overpayment, non-integers and nonsense", () => {
+    expect(isValidPartPayment(1_200, 1_000)).toBe(false);
+    expect(isValidPartPayment(500.5, 10_000)).toBe(false);
+    expect(isValidPartPayment(0, 10_000)).toBe(false);
+    expect(isValidPartPayment(-500, 10_000)).toBe(false);
+    expect(isValidPartPayment(500, 0)).toBe(false);
+  });
+});

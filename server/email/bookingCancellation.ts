@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma } from "../db";
 import { sendEmail } from "./resend";
+import { depositAmountFor } from "@/lib/paymentPlan";
 
 /**
  * The cancellation email, same discipline as the confirmation one: an
@@ -41,8 +42,15 @@ export async function sendBookingCancellation(recordId: string): Promise<void> {
       return;
     }
 
+    // What actually went in is the refund base: legacy records (born before
+    // the deposit feature) store paidAmount 0 while being fully paid.
+    const paid = record.paidAmount > 0 ? record.paidAmount : record.totalGrossAmount;
     const refunded = record.refundAmount ?? 0;
-    const kept = record.totalGrossAmount - refunded;
+    const kept = paid - refunded;
+    const deposit = Math.min(
+      record.depositAmount ?? depositAmountFor(record.totalGrossAmount),
+      paid,
+    );
     const greeting = session.guestFirstName ? `Hello ${session.guestFirstName},` : "Hello,";
     const reference = record.apaleoBookingId;
 
@@ -50,9 +58,11 @@ export async function sendBookingCancellation(recordId: string): Promise<void> {
       refunded > 0
         ? `We have refunded ${formatMoney(refunded, record.currency)} to your original payment method.` +
           (kept > 0
-            ? ` A cancellation charge of ${formatMoney(kept, record.currency)} applied under the cancellation terms.`
+            ? ` A cancellation charge of ${formatMoney(kept, record.currency)} applied under the cancellation terms. Deposits are non-refundable.`
             : "")
-        : `No refund was due this close to arrival under the cancellation terms.`;
+        : kept <= deposit + 0.01
+          ? `Your ${formatMoney(deposit, record.currency)} deposit is non-refundable, so no refund was due.`
+          : `No refund was due this close to arrival under the cancellation terms.`;
 
     const text = [
       greeting,

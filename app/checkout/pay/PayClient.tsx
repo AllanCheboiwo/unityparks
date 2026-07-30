@@ -4,6 +4,12 @@ import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { apiFetch, isExpired } from "@/lib/api";
 import { formatDate, formatKes, nightsLabel, plateList } from "@/lib/format";
+import {
+  balanceDueDateFor,
+  daysBetween,
+  depositAmountFor,
+  isDepositEligible,
+} from "@/lib/paymentPlan";
 import { LODGES } from "@/content/lodges";
 import type { SessionSummary } from "@/lib/types";
 import { Stepper } from "@/components/Stepper";
@@ -36,6 +42,7 @@ export function PayClient({ provider }: { provider: "simulated" | "pesapal" }) {
   const [error, setError] = useState<string | null>(null);
   const [soldOut, setSoldOut] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [payment, setPayment] = useState<"full" | "deposit">("full");
 
   useEffect(() => {
     if (!sessionId) return;
@@ -103,12 +110,26 @@ export function PayClient({ provider }: { provider: "simulated" | "pesapal" }) {
     0,
   );
 
+  // The deposit option, 57+ days out only. These numbers are advisory: the
+  // server recomputes eligibility and the amount from the folio totals,
+  // which can differ if a location fee is dropped at checkout.
+  const depositEligible = isDepositEligible(
+    daysBetween(new Date().toISOString().slice(0, 10), session.arrival),
+  );
+  const depositChosen = depositEligible && payment === "deposit";
+  const deposit = depositAmountFor(bookingTotal);
+  const balanceDue = balanceDueDateFor(session.arrival);
+  const paying = depositChosen ? deposit : bookingTotal;
+
   async function buyNow() {
     setBusy(true);
     setError(null);
     const result = await apiFetch<CheckoutResponse>(
       `/api/session/${sessionId}/checkout`,
-      { method: "POST" },
+      {
+        method: "POST",
+        body: JSON.stringify({ payment: depositChosen ? "deposit" : "full" }),
+      },
     );
     if (isExpired(result)) return setExpired(true);
     if (!result.ok) {
@@ -236,10 +257,62 @@ export function PayClient({ provider }: { provider: "simulated" | "pesapal" }) {
           <div className="mt-6 rounded-lg bg-white border border-line p-6">
             <p className="text-xl font-bold text-ink">Pay securely</p>
             <p className="mt-2 text-sm text-foreground/70">
-              {provider === "pesapal"
-                ? "One payment covers your whole break. We'll hold your lodge while you pay on Pesapal's secure page, then bring you straight back for your confirmation."
-                : "One payment covers your whole break. Confirm below and your lodge is booked straight away."}
+              {depositChosen
+                ? provider === "pesapal"
+                  ? "Pay your deposit today and your lodge is secured. We'll hold it while you pay on Pesapal's secure page, then bring you straight back for your confirmation."
+                  : "Pay your deposit today and your lodge is secured. Confirm below and your break is booked straight away."
+                : provider === "pesapal"
+                  ? "One payment covers your whole break. We'll hold your lodge while you pay on Pesapal's secure page, then bring you straight back for your confirmation."
+                  : "One payment covers your whole break. Confirm below and your lodge is booked straight away."}
             </p>
+
+            {depositEligible && (
+              <div className="mt-4 grid gap-2">
+                {(
+                  [
+                    {
+                      value: "full",
+                      label: "Pay in full",
+                      amount: bookingTotal,
+                      note: "Nothing more to pay before your break.",
+                    },
+                    {
+                      value: "deposit",
+                      label: "Pay a 30% deposit",
+                      amount: deposit,
+                      note: `The remaining ${formatKes(bookingTotal - deposit)} is due by ${formatDate(balanceDue)}. Pay any time from Manage my booking.`,
+                    },
+                  ] as const
+                ).map((option) => (
+                  <label
+                    key={option.value}
+                    className={`flex cursor-pointer items-start gap-3 rounded-md border p-3 ${
+                      payment === option.value
+                        ? "border-olive bg-mist"
+                        : "border-line bg-white"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="payment"
+                      value={option.value}
+                      checked={payment === option.value}
+                      onChange={() => setPayment(option.value)}
+                      className="mt-1 accent-[#536917]"
+                    />
+                    <span className="flex-1 text-sm">
+                      <span className="font-semibold text-ink">
+                        {option.label} · {formatKes(option.amount)}
+                      </span>
+                      <span className="mt-0.5 block text-xs text-foreground/60">
+                        {option.note}
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            )}
+
             <button
               onClick={buyNow}
               disabled={busy}
@@ -250,8 +323,8 @@ export function PayClient({ provider }: { provider: "simulated" | "pesapal" }) {
                   ? "One moment…"
                   : "Confirming your booking…"
                 : provider === "pesapal"
-                  ? `Continue to payment · ${formatKes(bookingTotal)}`
-                  : `Confirm booking · ${formatKes(bookingTotal)}`}
+                  ? `Continue to payment · ${formatKes(paying)}`
+                  : `Confirm booking · ${formatKes(paying)}`}
             </button>
             <p className="mt-3 text-center text-xs text-foreground/50">
               {provider === "pesapal"

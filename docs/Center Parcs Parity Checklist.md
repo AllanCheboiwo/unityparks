@@ -78,7 +78,7 @@ Ordered roughly by funnel position. "Apaleo modelling" says what (if anything) m
 
 | Feature | What Center Parcs does | Apaleo modelling needed |
 |---|---|---|
-| Deposit + balance schedule | Deposit at booking, balance due ~10 weeks before arrival, reminder emails | None. Rate plans already carry 30% prepayment terms; needs orchestration + scheduled jobs |
+| Deposit + balance schedule | Deposit at booking, balance due ~10 weeks before arrival, reminder emails | Built 23 Jul with an 8-week anchor (spec: deposit-and-cancellation-plan.md); reminder emails need scheduled jobs (phase 2) |
 | Repeat-guest / promo code | Code box unlocks discounted pricing | Discounted rate plans per tier; code-gating mechanism needs sandbox verification |
 | "Flex" cancellation cover | Paid add-on that relaxes cancellation charges | A per-lodge service for the fee; refund logic is own layer |
 | Real payment (Pesapal) | Card/wallet capture, PSP-hosted | None in Apaleo. Out of demo scope (explicit decision) |

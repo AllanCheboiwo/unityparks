@@ -119,6 +119,11 @@ export type BookingConfirmation = {
   refundAmount: number | null;
   totalGrossAmount: number;
   currency: string;
+  /** The payment plan. Null on bookings from before the deposit feature. */
+  depositAmount: number | null;
+  balanceDueDate: string | null;
+  /** What has actually been paid; legacy paid records report the total. */
+  paidAmount: number;
   folioBalance: number;
   account: { status: "ownedByYou" | "existingAccount" | "none" };
   /** One entry per lodge in the booking, manifest included. */
