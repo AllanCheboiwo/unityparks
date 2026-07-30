@@ -17,7 +17,17 @@ export async function GET(req: NextRequest) {
   if (!trackingId) return NextResponse.redirect(new URL("/", base));
 
   try {
-    const { outcome, record } = await confirmPesapalPayment(trackingId);
+    const { outcome, record, kind } = await confirmPesapalPayment(trackingId);
+    // Balance payments belong to Manage my booking: that page explains
+    // every outcome, and the session id doubles as its proof of access.
+    if (kind === "balance") {
+      return NextResponse.redirect(
+        new URL(
+          `/manage/${record.apaleoBookingId}?session=${record.sessionId}&payment=${outcome === "completed" ? "success" : outcome}`,
+          base,
+        ),
+      );
+    }
     if (outcome === "completed") {
       // Same handoff as the simulated flow: the session id is the
       // fresh-from-checkout proof of access for the confirmation page.
@@ -34,15 +44,19 @@ export async function GET(req: NextRequest) {
     );
   } catch (err) {
     console.error("Pesapal callback failed", err);
-    // Even on an error we try to land the guest back on their own pay page,
-    // where Buy now resumes the attempt. Home is the last resort.
+    // Even on an error we try to land the guest back on their own page
+    // (Manage for balance payments, the pay page for checkout), where a
+    // retry resumes the attempt. Home is the last resort.
     const transaction = await prisma.pesapalTransaction
       .findUnique({ where: { orderTrackingId: trackingId }, include: { record: true } })
       .catch(() => null);
     const sessionId = transaction?.record.sessionId;
+    if (!sessionId) return NextResponse.redirect(new URL("/", base));
     return NextResponse.redirect(
       new URL(
-        sessionId ? `/checkout/pay?session=${sessionId}&payment=error` : "/",
+        transaction!.kind === "balance"
+          ? `/manage/${transaction!.record.apaleoBookingId}?session=${sessionId}&payment=error`
+          : `/checkout/pay?session=${sessionId}&payment=error`,
         base,
       ),
     );

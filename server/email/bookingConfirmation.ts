@@ -74,16 +74,30 @@ export async function sendBookingConfirmation(recordId: string): Promise<void> {
     const total = formatMoney(record.totalGrossAmount, record.currency);
     const manageUrl = `${appBaseUrl()}/manage`;
 
+    // A deposit booking is just as booked; the email leads with that and
+    // then says plainly what is still to pay and by when.
+    const fullyPaid = record.status === "paid";
+    const outstanding = Math.max(0, record.totalGrossAmount - record.paidAmount);
+    const dueDate = record.balanceDueDate ? longDate(record.balanceDueDate) : null;
+
     const text = [
       `${greeting}`,
       ``,
-      `Your break at Unity Parks Naivasha is booked and paid. We can't wait to see you.`,
+      fullyPaid
+        ? `Your break at Unity Parks Naivasha is booked and paid. We can't wait to see you.`
+        : `Your break at Unity Parks Naivasha is booked. Your deposit is in; the balance is due ${dueDate ? `by ${dueDate}` : "before arrival"}.`,
       ``,
       `Booking reference: ${reference}`,
       `Check-in: ${longDate(session.arrival)}`,
       `Check-out: ${longDate(session.departure)}`,
       ...lodgeLines.map((line) => `Lodge: ${line}`),
-      `Total paid: ${total}`,
+      ...(fullyPaid
+        ? [`Total paid: ${total}`]
+        : [
+            `Paid today: ${formatMoney(record.paidAmount, record.currency)}`,
+            `Still to pay: ${formatMoney(outstanding, record.currency)} of ${total}${dueDate ? `, due by ${dueDate}` : ""}`,
+            `Pay any time from Manage my booking.`,
+          ]),
       ``,
       `Manage your break (change dates, add guest names) at ${manageUrl}`,
       `using your booking reference and this email address.`,
@@ -107,8 +121,11 @@ export async function sendBookingConfirmation(recordId: string): Promise<void> {
     <div style="padding:28px;">
       <h1 style="margin:0 0 8px;color:#1d1d1d;font-size:24px;">Your break is booked</h1>
       <p style="margin:0 0 20px;color:#4c4e4b;font-size:15px;line-height:1.5;">
-        ${greeting} your break at Unity Parks Naivasha is booked and paid.
-        We can't wait to see you.
+        ${
+          fullyPaid
+            ? `${greeting} your break at Unity Parks Naivasha is booked and paid. We can't wait to see you.`
+            : `${greeting} your break at Unity Parks Naivasha is booked. Your deposit is in; the balance is due ${dueDate ? `by ${dueDate}` : "before arrival"}.`
+        }
       </p>
       <div style="background:#f5f3ee;border-radius:6px;padding:14px 18px;margin-bottom:20px;">
         <span style="color:#4c4e4b;font-size:13px;">Booking reference</span><br/>
@@ -118,7 +135,15 @@ export async function sendBookingConfirmation(recordId: string): Promise<void> {
         ${row("Check-in", longDate(session.arrival))}
         ${row("Check-out", longDate(session.departure))}
         ${lodgeLines.map((line) => row("Lodge", line)).join("")}
-        ${row("Total paid", total)}
+        ${
+          fullyPaid
+            ? row("Total paid", total)
+            : row("Paid today", formatMoney(record.paidAmount, record.currency)) +
+              row(
+                "Still to pay",
+                `${formatMoney(outstanding, record.currency)} of ${total}${dueDate ? `, due by ${dueDate}` : ""}`,
+              )
+        }
       </table>
       <p style="margin:0 0 20px;color:#4c4e4b;font-size:14px;line-height:1.5;">
         Need to change dates or add guest names? Manage your break with your

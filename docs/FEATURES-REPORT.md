@@ -81,9 +81,9 @@ No new vendors. Split by how much sandbox work each needs.
 
 | Feature | Shape of the work |
 |---|---|
-| Cancel my booking | Built 18 Jul: tiered quote (100/50/0 percent by days to arrival), idempotent Apaleo cancel + folio refund per lodge, cancellation email, cancelled states across Manage and Account |
+| Cancel my booking | Built 18 Jul, tiers rebuilt 23 Jul around the 8-week deposit anchor: 100/50/25/0 percent of the amount paid beyond the non-refundable deposit (57+/42-56/21-41/under-21 days), idempotent Apaleo cancel + folio refund per lodge, cancellation email, cancelled states across Manage and Account |
 | Add extras post-booking | Amend the reservation's services, settle the difference. The 12-week pre-arrival upsell window in miniature |
-| Deposit + balance schedule | Rate plans already carry 30% prepayment terms. Take the deposit via the Pesapal flow we have, track the balance in our DB. The reminder emails belong to section 4 |
+| Deposit + balance schedule | Built 23 Jul (spec: docs/deposit-and-cancellation-plan.md): 30% deposit at checkout when 57+ days out, balance due 8 weeks before arrival, guest-initiated part payments from Manage, cancellation tiers rebuilt around the same 8-week anchor with the deposit never refunded. Reminder emails still belong to section 4 |
 | Promo / repeat-guest codes | Discounted rate plans per tier; our layer gates which offers are shown by code |
 | Basket hold | Apaleo has no soft holds. Our own timed hold with re-validation at pay (we already re-check at pay time) |
 | Lodge detail pages | Pure content: galleries, floor plans, what's included. No Apaleo at all |
@@ -205,7 +205,7 @@ list is the digital experience.
 - [x] Real PSP integration (Pesapal sandbox: card and M-Pesa simulations)
 - [x] Payment settled onto the booking folio (Apaleo)
 - [x] Confirmation page with real booking reference and itemised receipt
-- [ ] Deposit now, balance due 10 weeks before arrival, reminders
+- [x] Deposit now, balance due 8 weeks before arrival (built 23 Jul, see docs/deposit-and-cancellation-plan.md); reminder emails are phase 2
 - [ ] Wallet checkout (Click to Pay) and 3DS surfaced in our own UI
 - [x] Confirmation email (Resend, sent once when the folio settles)
 
@@ -223,8 +223,10 @@ list is the digital experience.
 - [x] View booking details and folio balance
 - [x] Move the break to new turnover dates (rule re-enforced)
 - [x] Add or edit guest names after booking
-- [x] Self-serve cancellation with tiered charges (full refund 28+ days,
-      half 8 to 27, none within 7; Apaleo cancel + folio refund + email)
+- [x] Self-serve cancellation with tiered charges (rebuilt 23 Jul on the
+      8-week anchor: 100/50/25/0 percent of the amount paid beyond the
+      non-refundable deposit at 57+/42-56/21-41/under-21 days; Apaleo
+      cancel + folio refund + email)
 - [ ] Add extras after booking
 - [ ] Shared itinerary across guests
 

@@ -97,7 +97,11 @@ export function ConfirmationClient({ bookingId }: { bookingId: string }) {
                 : "border border-bronze bg-white text-bronze"
             }`}
           >
-            {booking.status === "paid" ? "Paid in full" : booking.status}
+            {booking.status === "paid"
+              ? "Paid in full"
+              : booking.status === "deposit_paid"
+                ? "Deposit paid"
+                : booking.status}
           </span>
           <span
             className={`rounded-full px-3 py-1 text-xs font-semibold ${
@@ -106,9 +110,30 @@ export function ConfirmationClient({ bookingId }: { bookingId: string }) {
           >
             {settled
               ? "Folio settled · balance KES 0"
-              : `Folio balance ${formatKes(booking.folioBalance)}`}
+              : `Folio balance ${formatKes(Math.abs(booking.folioBalance))}`}
           </span>
         </div>
+
+        {booking.status === "deposit_paid" && (
+          <div className="mt-6 rounded-lg border border-bronze bg-mist px-6 py-5 text-left">
+            <p className="font-display text-lg font-bold text-ink">
+              Balance still to pay
+            </p>
+            <p className="mt-1 text-sm text-foreground">
+              {formatKes(Math.max(0, booking.totalGrossAmount - booking.paidAmount))}{" "}
+              of {formatKes(booking.totalGrossAmount)} is due
+              {booking.balanceDueDate ? ` by ${formatDate(booking.balanceDueDate)}` : ""}.
+              Pay any time from Manage my booking. We never store cards or
+              charge you automatically.
+            </p>
+            <Link
+              href={`/manage/${booking.bookingId}${proofQuery}`}
+              className="btn-primary mt-3 inline-block text-sm"
+            >
+              Pay towards my break
+            </Link>
+          </div>
+        )}
 
         <div className="mt-6 rounded-lg border border-line contour-bg px-6 py-5">
           <p className="font-display text-lg font-bold text-olive">
@@ -183,9 +208,19 @@ export function ConfirmationClient({ bookingId }: { bookingId: string }) {
             );
           })}
           <div className="mt-4 flex justify-between border-t border-line pt-4 text-lg font-bold text-ink">
-            <span className="font-display">Paid</span>
+            <span className="font-display">
+              {booking.status === "deposit_paid" ? "Total (deposit paid)" : "Paid"}
+            </span>
             <span className="font-display">{formatKes(booking.totalGrossAmount)}</span>
           </div>
+          {booking.status === "deposit_paid" && (
+            // "so far", not "today": paidAmount is cumulative and this page
+            // is revisitable long after later part payments.
+            <p className="mt-1 text-right text-sm text-foreground">
+              {formatKes(booking.paidAmount)} paid so far ·{" "}
+              {formatKes(Math.max(0, booking.totalGrossAmount - booking.paidAmount))} to pay
+            </p>
+          )}
         </div>
 
         <div className="p-6 text-sm text-foreground">

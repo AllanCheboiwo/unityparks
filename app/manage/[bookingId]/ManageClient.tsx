@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { BAND_LABELS, formatDate, formatKes, nightsLabel } from "@/lib/format";
+import { isValidPartPayment, MIN_PART_PAYMENT } from "@/lib/paymentPlan";
 import { LODGES } from "@/content/lodges";
 import type { BookingConfirmation } from "@/lib/types";
 import { TurnoverCalendar } from "@/components/TurnoverCalendar";
@@ -23,8 +24,27 @@ type CancellationQuote = {
   refundPercent: number;
   refundAmount: number;
   keptAmount: number;
+  paidAmount: number;
+  depositKept: number;
   total: number;
   currency: string;
+};
+
+// What the guest sees after a balance payment bounced them back here.
+const PAY_NOTICES: Record<string, { good: boolean; text: string }> = {
+  success: { good: true, text: "Payment received. Your balance is updated below." },
+  pending: {
+    good: false,
+    text: "We haven't seen your payment arrive yet. If you completed it, refresh in a moment; otherwise you can simply pay again below.",
+  },
+  failed: {
+    good: false,
+    text: "Your payment didn't go through and nothing was collected. You can try again below.",
+  },
+  error: {
+    good: false,
+    text: "Something went wrong while confirming your payment. Refresh in a moment before paying again.",
+  },
 };
 
 type GuestRow = {
@@ -66,6 +86,10 @@ export function ManageClient({ bookingId }: { bookingId: string }) {
   const [confirmingCancel, setConfirmingCancel] = useState(false);
   const [cancelBusy, setCancelBusy] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
+  const [payBusy, setPayBusy] = useState(false);
+  const [payError, setPayError] = useState<string | null>(null);
+  const [customAmount, setCustomAmount] = useState("");
+  const payNotice = PAY_NOTICES[searchParams.get("payment") ?? ""] ?? null;
 
   async function load() {
     const result = await apiFetch<BookingConfirmation>(`/api/booking/${bookingId}${proofQuery}`);
@@ -74,9 +98,9 @@ export function ManageClient({ bookingId }: { bookingId: string }) {
       return setError(result.error);
     }
     setBooking(result.data);
-    // The cancellation quote is a pure read; only paid bookings have one
-    // worth showing.
-    if (result.data.status === "paid") {
+    // The cancellation quote is a pure read; paid and deposit-paid bookings
+    // both have one worth showing.
+    if (result.data.status === "paid" || result.data.status === "deposit_paid") {
       const q = await apiFetch<CancellationQuote>(
         `/api/booking/${bookingId}/cancel${proofQuery}`,
       );
@@ -144,10 +168,50 @@ export function ManageClient({ bookingId }: { bookingId: string }) {
   const multi = booking.lodges.length > 1;
   const cancelled = booking.status === "cancelled";
 
+  // The balance state, derived from the booking payload: one read path,
+  // no second endpoint to drift from it.
+  const depositPaid = booking.status === "deposit_paid";
+  const outstanding = Math.max(0, Math.round(booking.totalGrossAmount - booking.paidAmount));
+  const overdue =
+    depositPaid &&
+    outstanding > 0 &&
+    booking.balanceDueDate !== null &&
+    new Date().toISOString().slice(0, 10) > booking.balanceDueDate;
+  const parsedCustom = customAmount.trim() === "" ? null : Number(customAmount.trim());
+  const customValid =
+    parsedCustom !== null && isValidPartPayment(parsedCustom, outstanding);
+
   function addDays(iso: string, days: number): string {
     const d = new Date(`${iso}T00:00:00Z`);
     d.setUTCDate(d.getUTCDate() + days);
     return d.toISOString().slice(0, 10);
+  }
+
+  // One balance payment attempt. No amount means "the whole outstanding
+  // balance". Pesapal answers with its hosted page (a full navigation, not
+  // a router push - it's another site); simulated settles on the spot.
+  async function payBalance(amount?: number) {
+    setPayBusy(true);
+    setPayError(null);
+    const result = await apiFetch<{ status: string; redirectUrl?: string }>(
+      `/api/booking/${bookingId}/pay${proofQuery}`,
+      {
+        method: "POST",
+        body: JSON.stringify(amount === undefined ? {} : { amount }),
+      },
+    );
+    if (!result.ok) {
+      setPayError(result.error);
+      setPayBusy(false);
+      return;
+    }
+    if (result.data.status === "redirect" && result.data.redirectUrl) {
+      window.location.assign(result.data.redirectUrl);
+      return;
+    }
+    setCustomAmount("");
+    await load();
+    setPayBusy(false);
   }
 
   async function move(e: React.FormEvent) {
@@ -228,20 +292,135 @@ export function ManageClient({ bookingId }: { bookingId: string }) {
               Cancelled
             </span>
           ) : (
-            <span
-              className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                booking.folioBalance === 0
-                  ? "bg-leaf text-white"
-                  : "border border-bronze bg-white text-bronze"
-              }`}
-            >
-              {booking.folioBalance === 0
-                ? "Folio settled"
-                : `Folio balance ${formatKes(booking.folioBalance)}`}
-            </span>
+            <>
+              {depositPaid && (
+                <span
+                  className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                    overdue
+                      ? "border border-[#b3261e] bg-white text-[#b3261e]"
+                      : "border border-bronze bg-white text-bronze"
+                  }`}
+                >
+                  {overdue
+                    ? "Balance overdue"
+                    : `Deposit paid · ${formatKes(outstanding)} outstanding`}
+                </span>
+              )}
+              <span
+                className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                  booking.folioBalance === 0
+                    ? "bg-leaf text-white"
+                    : "border border-bronze bg-white text-bronze"
+                }`}
+              >
+                {booking.folioBalance === 0
+                  ? "Folio settled"
+                  : `Folio balance ${formatKes(Math.abs(booking.folioBalance))}`}
+              </span>
+            </>
           )}
         </div>
       </div>
+
+      {payNotice && !cancelled && (
+        <div
+          className={`mt-4 flex items-start gap-2 rounded-md border px-4 py-3 text-sm ${
+            payNotice.good
+              ? "border-leaf/40 bg-mist text-olive"
+              : "border-amber-200 bg-amber-50 text-amber-900"
+          }`}
+        >
+          {payNotice.good && (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="mt-0.5 shrink-0" aria-hidden>
+              <path d="M4 12.5 9.5 18 20 6.5" />
+            </svg>
+          )}
+          <span>{payNotice.text}</span>
+        </div>
+      )}
+
+      {depositPaid && (
+        <div className="mt-8 rounded-lg border border-line bg-white p-6">
+          <p className="font-display text-xl font-bold text-ink">Your balance</p>
+          <p className="mt-1 text-sm text-foreground">
+            Pay towards your break any time. We never store cards or charge
+            you automatically.
+          </p>
+
+          {overdue && booking.balanceDueDate && (
+            <div className="mt-4 rounded-md border border-bronze bg-mist px-4 py-3 text-sm text-ink">
+              Your balance was due on {formatDate(booking.balanceDueDate)}. Pay
+              now to keep your break.
+            </div>
+          )}
+
+          <div className="mt-4 grid gap-1 text-sm text-foreground">
+            <p className="flex justify-between">
+              <span>Break total</span>
+              <span className="font-semibold text-ink">{formatKes(booking.totalGrossAmount)}</span>
+            </p>
+            <p className="flex justify-between">
+              <span>Paid so far</span>
+              <span className="font-semibold text-ink">{formatKes(booking.paidAmount)}</span>
+            </p>
+            <p className="flex justify-between border-t border-line pt-1">
+              <span>Still to pay</span>
+              <span className="font-bold text-ink">{formatKes(outstanding)}</span>
+            </p>
+            {booking.balanceDueDate && (
+              <p className="flex justify-between">
+                <span>Due by</span>
+                <span className="font-semibold text-ink">{formatDate(booking.balanceDueDate)}</span>
+              </p>
+            )}
+          </div>
+
+          {payError && (
+            <div className="mt-4 rounded-md border border-[#b3261e]/30 bg-red-50 px-4 py-3 text-sm text-[#b3261e]">
+              {payError}
+            </div>
+          )}
+
+          <div className="mt-4 flex flex-wrap items-start gap-3">
+            <button
+              type="button"
+              disabled={payBusy}
+              onClick={() => payBalance()}
+              className="btn-primary"
+            >
+              {payBusy ? "One moment…" : `Pay outstanding balance · ${formatKes(outstanding)}`}
+            </button>
+            <div>
+              <div className="flex gap-2">
+                <input
+                  aria-label="Amount to pay"
+                  type="number"
+                  inputMode="numeric"
+                  min={MIN_PART_PAYMENT}
+                  max={outstanding}
+                  placeholder="Amount (KES)"
+                  value={customAmount}
+                  onChange={(e) => setCustomAmount(e.target.value)}
+                  className={`${guestInputClass} w-36`}
+                />
+                <button
+                  type="button"
+                  disabled={payBusy || !customValid}
+                  onClick={() => payBalance(parsedCustom!)}
+                  className="btn-outline text-sm disabled:opacity-50"
+                >
+                  Pay this amount
+                </button>
+              </div>
+              <p className="mt-1 max-w-xs text-xs text-foreground/60">
+                Minimum KES {MIN_PART_PAYMENT}, and a part payment must leave
+                at least KES {MIN_PART_PAYMENT} to pay later, or clear the
+                balance exactly.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {cancelled && (
         <div className="mt-6 rounded-lg border border-line bg-mist p-6">
@@ -451,8 +630,10 @@ export function ManageClient({ bookingId }: { bookingId: string }) {
         <div className="mt-8 rounded-lg border border-line bg-white p-6">
           <p className="font-display text-xl font-bold text-ink">Cancel this break</p>
           <p className="mt-1 text-sm text-foreground">
-            Full refund 28 or more days before arrival, half refund 8 to 27
-            days before, no refund within 7 days.
+            Cancel more than 8 weeks before arrival and we refund everything
+            except your deposit. 6 to 8 weeks before: half of the balance
+            you have paid. 3 to 6 weeks: a quarter. Less than 3 weeks: no
+            refund. Deposits are non-refundable.
           </p>
 
           {quote.cancellable ? (
@@ -461,13 +642,16 @@ export function ManageClient({ bookingId }: { bookingId: string }) {
               {quote.daysToArrival === 1 ? "day" : "days"} before arrival:{" "}
               <span className="font-bold">
                 {quote.refundAmount > 0
-                  ? `we refund ${formatKes(quote.refundAmount)} of ${formatKes(quote.total)}`
+                  ? `we refund ${formatKes(quote.refundAmount)} of the ${formatKes(quote.paidAmount)} you've paid`
                   : "no refund is due"}
               </span>
               {quote.keptAmount > 0 && quote.refundAmount > 0 && (
                 <> ({formatKes(quote.keptAmount)} cancellation charge)</>
               )}
               .
+              {quote.depositKept > 0 && (
+                <> Your {formatKes(quote.depositKept)} deposit is non-refundable.</>
+              )}
             </div>
           ) : (
             <div className="mt-4 rounded-md border border-bronze bg-mist px-4 py-3 text-sm text-ink">

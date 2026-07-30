@@ -98,6 +98,15 @@ export async function GET(
       refundAmount: record.refundAmount,
       totalGrossAmount: record.totalGrossAmount,
       currency: record.currency,
+      depositAmount: record.depositAmount,
+      balanceDueDate: record.balanceDueDate,
+      // Legacy fallback: records from before the deposit feature store
+      // paidAmount 0 while being fully paid. Report the truth here so no
+      // client ever computes a phantom outstanding balance.
+      paidAmount:
+        record.status === "paid" && record.paidAmount === 0
+          ? record.totalGrossAmount
+          : record.paidAmount,
       folioBalance,
       account: { status: accountStatus },
       stay: {

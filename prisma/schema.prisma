@@ -218,7 +218,18 @@ model BookingRecord {
   totalGrossAmount Float // demo: JS number is fine; production would use integer minor units
   currency         String
 
-  status    String    @default("created") // created | paid | failed | cancelled
+  // Payment plan. Set at record creation for every new booking: the deposit
+  // is 30% of the total and the balance falls due 56 days before arrival,
+  // whether or not the guest used the deposit option. Null on records from
+  // before the feature; readers fall back to computing 30% on the fly.
+  depositAmount  Float?
+  balanceDueDate String? // ISO YYYY-MM-DD, arrival minus 56 days
+
+  // Sum of the children's paidAmount, derived from folio balances at settle
+  // time. 0 on legacy rows; a legacy "paid" record is read as fully paid.
+  paidAmount Float @default(0)
+
+  status    String    @default("created") // created | deposit_paid | paid | failed | cancelled
   paidAt    DateTime?
   paymentId String? // Apaleo payment id returned by the folio post
 
@@ -272,6 +283,15 @@ model PesapalTransaction {
   orderTrackingId String? @unique
   redirectUrl     String?
 
+  // What this payment is for: "checkout" (the Buy-now payment, deposit or
+  // full) or "balance" (a later top-up from Manage my booking). Decides the
+  // callback redirect and which email the settle sends.
+  kind String @default("checkout")
+
+  // Once-only stamp for the balance-payment receipt email, same discipline
+  // as BookingRecord.confirmationEmailAt.
+  receiptEmailAt DateTime?
+
   // pending | completed | failed | superseded, plus three flags a human must
   // act on: mismatch (Pesapal's amount differs from ours), excess (a second
   // order for an already-paid booking was collected), reversed (chargeback
@@ -305,6 +325,9 @@ model BookingReservation {
   grossAmount         Float
   currency            String
   paymentId           String?
+  // Money recorded on this folio so far, derived (grossAmount minus the
+  // folio balance) after each settle. paidAt stays "fully paid" only.
+  paidAmount          Float     @default(0)
   paidAt              DateTime?
 
   // Location step outcome, written when the reservation is created. The unit
