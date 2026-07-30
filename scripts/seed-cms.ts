@@ -55,18 +55,28 @@ const MEDIA = [
   },
   {
     file: "season-green.jpg",
-    alt: "Green season",
+    alt: "The forest turning green in the short rains",
     creditUrl: "https://www.pexels.com/photo/25491108/",
   },
   {
     file: "season-rains.jpg",
-    alt: "The long rains",
+    alt: "Storm clouds building over the forest in the long rains",
     creditUrl: "https://www.pexels.com/photo/32293234/",
   },
   {
     file: "season-festive.jpg",
-    alt: "Festive season",
+    alt: "Lights in the trees at festive time",
     creditUrl: "https://www.pexels.com/photo/19737894/",
+  },
+  {
+    file: "season-cool.jpg",
+    alt: "Mist drifting over the forest and the lake",
+    creditUrl: "https://www.pexels.com/video/lake-in-forest-13075768/",
+  },
+  {
+    file: "band-lake.jpg",
+    alt: "Golden evening light over the lake",
+    creditUrl: "https://www.pexels.com/photo/9245120/",
   },
   {
     file: "discover-groups.jpg",
@@ -116,30 +126,44 @@ const ACTIVITIES = [
   },
 ];
 
+// The four Kenyan seasons per docs/content-strategy.md. Festive is a
+// campaign inside sunshine season, not a season card.
 const SEASONS = [
   {
-    slug: "green-season",
-    title: "Green season",
-    copy: "Bright days, cool forest shade and the village at its liveliest.",
-    fromPrice: "from KES 45,000*",
-    photo: "season-green.jpg",
+    slug: "sunshine-season",
+    title: "Sunshine season",
+    months: "December to February",
+    copy: "Clear skies, hot days and the lagoon at its liveliest. Lake mornings before breakfast, long golden evenings after.",
+    fromPrice: "from KES 52,000*",
+    photo: "band-lake.jpg",
     displayOrder: 1,
   },
   {
     slug: "long-rains",
-    title: "The long rains",
+    title: "Long rains",
+    months: "March to May",
     copy: "Dramatic skies, quiet trails and the best prices of the year.",
     fromPrice: "from KES 38,500*",
     photo: "season-rains.jpg",
     displayOrder: 2,
   },
   {
-    slug: "festive-season",
-    title: "Festive season",
-    copy: "Lights in the trees, feasts in the lodge and the year's happiest goodbyes.",
-    fromPrice: "from KES 62,000*",
-    photo: "season-festive.jpg",
+    slug: "cool-season",
+    title: "Cool season",
+    months: "June to September",
+    copy: "Misty forest mornings, firewood evenings and the spa at its best. The August holidays land right in the middle.",
+    fromPrice: "from KES 45,000*",
+    photo: "season-cool.jpg",
     displayOrder: 3,
+  },
+  {
+    slug: "short-rains",
+    title: "Short rains",
+    months: "October to November",
+    copy: "Light afternoon showers, a forest turning green again and good value before the festive rush.",
+    fromPrice: "from KES 41,500*",
+    photo: "season-green.jpg",
+    displayOrder: 4,
   },
 ];
 
@@ -173,6 +197,18 @@ const FAQS = [
     answer:
       "No. The village sits on the shore of Lake Naivasha and shares it with hippos, giraffes and hundreds of bird species, so pets stay home for everyone's safety, theirs included.",
     displayOrder: 5,
+  },
+  {
+    question: "When is the best time to visit?",
+    answer:
+      "There is no bad time at 1,900 metres. Sunshine season (December to February) brings the hottest, clearest days. The long rains (March to May) mean dramatic afternoon skies and the best prices of the year. The cool season (June to September) is misty mornings and firewood evenings, and the short rains (October to November) turn the forest green again.",
+    displayOrder: 6,
+  },
+  {
+    question: "How do we get to Unity Parks Naivasha?",
+    answer:
+      "The village is about 90 minutes from Nairobi, down the Rift Valley escarpment and along the South Lake road. Parking at your lodge is included, and because we take your number plate at booking, the gate simply opens when you arrive.",
+    displayOrder: 7,
   },
 ];
 

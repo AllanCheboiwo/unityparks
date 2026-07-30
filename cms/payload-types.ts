@@ -208,6 +208,10 @@ export interface Season {
    */
   slug: string;
   title: string;
+  /**
+   * Shown on the card so guests know exactly when, e.g. December to February.
+   */
+  months: string;
   copy: string;
   /**
    * Shown exactly as typed, e.g. from KES 38,500*
@@ -379,6 +383,7 @@ export interface ActivitiesSelect<T extends boolean = true> {
 export interface SeasonsSelect<T extends boolean = true> {
   slug?: T;
   title?: T;
+  months?: T;
   copy?: T;
   fromPrice?: T;
   photo?: T;
@@ -449,6 +454,9 @@ export interface HomePage {
     headingAfter: string;
     subheading: string;
     intro: string;
+    /**
+     * Point this at the next school-holiday window: the April holidays, the August holidays, or the long November to January break. Update it each term, it takes two minutes.
+     */
     urgency: string;
     ctaLabel: string;
     video: number | Media;

@@ -195,13 +195,6 @@ export default async function HomePage() {
                     {activity.title}
                   </h3>
                   <p className="mt-1 text-sm">{activity.copy}</p>
-                  <a
-                    href="#"
-                    className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-navy"
-                  >
-                    Discover more
-                    <ChevronIcon />
-                  </a>
                 </div>
               </div>
             ))}
@@ -214,7 +207,7 @@ export default async function HomePage() {
         <h2 className="font-display text-3xl font-bold text-ink sm:text-4xl">
           {home.sections.seasonsHeading}
         </h2>
-        <div className="mt-8 grid gap-6 md:grid-cols-3">
+        <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
           {seasons.map((season) => (
             <div
               key={season.slug}
@@ -229,7 +222,10 @@ export default async function HomePage() {
                 />
               </div>
               <div className="p-5">
-                <h3 className="font-display text-xl font-bold text-ink">
+                <p className="text-xs font-semibold uppercase tracking-wide text-foreground/50">
+                  {season.months}
+                </p>
+                <h3 className="mt-1 font-display text-xl font-bold text-ink">
                   {season.title}
                 </h3>
                 <p className="mt-1 text-sm">{season.copy}</p>
@@ -289,13 +285,6 @@ export default async function HomePage() {
                   {card.title}
                 </h3>
                 <p className="mt-1 text-sm">{card.copy}</p>
-                <a
-                  href="#"
-                  className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-navy"
-                >
-                  Discover more
-                  <ChevronIcon />
-                </a>
               </div>
             </div>
           ))}

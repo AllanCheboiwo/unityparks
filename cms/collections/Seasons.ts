@@ -25,6 +25,14 @@ export const Seasons: CollectionConfig = {
       },
     },
     { name: "title", type: "text", required: true },
+    {
+      name: "months",
+      type: "text",
+      required: true,
+      admin: {
+        description: "Shown on the card so guests know exactly when, e.g. December to February.",
+      },
+    },
     { name: "copy", type: "textarea", required: true },
     {
       name: "fromPrice",

@@ -20,7 +20,15 @@ export const HomePage: GlobalConfig = {
         { name: "headingAfter", type: "text", required: true },
         { name: "subheading", type: "text", required: true },
         { name: "intro", type: "textarea", required: true },
-        { name: "urgency", type: "textarea", required: true },
+        {
+          name: "urgency",
+          type: "textarea",
+          required: true,
+          admin: {
+            description:
+              "Point this at the next school-holiday window: the April holidays, the August holidays, or the long November to January break. Update it each term, it takes two minutes.",
+          },
+        },
         { name: "ctaLabel", type: "text", required: true },
         { name: "video", type: "upload", relationTo: "media", required: true },
         { name: "poster", type: "upload", relationTo: "media", required: true },
