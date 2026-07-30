@@ -40,12 +40,25 @@ are booking fast") should always be pointing at whichever window is next.
 Four evergreen seasons, each with its months on the card, replacing the
 current three. Campaigns sit on top as time-boxed moments, not seasons.
 
-| Season | Months | Copy angle | From-price rung |
+| Season | Months | Copy angle | From-price (real floor) |
 | --- | --- | --- | --- |
-| Sunshine season | December to February | Big skies, lagoon days, boats out early on the lake | High. from KES 52,000* |
-| The long rains | March to May | Keep today's copy: dramatic skies, quiet trails, the best prices of the year | Lowest. from KES 38,500* |
-| The cool season | June to September | Misty forest mornings, firewood and blankets, the spa at its best, and the August holidays in the middle of it | Middle. from KES 45,000* |
-| The short rains | October to November | Green afternoons, quiet trails, value before the festive rush | Low-middle. from KES 41,500* |
+| Sunshine season | December to February | Big skies, lagoon days, boats out early on the lake | from KES 109,500* |
+| Long rains | March to May | Keep today's copy: dramatic skies, quiet trails, the best prices of the year | from KES 84,000* |
+| Cool season | June to September | Misty forest mornings, firewood and blankets, the spa at its best, and the August holidays in the middle of it | from KES 96,000* |
+| Short rains | October to November | Green afternoons, quiet trails, value before the festive rush | from KES 90,000* |
+
+Pricing is real, not editorial (implemented 30 Jul 2026). The provisioning
+script writes seasonal nightly rates into Apaleo: each tier's base price is
+the long-rains floor, multiplied per date (long rains 1.0, short rains 1.08,
+cool 1.15, sunshine 1.3) with campaign overlays on top (festive weeks 1.5,
+August holidays 1.25, April holidays 1.15), rounded to the nearest KES 500.
+Card from-prices quote the cheapest real product per season, a three-night
+Woodland break (3 x floor nightly), and are always quoted per break, never
+per night, because checkout prices per break and the unit must not change
+mid-funnel. If multipliers or bases change in provision.ts, the card prices
+in scripts/seed-cms.ts must be recomputed to match. The from-price footnote
+promises "lowest price for a three-night Woodland Lodge break in the
+season"; keeping that promise true is part of any pricing change.
 
 Campaign moments (banner plus, later, a landing page each): Festive (mid
 December to early January, inside sunshine season, the existing festive card

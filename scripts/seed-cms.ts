@@ -127,14 +127,17 @@ const ACTIVITIES = [
 ];
 
 // The four Kenyan seasons per docs/content-strategy.md. Festive is a
-// campaign inside sunshine season, not a season card.
+// campaign inside sunshine season, not a season card. From-prices are the
+// real seasonal floors: a 3-night Woodland break at 3 x round500(28,000 x
+// season multiplier), matching the rates provision.ts writes into Apaleo.
+// If the multipliers or the Woodland base change, recompute these.
 const SEASONS = [
   {
     slug: "sunshine-season",
     title: "Sunshine season",
     months: "December to February",
     copy: "Clear skies, hot days and the lagoon at its liveliest. Lake mornings before breakfast, long golden evenings after.",
-    fromPrice: "from KES 52,000*",
+    fromPrice: "from KES 109,500*",
     photo: "band-lake.jpg",
     displayOrder: 1,
   },
@@ -143,7 +146,7 @@ const SEASONS = [
     title: "Long rains",
     months: "March to May",
     copy: "Dramatic skies, quiet trails and the best prices of the year.",
-    fromPrice: "from KES 38,500*",
+    fromPrice: "from KES 84,000*",
     photo: "season-rains.jpg",
     displayOrder: 2,
   },
@@ -152,7 +155,7 @@ const SEASONS = [
     title: "Cool season",
     months: "June to September",
     copy: "Misty forest mornings, firewood evenings and the spa at its best. The August holidays land right in the middle.",
-    fromPrice: "from KES 45,000*",
+    fromPrice: "from KES 96,000*",
     photo: "season-cool.jpg",
     displayOrder: 3,
   },
@@ -161,7 +164,7 @@ const SEASONS = [
     title: "Short rains",
     months: "October to November",
     copy: "Light afternoon showers, a forest turning green again and good value before the festive rush.",
-    fromPrice: "from KES 41,500*",
+    fromPrice: "from KES 90,000*",
     photo: "season-green.jpg",
     displayOrder: 4,
   },
@@ -342,7 +345,7 @@ async function main() {
         activitiesHeading: "Things to do, together",
         activitiesIntro: "Days in the village fill themselves. Here is where they usually start.",
         seasonsHeading: "A forest for every season",
-        seasonsFootnote: "*Lowest lodge price for the season, subject to availability.",
+        seasonsFootnote: "*Lowest price for a three-night Woodland Lodge break in the season, subject to availability.",
         discoverHeading: "More from Unity Parks",
         faqsHeading: "Questions, answered",
       },
