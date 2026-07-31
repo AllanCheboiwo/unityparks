@@ -2,6 +2,8 @@ import { MigrateUpArgs, MigrateDownArgs, sql } from '@payloadcms/db-postgres'
 
 export async function up({ db, payload, req }: MigrateUpArgs): Promise<void> {
   await db.execute(sql`
+   CREATE SCHEMA IF NOT EXISTS "payload";
+
    CREATE TABLE "payload"."admins_sessions" (
   	"_order" integer NOT NULL,
   	"_parent_id" integer NOT NULL,
