@@ -32,7 +32,7 @@ export const EXTRAS: Record<string, ExtraContent> = {
       },
       {
         heading: "Good to know",
-        body: "Cycle hire runs from your arrival day through to departure. Over 15 km of car-free forest trails start right outside your lodge.",
+        body: "Cycle hire runs from your arrival day through to departure. Over 15 km of car-free forest trails start right outside your lodge, and they ride best in the dry months from December to February.",
       },
     ],
   },
@@ -42,7 +42,7 @@ export const EXTRAS: Record<string, ExtraContent> = {
     more: [
       {
         heading: "Your day at the spa",
-        body: "A full day pass to the Unity Spa: sauna, steam room, hydrotherapy pool and a quiet relaxation lounge. Towels and robes are provided.",
+        body: "A full day pass to the Unity Spa: sauna, steam room, hydrotherapy pool and a quiet relaxation lounge. Towels and robes are provided. Sweetest on a misty cool-season morning, June to September.",
       },
       {
         heading: "Good to know",
@@ -68,7 +68,7 @@ export const EXTRAS: Record<string, ExtraContent> = {
     more: [
       {
         heading: "For evenings on the deck",
-        body: "Seasoned hardwood logs, charcoal, firelighters and a selection of meat for a proper braai under the trees.",
+        body: "Seasoned hardwood logs, charcoal, firelighters and a selection of meat for a proper braai under the trees. Best of all in the cool season, June to September, when the nights ask for a fire.",
       },
       {
         heading: "Good to know",

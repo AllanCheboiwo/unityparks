@@ -42,3 +42,6 @@ next-env.d.ts
 
 # local sqlite database
 prisma/dev.db*
+
+# payload local media uploads (prod uses R2)
+/media
