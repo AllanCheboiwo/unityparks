@@ -40,10 +40,15 @@ model User {
   marketingEmail Boolean @default(false)
   marketingSms   Boolean @default(false)
 
+  // Gates the /ops pages (referral admin). Flagged by hand via
+  // scripts/make-admin.mjs; there is no in-app path to admin.
+  isAdmin Boolean @default(false)
+
   authSessions        AuthSession[]
   passwordResetTokens PasswordResetToken[]
   bookingSessions BookingSession[]
   bookingRecords  BookingRecord[]
+  referralParticipant ReferralParticipant?
 }
 
 // A login session. The row id IS the bearer token carried by the up_session
@@ -131,7 +136,22 @@ model BookingSession {
   marketingEmail Boolean @default(false)
   marketingSms   Boolean @default(false)
 
+  // Referral capture. The code is stamped from the up_ref cookie at session
+  // creation and editable at the details step until a BookingRecord exists,
+  // after which both fields are frozen (the folio totals are frozen too, so
+  // a late code change could never be honoured). referralDiscount is the
+  // advisory display snapshot; ensureRecord recomputes from config.
+  referralCode     String?
+  referralDiscount Float?
+
+  // Credit redemption choice, stamped by POST /api/session/[id]/credit from
+  // the pay step. Advisory like everything else on the session: ensureRecord
+  // re-derives the spendable balance authoritatively and clamps.
+  applyCredit  Boolean @default(false)
+  creditAmount Float?
+
   booking BookingRecord?
+  creditSpend ReferralLedgerEntry?
 }
 
 // One lodge in a break: its slot, its own party, its chosen tier snapshot,
@@ -257,6 +277,7 @@ model BookingRecord {
 
   reservations BookingReservation[]
   pesapalTransactions PesapalTransaction[]
+  referralAttribution ReferralAttribution?
 }
 
 // One Pesapal order per payment attempt for a booking (the guest sees one
@@ -339,4 +360,143 @@ model BookingReservation {
   locationFeeDropped Boolean @default(false)
 
   @@unique([recordId, slot])
+}
+
+// ---------------------------------------------------------------------------
+// Referral engine (docs/referral-system-plan.md). Two tracks: influencers
+// earn cash commission, clients earn resort credit. The PMS knows nothing
+// about referrals; the discount reaches Apaleo as a folio allowance posted
+// inside ensureRecord before the folio balances are read and frozen.
+// ---------------------------------------------------------------------------
+
+// A person who can refer: an influencer we onboarded or a client who claimed
+// their code. The code is permanent and identifies the person, nothing else;
+// amounts live in ReferralConfig rows.
+model ReferralParticipant {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  kind  String // "influencer" | "client" (room for "family", "organizer" later)
+  name  String
+  email String? // lowercase via normalizeEmail; self-use checks compare against this
+  phone String?
+
+  // 5-7 chars from an alphabet without 0/O/1/I, stored uppercase. Vanity
+  // codes for influencers. Never reissued: revoking means revoking the
+  // person, and rows are never deleted.
+  code String @unique
+
+  // Influencers only. Null on an influencer means the config default in
+  // force at each booking applies; always null for clients.
+  commissionRate Float?
+
+  // Client participants link to their account. Influencers have no account
+  // at launch (no dashboard; their window is email plus the payout note).
+  userId String? @unique
+  user   User?   @relation(fields: [userId], references: [id])
+
+  revokedAt DateTime?
+
+  attributions ReferralAttribution[]
+  ledger       ReferralLedgerEntry[]
+}
+
+// Dated program parameters, append-only: to change an amount, insert a new
+// row with a later effectiveFrom. "In force" means the latest row whose
+// effectiveFrom is on or before the UTC date ensureRecord runs (never the
+// stay dates). Amounts are frozen into the attribution at booking, so
+// config changes never rewrite history.
+model ReferralConfig {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  effectiveFrom         String // ISO date
+  guestDiscount         Float // whole KES off the referred booking, once per booking
+  clientCredit          Float // whole KES credit for a client referrer
+  defaultCommissionRate Float // used when an influencer's own rate is null
+  creditExpiryDays      Int // client credit only; commissions never expire
+
+  attributions ReferralAttribution[]
+}
+
+// One referred booking. Created inside the same nested create as the
+// BookingRecord, so it exists exactly when the record exists (the P2002
+// adopt-the-winner race in ensureRecord makes any later write unsafe).
+// All amounts are frozen here; discountAmount is what was actually posted
+// to the folios, which the cap rule can make smaller than the configured
+// figure.
+model ReferralAttribution {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  recordId String        @unique
+  record   BookingRecord @relation(fields: [recordId], references: [id])
+
+  participantId String
+  participant   ReferralParticipant @relation(fields: [participantId], references: [id])
+
+  configId String
+  config   ReferralConfig @relation(fields: [configId], references: [id])
+
+  discountAmount Float // posted to the folio(s), not the configured number
+  rewardAmount   Float // frozen: clientCredit, or rate * commissionBase
+  commissionBase Float? // influencer only: lodging gross minus discount, floored at 0
+
+  // Owner booked for someone else while signed in: discount yes, reward no.
+  gift Boolean @default(false)
+
+  // booked | earned | void. Once-only guards and ops display; money
+  // predicates never trust state alone, they join record.status too, so a
+  // crashed state write self-heals at read.
+  state    String    @default("booked")
+  earnedAt DateTime?
+  voidedAt DateTime?
+
+  // JSON array of per-folio Apaleo allowance ids, for reconciliation.
+  allowanceRefs String @default("[]")
+
+  // Once-only stamp for the referrer's "reward on the way" email, same
+  // claim-release discipline as BookingRecord.confirmationEmailAt.
+  rewardEmailAt DateTime?
+
+  ledger ReferralLedgerEntry[]
+}
+
+// Append-only value ledger. Every amount is SIGNED whole KES: earns and
+// releases positive, spends and payouts negative. Every derived figure
+// (vested balance, payout due) is a plain SUM(amount) over a filtered set
+// of rows. No row is ever updated or deleted, and no balance is ever a
+// stored column.
+model ReferralLedgerEntry {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  participantId String
+  participant   ReferralParticipant @relation(fields: [participantId], references: [id])
+
+  // Earns point at their attribution. Spend, payout, and release rows keep
+  // this null; Postgres treats nulls as distinct in unique indexes, so they
+  // never collide on the earn constraint below, and they must stay null.
+  attributionId String?
+  attribution   ReferralAttribution? @relation(fields: [attributionId], references: [id])
+
+  kind   String // credit_earn | credit_spend | commission_earn | payout | credit_release
+  amount Float // signed: earns/releases positive, spends/payouts negative
+
+  // credit_spend: the BookingSession the redemption rode (one spend per
+  // session, ever; the record does not exist yet when the spend is claimed,
+  // and BookingRecord.sessionId is unique so the session names the record).
+  spentOnSessionId String?         @unique
+  spentOnSession   BookingSession? @relation(fields: [spentOnSessionId], references: [id])
+
+  // credit_release: the locked spend this ops action unlocks (one per
+  // spend, ever). See the locked-credit edge in the plan, section 6.3.
+  releaseOfEntryId String? @unique
+
+  // payout rows: deterministic batch id, e.g. "2026-09-influencers", so a
+  // re-run of a payout batch cannot double-pay.
+  payoutBatchId String?
+
+  // One earn of each kind per attribution, ever.
+  @@unique([attributionId, kind])
 }

@@ -247,6 +247,21 @@ export async function cancelBooking(staleRecord: RecordForCancel): Promise<Cance
     } catch (err) {
       console.error("Mid-cancel drift check failed (non-fatal)", err);
     }
+    // Referral void: the referrer's reward dies with the booking. Best
+    // effort inside the gate; a crash before this write self-heals at read,
+    // because every money predicate joins record.status and treats a
+    // cancelled record as void regardless (the attribution state is a
+    // once-only guard and an ops label, not the truth). Spent referral
+    // credit needs no write at all: the spendable derivation stops counting
+    // spends on cancelled bookings, which IS the restoration.
+    try {
+      await prisma.referralAttribution.updateMany({
+        where: { recordId: record.id, state: { not: "void" } },
+        data: { state: "void", voidedAt: new Date() },
+      });
+    } catch (err) {
+      console.error("Referral void failed (self-heals at read)", err);
+    }
     await sendBookingCancellation(record.id);
   }
 

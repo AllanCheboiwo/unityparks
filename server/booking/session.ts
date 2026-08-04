@@ -48,6 +48,10 @@ export async function createSession(input: {
   // BookingRecord, so it must be stamped here rather than read from the
   // cookie later - checkout retries can arrive logged-out.
   userId?: string | null;
+  // Referral code from the up_ref cookie, stamped for the same reason as
+  // userId: the funnel never reads the cookie after this point. Editable
+  // at the details step until a BookingRecord freezes it.
+  referralCode?: string | null;
 }): Promise<SessionWithLodges> {
   const check = validateStay(input.arrival, input.departure);
   if (!check.ok) throw new Error(check.reason);
@@ -68,6 +72,7 @@ export async function createSession(input: {
       adults: totalAdults,
       childrenAges: JSON.stringify(allChildrenAges),
       userId: input.userId ?? null,
+      referralCode: input.referralCode ?? null,
       expiresAt: freshExpiry(),
       lodges: {
         create: input.parties.map((party, slot) => ({
@@ -242,6 +247,27 @@ export async function setVehicles(id: string, plates: string[]): Promise<void> {
   await prisma.bookingSession.update({
     where: { id },
     data: { vehiclePlates: JSON.stringify(plates), expiresAt: freshExpiry() },
+  });
+}
+
+/**
+ * The referral fields, written by the details route. Guarded here rather
+ * than trusted to callers: once a BookingRecord exists the folio totals are
+ * frozen and a late code change could never be honoured, so the write
+ * refuses via the relation filter and the stale code simply keeps its
+ * stamp. referralDiscount is the advisory display snapshot from validation;
+ * ensureRecord recomputes from config and never reads it for money.
+ */
+export async function setReferralOnSession(
+  id: string,
+  referral: { code: string | null; discount: number | null },
+): Promise<void> {
+  await prisma.bookingSession.updateMany({
+    where: { id, booking: null },
+    data: {
+      referralCode: referral.code,
+      referralDiscount: referral.discount,
+    },
   });
 }
 

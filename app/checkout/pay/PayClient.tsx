@@ -43,6 +43,10 @@ export function PayClient({ provider }: { provider: "simulated" | "pesapal" }) {
   const [soldOut, setSoldOut] = useState(false);
   const [busy, setBusy] = useState(false);
   const [payment, setPayment] = useState<"full" | "deposit">("full");
+  // Referral credit the signed-in guest could apply here. 0 for everyone
+  // else; the server is the judge either way.
+  const [creditAvailable, setCreditAvailable] = useState(0);
+  const [creditBusy, setCreditBusy] = useState(false);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -51,8 +55,27 @@ export function PayClient({ provider }: { provider: "simulated" | "pesapal" }) {
       if (isExpired(s)) return setExpired(true);
       if (!s.ok) return setError(s.error);
       setSession(s.data);
+      const c = await apiFetch<{ available: number; applied: boolean }>(
+        `/api/session/${sessionId}/credit`,
+      );
+      if (c.ok) setCreditAvailable(c.data.available);
     })();
   }, [sessionId]);
+
+  async function toggleCredit(apply: boolean) {
+    if (!sessionId) return;
+    setCreditBusy(true);
+    const result = await apiFetch<{ applied: boolean; amount: number | null }>(
+      `/api/session/${sessionId}/credit`,
+      { method: "POST", body: JSON.stringify({ apply }) },
+    );
+    setCreditBusy(false);
+    if (!result.ok) return setError(result.error);
+    setError(null);
+    // Re-fetch so the summary rail and the totals all move together.
+    const s = await apiFetch<SessionSummary>(`/api/session/${sessionId}`);
+    if (s.ok) setSession(s.data);
+  }
 
   // Browser back from Pesapal can restore this page from the bfcache with
   // busy still true, which would leave the button dead. pageshow with
@@ -101,7 +124,7 @@ export function PayClient({ provider }: { provider: "simulated" | "pesapal" }) {
     );
   }
 
-  const bookingTotal = session.lodges.reduce(
+  const grossTotal = session.lodges.reduce(
     (sum, l) =>
       sum +
       (l.lodge?.stayGrossAmount ?? 0) +
@@ -109,6 +132,12 @@ export function PayClient({ provider }: { provider: "simulated" | "pesapal" }) {
       l.extras.reduce((a, e) => a + e.grossAmount, 0),
     0,
   );
+  // Referral discount and applied credit reach the folio as allowances at
+  // checkout, so the collectable total (and the 30% deposit) shrink with
+  // them. Advisory like everything else here.
+  const referralDiscount = session.referral?.discount ?? 0;
+  const creditApplied = session.credit?.amount ?? 0;
+  const bookingTotal = Math.max(0, grossTotal - referralDiscount - creditApplied);
 
   // The deposit option, 57+ days out only. These numbers are advisory: the
   // server recomputes eligibility and the amount from the folio totals,
@@ -250,6 +279,30 @@ export function PayClient({ provider }: { provider: "simulated" | "pesapal" }) {
             <div className="mt-4 flex items-start gap-2 rounded-md border border-[#b3261e]/30 bg-[#b3261e]/5 px-4 py-3 text-sm text-[#b3261e]">
               <AlertIcon />
               <span>{error}</span>
+            </div>
+          )}
+
+          {(creditAvailable > 0 || creditApplied > 0) && (
+            <div className="mt-4 rounded-lg bg-white border border-line p-5">
+              <label className="flex cursor-pointer items-start gap-3">
+                <input
+                  type="checkbox"
+                  checked={creditApplied > 0}
+                  disabled={creditBusy}
+                  onChange={(e) => toggleCredit(e.target.checked)}
+                  className="mt-1 h-4 w-4 accent-[#536917]"
+                />
+                <span className="flex-1 text-sm">
+                  <span className="font-semibold text-ink">
+                    Apply {formatKes(creditApplied > 0 ? creditApplied : creditAvailable)}{" "}
+                    referral credit
+                  </span>
+                  <span className="mt-0.5 block text-xs text-foreground/60">
+                    Earned from your referrals. It comes straight off this
+                    booking's total.
+                  </span>
+                </span>
+              </label>
             </div>
           )}
 

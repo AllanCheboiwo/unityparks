@@ -96,6 +96,10 @@ export type SessionSummary = {
     vehiclePlates: string[];
   } | null;
   total: number | null;
+  /** Referral code applied to this walk, with its advisory discount. */
+  referral: { code: string; discount: number } | null;
+  /** Referral credit the guest chose to apply at the pay step. */
+  credit: { amount: number } | null;
 };
 
 export type GuestRowDto = {
@@ -126,6 +130,10 @@ export type BookingConfirmation = {
   paidAmount: number;
   folioBalance: number;
   account: { status: "ownedByYou" | "existingAccount" | "none" };
+  /** The referral discount posted to the folios at checkout, if any. */
+  referral: { code: string; discount: number } | null;
+  /** Referral credit the buyer applied at checkout, if any. */
+  creditApplied: number | null;
   /** One entry per lodge in the booking, manifest included. */
   lodges: {
     slot: number;

@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/server/db";
-import { getSession, setGuestDetails } from "@/server/booking/session";
+import { getSession, setGuestDetails, setReferralOnSession } from "@/server/booking/session";
+import { validateReferralCode } from "@/server/referral/validate";
+import { normalizeReferralCode } from "@/lib/referral";
 import { getCurrentUser, createAuthSession } from "@/server/auth/session";
 import { hashPassword } from "@/server/auth/password";
 import { normalizeEmail } from "@/server/auth/normalize";
@@ -31,6 +33,9 @@ const DetailsBody = z.object({
   termsAccepted: z.literal(true),
   // Present when the guest ticked "Create my Unity Parks account".
   password: z.string().min(8).optional(),
+  // The referral code field, always sent (prefilled from the session);
+  // empty string means the guest cleared it. Last code standing wins.
+  referralCode: z.string().trim().max(40).optional(),
 });
 
 /** The profile columns shared by account creation and write-back. Email is
@@ -95,7 +100,7 @@ export async function POST(
     const parsed = DetailsBody.safeParse(await req.json());
     if (!parsed.success) return jsonError(400, "Please check the details form.");
     // termsAccepted is validated by Zod (must be true) and not stored.
-    const { password, termsAccepted, ...guest } = parsed.data;
+    const { password, termsAccepted, referralCode, ...guest } = parsed.data;
     void termsAccepted;
     if (!adultAtArrival(guest.dateOfBirth, session.arrival)) {
       return jsonError(400, "The lead booker must be over 18 at the time of arrival.");
@@ -145,6 +150,33 @@ export async function POST(
     }
 
     await setGuestDetails(id, guest, user?.id ?? null);
-    return NextResponse.json({ ok: true, accountCreated });
+
+    // Referral: last code standing at details submit wins. Valid codes stamp
+    // the code plus the advisory discount snapshot; anything else clears
+    // both (the inline check already told the guest why). The record-exists
+    // 409 above is the freeze rule: once folio totals exist, no code change.
+    let referral: { applied: boolean; discount: number | null } = {
+      applied: false,
+      discount: null,
+    };
+    const typedCode = normalizeReferralCode(referralCode ?? "");
+    if (typedCode) {
+      const check = await validateReferralCode({
+        code: typedCode,
+        guestEmail: email,
+        guestPhone: guest.phone,
+        sessionUserId: user?.id ?? null,
+      });
+      if (check.ok) {
+        await setReferralOnSession(id, { code: typedCode, discount: check.discount });
+        referral = { applied: true, discount: check.discount };
+      } else {
+        await setReferralOnSession(id, { code: null, discount: null });
+      }
+    } else {
+      await setReferralOnSession(id, { code: null, discount: null });
+    }
+
+    return NextResponse.json({ ok: true, accountCreated, referral });
   });
 }

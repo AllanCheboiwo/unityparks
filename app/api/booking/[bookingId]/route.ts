@@ -25,6 +25,7 @@ export async function GET(
       include: {
         session: { include: { lodges: { orderBy: { slot: "asc" } } } },
         reservations: { orderBy: { slot: "asc" } },
+        referralAttribution: { include: { participant: { select: { code: true } } } },
       },
     });
     if (!record) return jsonError(404, "Booking not found.");
@@ -109,6 +110,20 @@ export async function GET(
           : record.paidAmount,
       folioBalance,
       account: { status: accountStatus },
+      // The referral discount that was posted to the folios at checkout, so
+      // the itemised lodge lines reconcile with the (discounted) total and
+      // the guest sees their discount applied. Credit applied by the buyer
+      // shows through the same surface.
+      referral: record.referralAttribution
+        ? {
+            code: record.referralAttribution.participant.code,
+            discount: record.referralAttribution.discountAmount,
+          }
+        : null,
+      creditApplied:
+        record.session.applyCredit && record.session.creditAmount
+          ? record.session.creditAmount
+          : null,
       stay: {
         arrival: record.session.arrival,
         departure: record.session.departure,

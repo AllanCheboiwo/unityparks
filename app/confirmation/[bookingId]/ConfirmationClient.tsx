@@ -207,6 +207,21 @@ export function ConfirmationClient({ bookingId }: { bookingId: string }) {
               </div>
             );
           })}
+          {/* Without these rows the itemised lodge lines sum to MORE than
+              the total below: the discount lives on the folio, not in the
+              per-lodge snapshots. */}
+          {booking.referral && booking.referral.discount > 0 && (
+            <div className="mt-2 flex justify-between text-sm text-foreground">
+              <span>Referral discount ({booking.referral.code})</span>
+              <span>-{formatKes(booking.referral.discount)}</span>
+            </div>
+          )}
+          {booking.creditApplied != null && booking.creditApplied > 0 && (
+            <div className="mt-1 flex justify-between text-sm text-foreground">
+              <span>Referral credit applied</span>
+              <span>-{formatKes(booking.creditApplied)}</span>
+            </div>
+          )}
           <div className="mt-4 flex justify-between border-t border-line pt-4 text-lg font-bold text-ink">
             <span className="font-display">
               {booking.status === "deposit_paid" ? "Total (deposit paid)" : "Paid"}

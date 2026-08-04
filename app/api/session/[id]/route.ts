@@ -99,6 +99,17 @@ export async function GET(
           }
         : null,
       total,
+      // Referral display state. Advisory snapshots: the folio is the money
+      // truth, these keep every totals surface honest with what checkout
+      // will actually collect.
+      referral:
+        session.referralCode && session.referralDiscount != null
+          ? { code: session.referralCode, discount: session.referralDiscount }
+          : null,
+      credit:
+        session.applyCredit && session.creditAmount != null
+          ? { amount: session.creditAmount }
+          : null,
     });
   });
 }
