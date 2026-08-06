@@ -34,34 +34,44 @@ export function isLiveClaim(claim: ReferralLedgerEntry | null): claim is Referra
  * Give a claim back to the pool: mark the row and append the paired
  * credit_release value entry, in one transaction so a crash can never
  * leave one without the other. Refuses (false) when the claim is already
- * released or has been committed to a folio by a checkout in flight.
+ * released, or when a checkout has committed it to a folio.
+ *
+ * allowPosted is for ops only. A committed claim is normally untouchable
+ * (its money is on a bill someone may still pay), but the locked-credit
+ * case in plan 6.3 is exactly a committed claim on a checkout that died,
+ * and a human has judged it dead. The ops caller must make that booking
+ * unresumable in the same breath, or the guest could still pay the
+ * discounted total after their credit went home.
  */
 export async function releaseClaim(
   claim: ReferralLedgerEntry,
   db: Db = prisma,
+  options: { allowPosted?: boolean } = {},
 ): Promise<boolean> {
   const run = async (tx: Db) => {
     const marked = await tx.referralLedgerEntry.updateMany({
-      where: { id: claim.id, releasedAt: null, postingStartedAt: null },
+      where: {
+        id: claim.id,
+        releasedAt: null,
+        ...(options.allowPosted ? {} : { postingStartedAt: null }),
+      },
       data: { releasedAt: new Date() },
     });
     if (marked.count === 0) return false;
-    try {
-      await tx.referralLedgerEntry.create({
-        data: {
+    // createMany + skipDuplicates is ON CONFLICT DO NOTHING, so a paired
+    // row that somehow exists cannot abort this transaction (a caught
+    // P2002 would still poison it and roll the mark back).
+    await tx.referralLedgerEntry.createMany({
+      data: [
+        {
           participantId: claim.participantId,
           kind: "credit_release",
           amount: Math.abs(claim.amount),
           releaseOfEntryId: claim.id,
         },
-      });
-    } catch (err) {
-      // The paired row already exists (a historic release before this
-      // column existed). The mark above is the state that matters.
-      if (!(err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002")) {
-        throw err;
-      }
-    }
+      ],
+      skipDuplicates: true,
+    });
     return true;
   };
   // Callers inside a transaction pass their own client; everyone else gets

@@ -5,6 +5,7 @@ import { PublicError } from "../api-helpers";
 import { normalizeEmail } from "../auth/normalize";
 import { commissionOwed, pendingCreditBalance, vestedCreditBalance } from "./derive";
 import { releaseClaim } from "./claim";
+import { cancelReservationOnce } from "../apaleo/cancel";
 import { isValidCodeFormat, normalizeReferralCode } from "@/lib/referral";
 
 /**
@@ -174,9 +175,44 @@ export async function releaseSpend(entryId: string) {
       "That booking is no longer an abandoned checkout, so its credit is genuinely spent. Refresh the list.",
     );
   }
-  const released = await releaseClaim(spend);
+
+  // Declaring the checkout dead is the whole point, so it must actually
+  // die: a "created" record is resumable forever, and giving the credit
+  // back while leaving the booking payable would let the guest collect the
+  // credited total AND keep the credit. Guarded flip first, and only a
+  // caller that wins it releases the claim (allowPosted, because a locked
+  // claim is by definition one that already reached a folio).
+  const record = await prisma.bookingRecord.findFirst({
+    where: { sessionId: spend.spentOnSessionId ?? "" },
+    include: { reservations: true },
+  });
+  if (!record) throw new PublicError(409, "That booking has gone. Refresh the list.");
+
+  const killed = await prisma.bookingRecord.updateMany({
+    where: { id: record.id, status: "created" },
+    data: { status: "cancelled", cancelledAt: new Date(), refundAmount: 0 },
+  });
+  if (killed.count === 0) {
+    throw new PublicError(
+      409,
+      "That booking was resumed while you were looking at it, so its credit is genuinely spent. Refresh the list.",
+    );
+  }
+
+  const released = await releaseClaim(spend, prisma, { allowPosted: true });
   if (!released) {
-    throw new PublicError(409, "That credit is being applied to a booking right now. Refresh the list.");
+    throw new PublicError(409, "That credit was released by someone else. Refresh the list.");
+  }
+
+  // Hand the lodges back. Idempotent and best effort: the credit is
+  // already home and a stuck reservation is a smaller problem than a
+  // half-done ops action, so a failure here is logged, not thrown.
+  for (const child of record.reservations) {
+    try {
+      await cancelReservationOnce(child.apaleoReservationId);
+    } catch (err) {
+      console.error(`[referral] could not cancel ${child.apaleoReservationId} after credit release`, err);
+    }
   }
 }
 
@@ -240,34 +276,41 @@ export async function runPayoutBatch(
         // concurrent batches cannot both read the same owed sums; one of
         // them aborts and reports a retry instead of double-paying.
         const dues = await payoutsDue(tx);
-        if (dues.length === 0) throw new PublicError(409, "Nothing is owed right now.");
+        const owedById = new Map(dues.map((d) => [d.participantId, Math.round(d.owed)]));
 
-        const expectedById = new Map(expected.map((e) => [e.participantId, Math.round(e.owed)]));
-        const drifted =
-          expectedById.size !== dues.length ||
-          dues.some((d) => expectedById.get(d.participantId) !== Math.round(d.owed));
-        if (drifted) {
-          throw new PublicError(
-            409,
-            "What is owed has changed since this page was loaded (a stay completed, or another run landed). Refresh, re-export the CSV, and pay from that.",
-          );
+        // The batch records exactly what the admin paid from the CSV, not
+        // whatever is owed at click time: commission matures with every
+        // passing departure date, and recording a stranger's maturing
+        // commission as paid would bury money that never moved. Anything
+        // that matured since simply belongs to the next batch.
+        for (const entry of expected) {
+          const owed = owedById.get(entry.participantId) ?? 0;
+          if (Math.round(entry.owed) > owed) {
+            throw new PublicError(
+              409,
+              "One of these payouts is no longer owed in full (it was paid by another run, or a booking was cancelled). Refresh, re-export the CSV, and pay from that.",
+            );
+          }
         }
         const existing = await tx.referralLedgerEntry.findFirst({
           where: { kind: "payout", payoutBatchId: batchId },
           select: { id: true },
         });
         if (existing) throw new PublicError(409, `Batch ${batchId} has already been run.`);
-        for (const due of dues) {
+        for (const entry of expected) {
           await tx.referralLedgerEntry.create({
             data: {
-              participantId: due.participantId,
+              participantId: entry.participantId,
               kind: "payout",
-              amount: -due.owed,
+              amount: -Math.round(entry.owed),
               payoutBatchId: batchId,
             },
           });
         }
-        return { count: dues.length, total: dues.reduce((s, d) => s + d.owed, 0) };
+        return {
+          count: expected.length,
+          total: expected.reduce((s, e) => s + Math.round(e.owed), 0),
+        };
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );

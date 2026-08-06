@@ -70,11 +70,17 @@ export function PayClient({ provider }: { provider: "simulated" | "pesapal" }) {
       { method: "POST", body: JSON.stringify({ apply }) },
     );
     setCreditBusy(false);
-    if (!result.ok) return setError(result.error);
-    setError(null);
-    // Re-fetch so the summary rail and the totals all move together.
-    const s = await apiFetch<SessionSummary>(`/api/session/${sessionId}`);
-    if (s.ok) setSession(s.data);
+    if (!result.ok) setError(result.error);
+    else setError(null);
+    // Re-fetch both, always: the summary rail and totals must move
+    // together, and what is offerable can change with the toggle (a
+    // refused apply, or an untick that burned this booking's slot).
+    const [fresh, credit] = await Promise.all([
+      apiFetch<SessionSummary>(`/api/session/${sessionId}`),
+      apiFetch<{ available: number }>(`/api/session/${sessionId}/credit`),
+    ]);
+    if (fresh.ok) setSession(fresh.data);
+    if (credit.ok) setCreditAvailable(credit.data.available);
   }
 
   // Browser back from Pesapal can restore this page from the bfcache with

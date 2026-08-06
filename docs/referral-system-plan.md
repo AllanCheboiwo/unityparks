@@ -624,12 +624,19 @@ neither pay nor cancel it (`cancelBooking` refuses non-paid records,
 locked. This is rare (a Buy now that created the record and then never
 paid, past the session's freshness window) and deliberately manual, in
 the house log-and-reconcile style: the `/ops/referrals` page lists spends
-on stale `created` records, and an admin action appends the
-`credit_release` row (unique `releaseOfEntryId`, one release per spend,
-ever). An automatic time-based release was considered and rejected: a
-`created` record is resumable indefinitely by design, and auto-released
-credit re-spent elsewhere would double-redeem if the original checkout
-then resumed.
+on stale `created` records, and an admin action releases them.
+
+That ops release is the **only** actor allowed to unwind a claim already
+committed to a folio, and it earns that by killing the booking in the
+same action (a guarded flip to `cancelled`, plus an idempotent Apaleo
+cancel of the reservations). Without that, a released claim would leave a
+still-resumable booking whose folio carries the credit: the guest could
+pay the credited total and keep the credit. An automatic time-based
+release was considered and rejected for the same reason, since a
+`created` record is resumable indefinitely by design and only a human can
+judge one dead. (The third review caught the first version of this fix
+refusing every release it was built for, because the guard that protects
+the guest-side untick also matched every locked claim.)
 
 Accepted simplification: expiry is computed per-earn but spends are not
 FIFO-matched to specific earns. With fixed-size earns, 12-month expiry,

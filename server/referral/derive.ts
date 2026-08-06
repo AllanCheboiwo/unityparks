@@ -115,17 +115,21 @@ export async function pendingCreditBalance(
 export type RewardHistoryRow = {
   id: string;
   createdAt: Date;
+  /** Signed, like the ledger: earns positive, redemptions negative. */
   amount: number;
-  /** vested | pending | expired | lost (the referred booking unravelled) */
+  /** vested | pending | expired | lost | spent */
   state: string;
-  /** The stay whose completion the reward waits on. */
+  /** The stay whose completion an earn waits on. */
   departure: string | null;
 };
 
 /**
- * The account card's reward history: one row per earn, classified with the
- * same predicates the balances use, so what a guest reads always adds up
- * to what they can spend.
+ * The account card's reward history. It shows redemptions as well as
+ * earns, and counts exactly what the balance counts, so the rows a guest
+ * reads sum to the figure printed above them: vested earns plus active
+ * spends equals the spendable balance. Rows that carry no value now
+ * (pending, expired, lost) are labelled as such and stand outside that
+ * sum, which the card makes visually obvious.
  */
 export async function creditHistory(
   participantId: string,
@@ -134,9 +138,10 @@ export async function creditHistory(
 ): Promise<RewardHistoryRow[]> {
   const rows = await loadCreditRows(db, participantId);
   const todayIso = now.toISOString().slice(0, 10);
-  return rows
-    .filter((row) => row.kind === "credit_earn")
-    .map((row) => {
+  const history: RewardHistoryRow[] = [];
+
+  for (const row of rows) {
+    if (row.kind === "credit_earn") {
       const attribution = row.attribution;
       const departure = attribution?.record?.session?.departure ?? null;
       let state = "lost";
@@ -153,15 +158,37 @@ export async function creditHistory(
           state = departure >= todayIso ? "pending" : "expired";
         }
       }
-      return {
+      history.push({
         id: row.id,
         createdAt: row.createdAt,
         amount: Math.round(row.amount),
         state,
         departure,
-      };
-    })
-    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      });
+    } else if (row.kind === "credit_spend") {
+      // Only spends the balance is actually counting. A released or
+      // unwound spend gave its credit back, so showing it would describe
+      // money the guest still has.
+      const session = row.spentOnSession;
+      const counted =
+        row.releasedAt === null &&
+        isSpendActive({
+          recordStatus: session?.booking?.status ?? null,
+          sessionExpiresAt: session?.expiresAt ?? new Date(0),
+          now,
+        });
+      if (counted) {
+        history.push({
+          id: row.id,
+          createdAt: row.createdAt,
+          amount: Math.round(row.amount), // negative
+          state: "spent",
+          departure: null,
+        });
+      }
+    }
+  }
+  return history.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 }
 
 /**

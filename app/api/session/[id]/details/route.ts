@@ -158,7 +158,18 @@ export async function POST(
     // its owner and clear the flags; the guest re-applies at the pay step.
     if (session.userId !== (user?.id ?? null)) {
       const claim = await findClaim(id);
-      if (isLiveClaim(claim)) await releaseClaim(claim);
+      if (isLiveClaim(claim)) {
+        const released = await releaseClaim(claim);
+        if (!released) {
+          // The claim is already on this booking's folio, so the credit
+          // cannot go home and a different account must not inherit the
+          // discount it paid for. This walk belongs to whoever applied it.
+          return jsonError(
+            409,
+            "This booking already has referral credit applied by another account. Please start a new search.",
+          );
+        }
+      }
       await prisma.bookingSession.updateMany({
         where: { id, booking: null },
         data: { applyCredit: false, creditAmount: null },

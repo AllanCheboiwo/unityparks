@@ -219,8 +219,20 @@ export async function applyReferralAtCheckout(input: {
       // on screen promised this booking a discount.
       const released = await releaseClaim(liveClaim);
       await clearCreditFlags(session.id);
+      if (!released) {
+        // Committed: its allowance is already on these folios, so simply
+        // continuing would hand the other account's credit to whoever is
+        // signed in now. Refuse the walk instead.
+        console.error(
+          `[referral] claim ${liveClaim.id} on session ${session.id} is committed to another account's credit; refusing checkout`,
+        );
+        throw new PublicError(
+          409,
+          "This booking already has referral credit applied by another account. Please start a new search.",
+        );
+      }
       console.error(
-        `[referral] claim ${liveClaim.id} on session ${session.id} belongs to another account; ${released ? "released to its owner" : "release refused (already committed)"}`,
+        `[referral] claim ${liveClaim.id} on session ${session.id} belonged to another account and was released to its owner`,
       );
     } else {
       creditClaim = liveClaim;
@@ -290,11 +302,14 @@ export async function applyReferralAtCheckout(input: {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
         // Someone claimed this session's slot first: a racing tab, or an
         // earlier attempt whose claim the guest has since released (the
-        // slot stays occupied forever either way). Adopt only a live one.
+        // slot stays occupied forever either way). Adopt only a live claim
+        // that belongs to this participant, same rule as the top-level
+        // adoption path.
         const claimed = await findClaim(session.id);
-        outcome = isLiveClaim(claimed)
-          ? { kind: "ok", amount: Math.round(Math.abs(claimed.amount)), claimId: claimed.id }
-          : { kind: "none", amount: 0 };
+        outcome =
+          isLiveClaim(claimed) && claimed.participantId === participant.id
+            ? { kind: "ok", amount: Math.round(Math.abs(claimed.amount)), claimId: claimed.id }
+            : { kind: "none", amount: 0 };
       } else if (
         err instanceof Prisma.PrismaClientKnownRequestError &&
         err.code === "P2034"

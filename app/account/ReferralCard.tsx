@@ -115,22 +115,24 @@ export function ReferralCard(props: {
             {history.map((row) => (
               <div key={row.id} className="flex justify-between gap-3 text-sm">
                 <span className="text-foreground/70">
-                  {row.state === "vested" && "Ready to spend"}
+                  {row.state === "vested" && "Earned, ready to spend"}
+                  {row.state === "spent" && "Applied to your booking"}
                   {row.state === "pending" &&
                     `Ready after their stay${row.departure ? `, ${row.departure}` : ""}`}
                   {row.state === "expired" && "Expired"}
-                  {row.state === "lost" && "Booking cancelled"}
+                  {row.state === "lost" && "Their booking was cancelled"}
                 </span>
                 <span
                   className={
                     row.state === "vested"
                       ? "font-semibold text-ink"
-                      : row.state === "pending"
+                      : row.state === "spent" || row.state === "pending"
                         ? "text-foreground/70"
                         : "text-foreground/50 line-through"
                   }
                 >
-                  {formatKes(row.amount)}
+                  {row.amount < 0 ? "-" : ""}
+                  {formatKes(Math.abs(row.amount))}
                 </span>
               </div>
             ))}

@@ -37,6 +37,16 @@ async function availableFor(
     where: { userId: user.id },
   });
   if (!participant || participant.revokedAt) return 0;
+  // This session's one claim slot decides what is still possible here, so
+  // the pay page never offers a box whose every click would be refused: a
+  // released slot is burned for this booking, and a live claim belonging
+  // to someone else is not this guest's to re-arm.
+  const claim = await findClaim(session.id);
+  if (claim) {
+    if (claim.releasedAt) return 0;
+    if (claim.participantId !== participant.id) return 0;
+    return Math.round(Math.abs(claim.amount));
+  }
   const vested = await vestedCreditBalance(participant.id);
   return capApplicableCredit({
     bookingTotal: snapshotTotal(session),
@@ -89,9 +99,12 @@ export async function POST(
       if (live) {
         const released = await releaseClaim(live);
         if (!released) {
+          // Committed to a folio: the credit is on the bill now. Finishing
+          // and cancelling returns it (a cancelled booking's spend stops
+          // counting); abandoning leaves it for us to release from ops.
           return jsonError(
             409,
-            "Your credit is already being applied to this booking. Press Buy now to finish, or cancel the booking afterwards to get it back.",
+            "Your credit is already on this booking's bill. Finish the payment (cancelling later returns the credit), or contact us to undo it.",
           );
         }
       }

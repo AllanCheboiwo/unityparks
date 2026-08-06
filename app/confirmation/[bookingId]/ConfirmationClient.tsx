@@ -285,7 +285,7 @@ export function ConfirmationClient({ bookingId }: { bookingId: string }) {
               stayed.
             </p>
             <Link href="/account" className="btn-outline mt-3 inline-block text-sm">
-              Get my referral code
+              My referral code
             </Link>
           </div>
         )}
