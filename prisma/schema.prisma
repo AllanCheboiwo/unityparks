@@ -493,6 +493,19 @@ model ReferralLedgerEntry {
   // spend, ever). See the locked-credit edge in the plan, section 6.3.
   releaseOfEntryId String? @unique
 
+  // The credit_spend lifecycle, carried ON the spend row so that releasing
+  // a claim and committing it to a folio are guarded writes to the SAME
+  // row: the database serializes them and the loser's guard simply fails.
+  // (A release stored only as a separate paired row let both sides decide
+  // independently, which double-counted credit. Plan 6.3.)
+  // releasedAt: the claim was given back to the pool (self-service before a
+  // record exists, or an ops release); the paired credit_release row stays
+  // as the ledger's value entry.
+  releasedAt DateTime?
+  // postingStartedAt: checkout committed this claim to a folio allowance.
+  // Once set, no release may happen: the money is on the bill.
+  postingStartedAt DateTime?
+
   // payout rows: deterministic batch id, e.g. "2026-09-influencers", so a
   // re-run of a payout batch cannot double-pay.
   payoutBatchId String?

@@ -36,15 +36,6 @@ async function loadCreditRows(db: Db, participantId: string) {
   });
 }
 
-/** The ids of release rows, so released (locked) spends can be paired off. */
-function releasedSpendIds(rows: Awaited<ReturnType<typeof loadCreditRows>>): Set<string> {
-  const ids = new Set<string>();
-  for (const row of rows) {
-    if (row.kind === "credit_release" && row.releaseOfEntryId) ids.add(row.releaseOfEntryId);
-  }
-  return ids;
-}
-
 /**
  * The spendable (vested) balance: SUM(amount) over vested earns, active
  * spends (stored negative) and releases. A released spend counts as active
@@ -58,7 +49,6 @@ export async function vestedCreditBalance(
   options: { floored?: boolean } = {},
 ): Promise<number> {
   const rows = await loadCreditRows(db, participantId);
-  const released = releasedSpendIds(rows);
   const todayIso = now.toISOString().slice(0, 10);
 
   let sum = 0;
@@ -79,8 +69,10 @@ export async function vestedCreditBalance(
       }
     } else if (row.kind === "credit_spend") {
       const session = row.spentOnSession;
+      // A released spend still counts, so its paired positive release row
+      // neutralises it exactly once and can never double-restore.
       const active =
-        released.has(row.id) ||
+        row.releasedAt !== null ||
         isSpendActive({
           recordStatus: session?.booking?.status ?? null,
           sessionExpiresAt: session?.expiresAt ?? new Date(0),
@@ -118,6 +110,58 @@ export async function pendingCreditBalance(
     sum += row.amount;
   }
   return Math.round(sum);
+}
+
+export type RewardHistoryRow = {
+  id: string;
+  createdAt: Date;
+  amount: number;
+  /** vested | pending | expired | lost (the referred booking unravelled) */
+  state: string;
+  /** The stay whose completion the reward waits on. */
+  departure: string | null;
+};
+
+/**
+ * The account card's reward history: one row per earn, classified with the
+ * same predicates the balances use, so what a guest reads always adds up
+ * to what they can spend.
+ */
+export async function creditHistory(
+  participantId: string,
+  db: Db = prisma,
+  now: Date = new Date(),
+): Promise<RewardHistoryRow[]> {
+  const rows = await loadCreditRows(db, participantId);
+  const todayIso = now.toISOString().slice(0, 10);
+  return rows
+    .filter((row) => row.kind === "credit_earn")
+    .map((row) => {
+      const attribution = row.attribution;
+      const departure = attribution?.record?.session?.departure ?? null;
+      let state = "lost";
+      if (attribution?.record && attribution.config && departure) {
+        const ctx = {
+          attributionState: attribution.state,
+          recordStatus: attribution.record.status,
+          departure,
+          creditExpiryDays: attribution.config.creditExpiryDays,
+          todayIso,
+        };
+        if (isCreditEarnVested(ctx)) state = "vested";
+        else if (attribution.state !== "void" && attribution.record.status === "paid") {
+          state = departure >= todayIso ? "pending" : "expired";
+        }
+      }
+      return {
+        id: row.id,
+        createdAt: row.createdAt,
+        amount: Math.round(row.amount),
+        state,
+        departure,
+      };
+    })
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 }
 
 /**

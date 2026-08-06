@@ -23,7 +23,7 @@ import { getSession, parseChildrenAges, parseExtras, parseVehiclePlates } from "
 import { loadGuests } from "./guests";
 import { sendBookingConfirmation } from "../email/bookingConfirmation";
 import { sendBalanceReceipt } from "../email/balanceReceipt";
-import { applyReferralAtCheckout } from "../referral/checkout";
+import { applyReferralAtCheckout, reconcileCreditFlags } from "../referral/checkout";
 import { sendReferralReward } from "../email/referralReward";
 import {
   balanceDueDateFor,
@@ -596,7 +596,15 @@ async function ensureRecord(sessionId: string): Promise<{
   if (!session) {
     throw new PublicError(410, "Your booking session has expired. Please search again.");
   }
-  if (existing) return { record: existing, session };
+  if (existing) {
+    // The record's totals are frozen. Make the funnel's advisory credit
+    // flags agree with the ledger before the pay page renders again: a
+    // credit toggled on while this record was mid-flight would otherwise
+    // show a discount the frozen total never absorbed (and vice versa
+    // after a refused attempt).
+    await reconcileCreditFlags(session.id);
+    return { record: existing, session };
+  }
 
   if (
     session.lodges.length === 0 ||

@@ -4,7 +4,11 @@ import { prisma } from "@/server/db";
 import { getCurrentUser } from "@/server/auth/session";
 import { parseChildrenAges } from "@/server/booking/session";
 import { partyLabel } from "@/server/booking/party";
-import { pendingCreditBalance, vestedCreditBalance } from "@/server/referral/derive";
+import {
+  creditHistory,
+  pendingCreditBalance,
+  vestedCreditBalance,
+} from "@/server/referral/derive";
 import { formatDate, formatKes, nightsLabel } from "@/lib/format";
 import { LODGES } from "@/content/lodges";
 import { ReferralCard } from "./ReferralCard";
@@ -36,6 +40,12 @@ export default async function AccountPage() {
           code: participant.code,
           vested: await vestedCreditBalance(participant.id),
           pending: await pendingCreditBalance(participant.id),
+          history: (await creditHistory(participant.id)).map((row) => ({
+            id: row.id,
+            amount: row.amount,
+            state: row.state,
+            departure: row.departure ? formatDate(row.departure) : null,
+          })),
         }
       : null;
   const shareBase = process.env.APP_BASE_URL ?? "http://localhost:3000";

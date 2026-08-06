@@ -5,10 +5,13 @@ implemented, the Phase 0 spike passed all six items against UPNV (endpoint
 is POST /finance/v1/folio-actions/{folioId}/allowances, vatType "Without",
 scope folios.manage), and a live end-to-end referred booking verified the
 discount, deposit, attribution, earn and void against the real sandbox.
-A post-build adversarial review (four lenses plus refutation agents) found
-two blocking defects and several races; all fixes are in code and the
-design refinements are folded into sections 6.3 and 11 below, marked
-"(review)". This document remains the architecture reference.
+Two rounds of post-build adversarial review (four lenses plus refutation
+agents each) found two blocking defects apiece; the second round's were
+regressions in the first round's fixes, both in the credit-claim
+lifecycle. All fixes are in code, verified by live sandbox bookings for
+the discount path AND the credit path, and the design refinements are
+folded into sections 6.3 and 11 below, marked "(review)". This document
+remains the architecture reference.
 Scope: the original two groups from the Referral Growth System report v2.0
 (Drive): the influencer track (cash commission) and the client track
 (guest-to-guest credit). The Unity Family and group-organizer tracks are
@@ -587,18 +590,32 @@ If the authoritative re-derivation comes up short (balance changed since
 the pay page rendered), the checkout refuses with a friendly message and
 clears `applyCredit`, same discipline as a refused code.
 
-**The claim is authoritative, the flag is display (review).** The
+**The claim is authoritative, the flag is display (review).** The first
 adversarial review found the original design's blocking flaw: a claim
 committed by a failed attempt while the guest could still untick the
 credit box would post no allowance yet count against the pool forever.
-The fix has two halves. Checkout adopts an unreleased claim for its
-session even when `applyCredit` is false (the claim, never the flag, is
-the money truth). And unticking the credit before a record exists
-*releases* the claim: the credit route appends the `credit_release` row
-itself, which is safe there and only there, because no record exists and
-the claim is that session's own. A released session slot cannot be
-re-claimed (one spend per session, ever), so re-applying credit on that
-same booking is refused with the credit staying good for the next one.
+Checkout therefore adopts an unreleased claim for its session even when
+`applyCredit` is false (the claim, never the flag, is the money truth),
+and unticking before a record exists gives the claim back to the pool.
+
+**The claim row owns its own state (second review).** The first fix left
+the release recorded as a *separate* ledger row, which let two actors
+decide a claim's fate independently: a guest unticking while a checkout
+was mid-flight could restore the pool while the allowance still landed on
+the bill, and a re-claim colliding with a released slot adopted it
+blindly. Both handed out the same credit twice. So the spend row now
+carries `releasedAt` and `postingStartedAt`, and every actor takes a
+**guarded write on that one row**: checkout marks it committed
+immediately before posting its allowance, and a release marks it
+released, refusing once posting has begun. The database serializes them,
+the loser's guard returns count 0, and it backs off with an honest
+message. The paired `credit_release` row remains as the ledger's value
+entry, but no code decides anything by reading it. A released slot can
+never be re-claimed (one spend per session, ever), so re-applying credit
+to that same booking is refused with the credit staying good for the
+next one. A claim is also honoured only for the account that made it: on
+a shared machine, an identity change gives it back to its owner rather
+than spending it on a stranger's booking.
 
 **The locked-credit edge, stated honestly.** A spend rides a record that
 reaches `created` and then is abandoned forever: the money path can
@@ -768,9 +785,11 @@ Buy incentive design, not identity verification (report A.6). At launch:
 - Per-participant redemption serialization (6.3), so credit cannot be
   double-spent even by a determined guest with two tabs.
 - Velocity visibility: the `/ops/referrals` attribution list shows
-  per-code counts over a rolling window (lapsed attributions excluded);
-  a threshold breach sends Allan an email. Ops sums are rendered
-  unfloored, so a negative pool would be visible, not hidden.
+  per-code counts over a rolling window; a threshold breach sends Allan
+  an email. Every attribution counts, including abandoned ones, because
+  a farmer generating unpaid bookings is exactly the pattern worth
+  seeing (the list labels those rows lapsed). Ops sums are rendered
+  unfloored, so a negative pool is visible, not hidden.
 - Known inherited hole, documented: account claiming is email-match on
   unverified emails (`server/auth/claim.ts:11-15`, accepted for the
   demo). A client participant is only as authentic as their account
@@ -885,6 +904,13 @@ engineered away (review):
   adopts instead of posting, which shrinks the exposed window from the
   whole flight to milliseconds; the residual race is accepted and would
   surface loudly as a settle drift wedge, not silent money loss.
+- **Display flags reconciled, not trusted.** A credit toggled on while a
+  checkout was in flight leaves a flag the frozen total never absorbed.
+  `ensureRecord`'s existing-record path re-derives those flags from the
+  ledger before the pay page renders again, so the funnel converges on
+  the truth instead of promising a discount nobody will collect. The
+  money surfaces (confirmation, ops) read the ledger directly and never
+  the flags.
 
 ---
 

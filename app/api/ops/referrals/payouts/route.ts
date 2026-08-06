@@ -27,14 +27,19 @@ export async function GET() {
   });
 }
 
-const RunBody = z.object({ batchId: z.string().min(4).max(40) });
+const RunBody = z.object({
+  batchId: z.string().min(4).max(40),
+  // The dues the admin was looking at when they paid, so the batch can
+  // refuse to record anything that drifted since.
+  expected: z.array(z.object({ participantId: z.string().min(1), owed: z.number() })).min(1),
+});
 
 export async function POST(req: NextRequest) {
   return handleRoute(async () => {
     await requireAdmin();
     const parsed = RunBody.safeParse(await req.json());
     if (!parsed.success) return jsonError(400, "Give the batch a short slug id.");
-    const result = await runPayoutBatch(parsed.data.batchId);
+    const result = await runPayoutBatch(parsed.data.batchId, parsed.data.expected);
     return NextResponse.json(result);
   });
 }

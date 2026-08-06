@@ -4,6 +4,7 @@ import { prisma } from "../db";
 import { PublicError } from "../api-helpers";
 import { normalizeEmail } from "../auth/normalize";
 import { commissionOwed, pendingCreditBalance, vestedCreditBalance } from "./derive";
+import { releaseClaim } from "./claim";
 import { isValidCodeFormat, normalizeReferralCode } from "@/lib/referral";
 
 /**
@@ -76,7 +77,7 @@ export async function recentAttributions(limit = 50) {
  */
 export async function lockedSpends() {
   const spends = await prisma.referralLedgerEntry.findMany({
-    where: { kind: "credit_spend" },
+    where: { kind: "credit_spend", releasedAt: null },
     include: {
       participant: { select: { name: true, code: true } },
       spentOnSession: {
@@ -87,19 +88,25 @@ export async function lockedSpends() {
       },
     },
   });
-  if (spends.length === 0) return [];
-  const releases = await prisma.referralLedgerEntry.findMany({
-    where: { kind: "credit_release", releaseOfEntryId: { in: spends.map((s) => s.id) } },
-    select: { releaseOfEntryId: true },
-  });
-  const released = new Set(releases.map((r) => r.releaseOfEntryId));
   const now = new Date();
-  return spends.filter(
-    (s) =>
-      !released.has(s.id) &&
-      s.spentOnSession?.booking?.status === "created" &&
-      s.spentOnSession.expiresAt < now,
-  );
+  return spends.filter((s) => isLockedSpend(s, now));
+}
+
+/** The release criteria, one predicate so the page and the write agree. */
+function isLockedSpend(
+  spend: {
+    releasedAt: Date | null;
+    spentOnSession: { expiresAt: Date; booking: { status: string } | null } | null;
+  },
+  now: Date,
+): boolean {
+  if (spend.releasedAt) return false;
+  const session = spend.spentOnSession;
+  if (!session) return false;
+  // Only an abandoned checkout: a booking that reached created and then
+  // stopped, past the funnel's freshness window. A paid or cancelled
+  // booking is not ops' to unwind here.
+  return session.booking?.status === "created" && session.expiresAt < now;
 }
 
 export async function createInfluencer(input: {
@@ -143,26 +150,33 @@ export async function setRevoked(participantId: string, revoked: boolean) {
   });
 }
 
-/** The ops release for locked credit: one per spend, ever (unique). */
+/**
+ * The ops release for locked credit. The criteria are re-checked HERE, not
+ * just when the page rendered: a "created" booking is resumable forever,
+ * so the guest can pay between the admin reading the list and clicking the
+ * button, and releasing behind a live booking would restore credit that
+ * the folio already discounted.
+ */
 export async function releaseSpend(entryId: string) {
-  const spend = await prisma.referralLedgerEntry.findUnique({ where: { id: entryId } });
+  const spend = await prisma.referralLedgerEntry.findUnique({
+    where: { id: entryId },
+    include: {
+      spentOnSession: { select: { expiresAt: true, booking: { select: { status: true } } } },
+    },
+  });
   if (!spend || spend.kind !== "credit_spend") {
     throw new PublicError(404, "No such credit spend.");
   }
-  try {
-    return await prisma.referralLedgerEntry.create({
-      data: {
-        participantId: spend.participantId,
-        kind: "credit_release",
-        amount: Math.abs(spend.amount),
-        releaseOfEntryId: spend.id,
-      },
-    });
-  } catch (err) {
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-      throw new PublicError(409, "That spend was already released.");
-    }
-    throw err;
+  if (spend.releasedAt) throw new PublicError(409, "That spend was already released.");
+  if (!isLockedSpend(spend, new Date())) {
+    throw new PublicError(
+      409,
+      "That booking is no longer an abandoned checkout, so its credit is genuinely spent. Refresh the list.",
+    );
+  }
+  const released = await releaseClaim(spend);
+  if (!released) {
+    throw new PublicError(409, "That credit is being applied to a booking right now. Refresh the list.");
   }
 }
 
@@ -208,7 +222,14 @@ export async function payoutsDue(db: Db = prisma): Promise<PayoutDue[]> {
  * payoutBatchId) makes even a racing re-run a constraint error instead of
  * a double payment. Allan moves the actual money by hand from the CSV.
  */
-export async function runPayoutBatch(batchId: string): Promise<{ count: number; total: number }> {
+export async function runPayoutBatch(
+  batchId: string,
+  /** What the admin actually saw and transferred, from the payouts page.
+   *  The batch refuses to record anything else: commission matures with
+   *  every passing departure date, so a batch derived purely at click time
+   *  can mark an influencer paid whose money never moved. */
+  expected: Array<{ participantId: string; owed: number }>,
+): Promise<{ count: number; total: number }> {
   if (!/^[a-z0-9-]{4,40}$/i.test(batchId)) {
     throw new PublicError(400, "Batch ids are short slugs, e.g. 2026-08-influencers.");
   }
@@ -220,6 +241,17 @@ export async function runPayoutBatch(batchId: string): Promise<{ count: number; 
         // them aborts and reports a retry instead of double-paying.
         const dues = await payoutsDue(tx);
         if (dues.length === 0) throw new PublicError(409, "Nothing is owed right now.");
+
+        const expectedById = new Map(expected.map((e) => [e.participantId, Math.round(e.owed)]));
+        const drifted =
+          expectedById.size !== dues.length ||
+          dues.some((d) => expectedById.get(d.participantId) !== Math.round(d.owed));
+        if (drifted) {
+          throw new PublicError(
+            409,
+            "What is owed has changed since this page was loaded (a stay completed, or another run landed). Refresh, re-export the CSV, and pay from that.",
+          );
+        }
         const existing = await tx.referralLedgerEntry.findFirst({
           where: { kind: "payout", payoutBatchId: batchId },
           select: { id: true },

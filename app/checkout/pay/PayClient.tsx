@@ -164,6 +164,16 @@ export function PayClient({ provider }: { provider: "simulated" | "pesapal" }) {
     if (!result.ok) {
       if (result.soldOut) setSoldOut(true);
       else setError(result.error);
+      // A refused checkout may have removed the discount or the credit
+      // server-side ("review your total and press Buy now again"), so the
+      // rail, the deposit split and this button must re-render from the
+      // server before the guest can press again.
+      const [fresh, credit] = await Promise.all([
+        apiFetch<SessionSummary>(`/api/session/${sessionId}`),
+        apiFetch<{ available: number }>(`/api/session/${sessionId}/credit`),
+      ]);
+      if (fresh.ok) setSession(fresh.data);
+      if (credit.ok) setCreditAvailable(credit.data.available);
       setBusy(false);
       return;
     }
@@ -288,7 +298,10 @@ export function PayClient({ provider }: { provider: "simulated" | "pesapal" }) {
                 <input
                   type="checkbox"
                   checked={creditApplied > 0}
-                  disabled={creditBusy}
+                  // Locked while Buy now runs: the server is deciding this
+                  // booking's credit right now, and a toggle landing in
+                  // that window is a race nobody benefits from.
+                  disabled={creditBusy || busy}
                   onChange={(e) => toggleCredit(e.target.checked)}
                   className="mt-1 h-4 w-4 accent-[#536917]"
                 />

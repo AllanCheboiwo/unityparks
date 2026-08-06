@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/server/db";
 import { getSession, setGuestDetails, setReferralOnSession } from "@/server/booking/session";
 import { validateReferralCode } from "@/server/referral/validate";
+import { findClaim, isLiveClaim, releaseClaim } from "@/server/referral/claim";
 import { normalizeReferralCode } from "@/lib/referral";
 import { getCurrentUser, createAuthSession } from "@/server/auth/session";
 import { hashPassword } from "@/server/auth/password";
@@ -153,9 +154,11 @@ export async function POST(
     // the identity changed since (sign-out on a shared machine, a different
     // user signing in mid-funnel), the stale application would either be
     // silently skipped at checkout (display disagreeing with the charge) or
-    // spend the previous user's credit. Clear it; the guest re-applies at
-    // the pay step.
+    // spend the previous user's credit. Give any committed claim back to
+    // its owner and clear the flags; the guest re-applies at the pay step.
     if (session.userId !== (user?.id ?? null)) {
+      const claim = await findClaim(id);
+      if (isLiveClaim(claim)) await releaseClaim(claim);
       await prisma.bookingSession.updateMany({
         where: { id, booking: null },
         data: { applyCredit: false, creditAmount: null },

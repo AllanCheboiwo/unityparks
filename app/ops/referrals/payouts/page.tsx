@@ -57,7 +57,9 @@ export default async function ReferralPayoutsPage() {
                 Export CSV
               </a>
             </div>
-            <RunPayoutBatch />
+            <RunPayoutBatch
+              expected={dues.map((d) => ({ participantId: d.participantId, owed: d.owed }))}
+            />
           </>
         )}
       </div>

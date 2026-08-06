@@ -14,14 +14,10 @@ import { handleRoute, jsonError } from "@/server/api-helpers";
 async function creditAppliedFor(sessionId: string): Promise<number | null> {
   const spend = await prisma.referralLedgerEntry.findUnique({
     where: { spentOnSessionId: sessionId },
-    select: { id: true, amount: true },
+    select: { amount: true, releasedAt: true },
   });
-  if (!spend) return null;
-  const released = await prisma.referralLedgerEntry.findUnique({
-    where: { releaseOfEntryId: spend.id },
-    select: { id: true },
-  });
-  return released ? null : Math.round(Math.abs(spend.amount));
+  if (!spend || spend.releasedAt) return null;
+  return Math.round(Math.abs(spend.amount));
 }
 
 /**

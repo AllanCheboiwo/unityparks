@@ -271,6 +271,24 @@ export function ConfirmationClient({ bookingId }: { bookingId: string }) {
             </Link>
           </div>
         )}
+        {/* Every departing guest is offered their own code, Center Parcs
+            style: the growth loop closes here, on the page they reached in
+            the best mood they will be in all journey. */}
+        {booking.account.status === "ownedByYou" && booking.status !== "cancelled" && (
+          <div className="border-t border-line bg-white p-6 text-sm text-foreground">
+            <p className="font-display text-base font-bold text-ink">
+              Know someone who&apos;d love this?
+            </p>
+            <p className="mt-1">
+              Share your referral code and they save on their first break. You
+              earn resort credit towards your next one once they&apos;ve
+              stayed.
+            </p>
+            <Link href="/account" className="btn-outline mt-3 inline-block text-sm">
+              Get my referral code
+            </Link>
+          </div>
+        )}
         {booking.account.status === "existingAccount" && (
           <div className="bg-mist p-6 text-sm text-foreground">
             This email has a Unity Parks account.{" "}

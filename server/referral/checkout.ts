@@ -1,11 +1,12 @@
 import "server-only";
-import { Prisma } from "@prisma/client";
+import { Prisma, type ReferralLedgerEntry } from "@prisma/client";
 import { prisma } from "../db";
 import { PublicError } from "../api-helpers";
 import { postAllowance } from "../apaleo/payments";
 import { parseExtras, setReferralOnSession, type SessionWithLodges } from "../booking/session";
 import { validateReferralCode, refusalMessage } from "./validate";
 import { vestedCreditBalance } from "./derive";
+import { findClaim, isLiveClaim, markClaimPosting, releaseClaim } from "./claim";
 import { VELOCITY_ALERT_THRESHOLD, VELOCITY_WINDOW_DAYS } from "./ops";
 import { sendEmail } from "../email/resend";
 import {
@@ -20,7 +21,7 @@ import { MIN_PART_PAYMENT } from "@/lib/paymentPlan";
  * The referral moment inside ensureRecord: strictly after unit assignment
  * (whose 422 fallback can drop a location fee) and strictly before the
  * folio-balance reads that freeze the booking's totals. Posts the discount
- * and any applied credit as folio allowances, claims the credit spend in
+ * and any applied credit as folio allowances, commits the credit claim in
  * the ledger, and hands back the attribution row for the record's nested
  * create. Everything downstream (deposit, Pesapal, settle, refunds) then
  * absorbs the discount with no further code (plan 5.2).
@@ -28,14 +29,15 @@ import { MIN_PART_PAYMENT } from "@/lib/paymentPlan";
  * Replay safety: the split bases are session snapshots (identical on every
  * retry), so the allowance bodies are deterministic and Apaleo's 24h
  * idempotency window dedupes the racing-tabs and crash-retry cases, the
- * same boundary the booking create itself lives with. The credit spend row
- * is keyed by session (unique), claimed in a Serializable transaction
- * BEFORE the folio is touched, so two tabs cannot double-spend a pool and
- * a crash-replay finds and reuses its own claim. The CLAIM is authoritative
- * for money, never the session's applyCredit flag: a claim left behind by
- * a failed attempt is adopted here even if the guest has since toggled the
- * flag, and the credit route can only detach one by releasing it back to
- * the pool (both halves of the orphaned-spend fix from the diff review).
+ * same boundary the booking create itself lives with.
+ *
+ * Credit safety: the ledger CLAIM is authoritative, never the session's
+ * applyCredit flag, and the claim's own row carries its state (see
+ * ./claim.ts). Checkout marks a claim as committed-to-a-folio immediately
+ * before posting its allowance; a guest releasing credit at that moment
+ * loses the race on that row and one of the two backs off. Without this,
+ * a release could restore the pool while the allowance still landed on the
+ * bill: the same credit counted twice.
  */
 
 export type ReferralAtCheckout = {
@@ -46,6 +48,33 @@ export type ReferralAtCheckout = {
 };
 
 const NOTHING: ReferralAtCheckout = { attribution: null, postedAllowances: false };
+
+/** Display flags off, ledger untouched. Used by every refusal path. */
+async function clearCreditFlags(sessionId: string): Promise<void> {
+  await prisma.bookingSession.updateMany({
+    where: { id: sessionId, booking: null },
+    data: { applyCredit: false, creditAmount: null },
+  });
+}
+
+/**
+ * Make a frozen booking's display flags agree with the ledger. Called when
+ * ensureRecord takes its existing-record path: a credit toggled on while
+ * that record was mid-flight would otherwise leave the funnel rendering a
+ * credit the frozen total never absorbed (and the reverse after a refused
+ * attempt). The record exists here, so this writes past the freeze guard
+ * deliberately, exactly like the dropped-location-fee cleanup.
+ */
+export async function reconcileCreditFlags(sessionId: string): Promise<void> {
+  const claim = await findClaim(sessionId);
+  const live = isLiveClaim(claim) ? claim : null;
+  await prisma.bookingSession.update({
+    where: { id: sessionId },
+    data: live
+      ? { applyCredit: true, creditAmount: Math.round(Math.abs(live.amount)) }
+      : { applyCredit: false, creditAmount: null },
+  });
+}
 
 export async function applyReferralAtCheckout(input: {
   session: SessionWithLodges;
@@ -68,22 +97,13 @@ export async function applyReferralAtCheckout(input: {
   });
   if (raced) return NOTHING;
 
-  // A crashed earlier attempt may have committed this session's spend
-  // claim. It is the money truth regardless of what the session flags say
-  // now, unless the guest released it back to the pool via the credit
-  // route.
-  const existingSpend = await prisma.referralLedgerEntry.findUnique({
-    where: { spentOnSessionId: session.id },
-  });
-  const releasedSpend = existingSpend
-    ? await prisma.referralLedgerEntry.findUnique({
-        where: { releaseOfEntryId: existingSpend.id },
-        select: { id: true },
-      })
-    : null;
-  const claimedSpend = existingSpend && !releasedSpend ? existingSpend : null;
+  // A crashed earlier attempt may have committed this session's claim. It
+  // is the money truth regardless of what the session flags say now,
+  // unless the guest gave it back to the pool.
+  const existingClaim = await findClaim(session.id);
+  const liveClaim = isLiveClaim(existingClaim) ? existingClaim : null;
 
-  if (!session.referralCode && !session.applyCredit && !claimedSpend) {
+  if (!session.referralCode && !session.applyCredit && !liveClaim) {
     return NOTHING;
   }
 
@@ -125,8 +145,17 @@ export async function applyReferralAtCheckout(input: {
       );
     }
     // Cap so the booking keeps a collectable remainder (whole-KES minimum,
-    // same floor the part-payment rules enforce).
+    // same floor the part-payment rules enforce). A cap that bites means
+    // the screens promised more than this booking can absorb, so it is
+    // restamped and refused rather than applied quietly.
     discount = Math.min(check.discount, Math.max(0, totalBase - MIN_PART_PAYMENT));
+    if (session.referralDiscount != null && discount + 0.01 < session.referralDiscount) {
+      await setReferralOnSession(session.id, { code: session.referralCode, discount });
+      throw new PublicError(
+        409,
+        "Your referral discount is larger than this booking can take, so it has been reduced. Please review your total and press Buy now again.",
+      );
+    }
     discountReason = `UP-REFERRAL-${check.participant.code}`;
 
     // Velocity check: a hot code is reviewed by a human, never auto-frozen
@@ -171,30 +200,43 @@ export async function applyReferralAtCheckout(input: {
   // --- Applied credit ------------------------------------------------------
   let credit = 0;
   let creditReason = "";
-  if (claimedSpend) {
-    // Adopt the committed claim from the crashed attempt: post its
-    // allowance this time and keep the display flags honest with it. The
-    // owning participant may even be revoked by now; the money was already
-    // committed, so it is honoured, not dropped.
+  let creditClaim: ReferralLedgerEntry | null = null;
+
+  if (liveClaim) {
+    // A claim from a crashed attempt. Honour it only for the account that
+    // made it: a shared machine can sign a different guest into this walk,
+    // and spending the first guest's credit on the second guest's booking
+    // is the exact failure the identity-change clearing exists to prevent.
     const participant = await prisma.referralParticipant.findUnique({
-      where: { id: claimedSpend.participantId },
-      select: { code: true },
+      where: { id: liveClaim.participantId },
+      select: { code: true, userId: true },
     });
-    credit = Math.round(Math.abs(claimedSpend.amount));
-    creditReason = `UP-CREDIT-${participant?.code ?? "CREDIT"}`;
-    await prisma.bookingSession.updateMany({
-      where: { id: session.id, booking: null },
-      data: { applyCredit: true, creditAmount: credit },
-    });
+    const ownsThisWalk =
+      participant?.userId != null && session.userId != null && participant.userId === session.userId;
+    if (!ownsThisWalk) {
+      // Give it straight back to its owner and carry on without credit.
+      // The identity change already cleared the display flags, so nothing
+      // on screen promised this booking a discount.
+      const released = await releaseClaim(liveClaim);
+      await clearCreditFlags(session.id);
+      console.error(
+        `[referral] claim ${liveClaim.id} on session ${session.id} belongs to another account; ${released ? "released to its owner" : "release refused (already committed)"}`,
+      );
+    } else {
+      creditClaim = liveClaim;
+      credit = Math.round(Math.abs(liveClaim.amount));
+      creditReason = `UP-CREDIT-${participant.code}`;
+      await prisma.bookingSession.updateMany({
+        where: { id: session.id, booking: null },
+        data: { applyCredit: true, creditAmount: credit },
+      });
+    }
   } else if (session.applyCredit) {
     if (!session.userId) {
       // The identity that applied the credit is gone (shared-machine
       // sign-out). Refuse, never silently skip a number every screen
       // subtracted.
-      await prisma.bookingSession.updateMany({
-        where: { id: session.id, booking: null },
-        data: { applyCredit: false, creditAmount: null },
-      });
+      await clearCreditFlags(session.id);
       throw new PublicError(
         409,
         "Please sign in to use your referral credit. It has been removed - review your total and press Buy now again.",
@@ -204,10 +246,7 @@ export async function applyReferralAtCheckout(input: {
       where: { userId: session.userId },
     });
     if (!participant || participant.revokedAt) {
-      await prisma.bookingSession.updateMany({
-        where: { id: session.id, booking: null },
-        data: { applyCredit: false, creditAmount: null },
-      });
+      await clearCreditFlags(session.id);
       throw new PublicError(
         409,
         "Your referral credit is not available. It has been removed - please review your total and press Buy now again.",
@@ -215,24 +254,27 @@ export async function applyReferralAtCheckout(input: {
     }
     creditReason = `UP-CREDIT-${participant.code}`;
     const stamped = session.creditAmount;
-    let outcome: { kind: "ok" | "none" | "short"; amount: number };
+    let outcome: { kind: "ok" | "none" | "short"; amount: number; claimId?: string };
     try {
       outcome = await prisma.$transaction(
         async (tx) => {
           const vested = await vestedCreditBalance(participant.id, tx);
-          const applicable = capApplicableCredit({
+          let applicable = capApplicableCredit({
             bookingTotal: totalBase,
             discount,
             vestedBalance: vested,
           });
           if (applicable <= 0) return { kind: "none" as const, amount: 0 };
           // The guest accepted a specific number on the pay page. Coming up
-          // short (a supporting earn amended away, another device spending
-          // the pool) must refuse, not quietly post less than promised.
+          // short must refuse rather than quietly post less than promised;
+          // coming up LONG (the pool grew meanwhile) is clamped, because
+          // spending more of their credit than they agreed to is equally
+          // not ours to decide.
           if (stamped != null && applicable + 0.01 < stamped) {
             return { kind: "short" as const, amount: applicable };
           }
-          await tx.referralLedgerEntry.create({
+          if (stamped != null && applicable > stamped) applicable = stamped;
+          const created = await tx.referralLedgerEntry.create({
             data: {
               participantId: participant.id,
               kind: "credit_spend",
@@ -240,18 +282,18 @@ export async function applyReferralAtCheckout(input: {
               spentOnSessionId: session.id,
             },
           });
-          return { kind: "ok" as const, amount: applicable };
+          return { kind: "ok" as const, amount: applicable, claimId: created.id };
         },
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
       );
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-        // The racing tab claimed it first; adopt that claim.
-        const claimed = await prisma.referralLedgerEntry.findUnique({
-          where: { spentOnSessionId: session.id },
-        });
-        outcome = claimed
-          ? { kind: "ok", amount: Math.round(-claimed.amount) }
+        // Someone claimed this session's slot first: a racing tab, or an
+        // earlier attempt whose claim the guest has since released (the
+        // slot stays occupied forever either way). Adopt only a live one.
+        const claimed = await findClaim(session.id);
+        outcome = isLiveClaim(claimed)
+          ? { kind: "ok", amount: Math.round(Math.abs(claimed.amount)), claimId: claimed.id }
           : { kind: "none", amount: 0 };
       } else if (
         err instanceof Prisma.PrismaClientKnownRequestError &&
@@ -262,17 +304,17 @@ export async function applyReferralAtCheckout(input: {
         throw err;
       }
     }
-    if (outcome.kind !== "ok") {
-      await prisma.bookingSession.updateMany({
-        where: { id: session.id, booking: null },
-        data: { applyCredit: false, creditAmount: null },
-      });
+    if (outcome.kind !== "ok" || !outcome.claimId) {
+      await clearCreditFlags(session.id);
       throw new PublicError(
         409,
         "Your referral credit balance has changed and could not be applied. It has been removed - please review your total and press Buy now again.",
       );
     }
     credit = outcome.amount;
+    creditClaim = await prisma.referralLedgerEntry.findUniqueOrThrow({
+      where: { id: outcome.claimId },
+    });
     // Keep the display snapshot honest with what was actually claimed.
     await prisma.bookingSession.updateMany({
       where: { id: session.id, booking: null },
@@ -294,6 +336,21 @@ export async function applyReferralAtCheckout(input: {
       409,
       "Your referral discount and credit together no longer fit this booking's total. Remove the code on the details step or untick the credit, then press Buy now again.",
     );
+  }
+
+  // Point of no return for the credit: commit the claim to this booking
+  // before any of it reaches a folio. Losing this guarded write means the
+  // guest released the credit first and the pool already has it back, so
+  // posting the allowance now would hand out the same credit twice.
+  if (credit > 0 && creditClaim) {
+    const committed = await markClaimPosting(creditClaim.id);
+    if (!committed) {
+      await clearCreditFlags(session.id);
+      throw new PublicError(
+        409,
+        "Your referral credit was removed from this booking. Please review your total and press Buy now again.",
+      );
+    }
   }
 
   // --- Post the allowances, deterministic split, own key per family --------

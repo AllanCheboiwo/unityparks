@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { Prisma } from "@prisma/client";
 import { prisma } from "@/server/db";
+import { findClaim, isLiveClaim, releaseClaim } from "@/server/referral/claim";
 import { getSession, parseExtras } from "@/server/booking/session";
 import { getCurrentUser } from "@/server/auth/session";
 import { handleRoute, jsonError } from "@/server/api-helpers";
@@ -76,46 +76,23 @@ export async function POST(
     if (!parsed.success) return jsonError(400, "Invalid credit request.");
 
     // A failed checkout attempt may already have claimed this session's
-    // spend row (the claim commits before the folio work). The claim, not
-    // the session flag, is authoritative for money, so toggling must deal
-    // with it: off releases it (safe here and only here, because no record
-    // exists yet and the claim is this session's own), and on adopts it.
-    const spend = await prisma.referralLedgerEntry.findUnique({
-      where: { spentOnSessionId: id },
-    });
-    const released = spend
-      ? await prisma.referralLedgerEntry.findUnique({
-          where: { releaseOfEntryId: spend.id },
-          select: { id: true },
-        })
-      : null;
+    // credit (the claim commits before the folio work). The claim, not the
+    // session flag, is authoritative for money, so toggling must deal with
+    // it: off releases it, on adopts it. releaseClaim's guarded write on
+    // the claim row is what makes "off" safe against a checkout that is in
+    // flight right now: whoever writes first wins, and a claim already
+    // committed to a folio refuses to be released.
+    const claim = await findClaim(id);
+    const live = isLiveClaim(claim) ? claim : null;
 
     if (!parsed.data.apply) {
-      if (spend && !released) {
-        // Guarded by the unique releaseOfEntryId: a double-click cannot
-        // release twice. Once a record exists the guarded session write
-        // below refuses first, so a claim behind a live booking can never
-        // be released from here.
-        const recordExists = await prisma.bookingRecord.findUnique({
-          where: { sessionId: id },
-          select: { id: true },
-        });
-        if (recordExists) {
-          return jsonError(409, "Your booking is already being confirmed. Press Buy now to finish.");
-        }
-        try {
-          await prisma.referralLedgerEntry.create({
-            data: {
-              participantId: spend.participantId,
-              kind: "credit_release",
-              amount: Math.abs(spend.amount),
-              releaseOfEntryId: spend.id,
-            },
-          });
-        } catch (err) {
-          if (!(err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002")) {
-            throw err;
-          }
+      if (live) {
+        const released = await releaseClaim(live);
+        if (!released) {
+          return jsonError(
+            409,
+            "Your credit is already being applied to this booking. Press Buy now to finish, or cancel the booking afterwards to get it back.",
+          );
         }
       }
       // Freeze rule folded into the write itself (check-then-act raced the
@@ -131,7 +108,7 @@ export async function POST(
       return NextResponse.json({ applied: false, amount: null });
     }
 
-    if (spend && released) {
+    if (claim && !live) {
       // The claim slot for this session is spent-and-released; a fresh
       // claim cannot reuse it (spentOnSessionId is one-per-session, ever).
       return jsonError(
@@ -140,7 +117,22 @@ export async function POST(
       );
     }
 
-    const amount = spend ? Math.round(Math.abs(spend.amount)) : await availableFor(session);
+    let amount: number;
+    if (live) {
+      // Only the account that made the claim may re-arm it; a shared
+      // machine can have signed a different guest into this walk since.
+      const user = await getCurrentUser();
+      const owner = await prisma.referralParticipant.findUnique({
+        where: { id: live.participantId },
+        select: { userId: true },
+      });
+      if (!user || !owner?.userId || owner.userId !== user.id) {
+        return jsonError(403, "That referral credit belongs to a different account.");
+      }
+      amount = Math.round(Math.abs(live.amount));
+    } else {
+      amount = await availableFor(session);
+    }
     if (amount <= 0) {
       return jsonError(409, "You have no referral credit available for this booking.");
     }

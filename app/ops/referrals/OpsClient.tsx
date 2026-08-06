@@ -109,7 +109,13 @@ export function ReleaseButton(props: { entryId: string }) {
   );
 }
 
-export function RunPayoutBatch() {
+export function RunPayoutBatch({
+  expected,
+}: {
+  /** Exactly the dues this page rendered; the server refuses to record a
+   *  batch that has drifted from them. */
+  expected: Array<{ participantId: string; owed: number }>;
+}) {
   const router = useRouter();
   const now = new Date();
   const defaultId = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}-influencers`;
@@ -125,7 +131,7 @@ export function RunPayoutBatch() {
     setMessage(null);
     const result = await apiFetch<{ count: number; total: number }>(
       `/api/ops/referrals/payouts`,
-      { method: "POST", body: JSON.stringify({ batchId }) },
+      { method: "POST", body: JSON.stringify({ batchId, expected }) },
     );
     setBusy(false);
     if (!result.ok) return setMessage(result.error);

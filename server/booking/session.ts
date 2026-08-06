@@ -280,13 +280,18 @@ export async function setReferralOnSession(
 export async function stampSessionUser(id: string, userId: string): Promise<void> {
   // A different identity taking over the walk drops any applied referral
   // credit first: credit is bound to the account that applied it, and a
-  // stale application would spend the wrong pool at checkout.
+  // stale application would spend the wrong pool at checkout. The ledger
+  // claim itself is released by the checkout/credit paths that own it;
+  // here we only stop the display flags carrying over.
   await prisma.bookingSession.updateMany({
     where: { id, state: { not: "completed" }, userId: { not: userId } },
     data: { applyCredit: false, creditAmount: null },
   });
+  // Expired sessions are dead everywhere else (getSession refuses them),
+  // and a dead session's credit spend has already been counted back into
+  // the pool, so resurrecting one here would re-activate spent credit.
   await prisma.bookingSession.updateMany({
-    where: { id, state: { not: "completed" } },
+    where: { id, state: { not: "completed" }, expiresAt: { gte: new Date() } },
     data: { userId, expiresAt: freshExpiry() },
   });
 }

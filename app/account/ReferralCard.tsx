@@ -16,6 +16,12 @@ export function ReferralCard(props: {
     code: string;
     vested: number;
     pending: number;
+    history: Array<{
+      id: string;
+      amount: number;
+      state: string;
+      departure: string | null;
+    }>;
   } | null;
   shareBase: string;
 }) {
@@ -51,7 +57,7 @@ export function ReferralCard(props: {
     );
   }
 
-  const { code, vested, pending } = props.participant;
+  const { code, vested, pending, history } = props.participant;
   const shareUrl = `${props.shareBase}/r/${code}`;
 
   async function copy() {
@@ -99,6 +105,37 @@ export function ReferralCard(props: {
           Credit is offered automatically at the payment step of your next
           booking while you are signed in.
         </p>
+      )}
+      {history.length > 0 && (
+        <div className="mt-4 border-t border-line pt-4">
+          <p className="text-xs uppercase tracking-wide text-foreground/50">
+            Your rewards
+          </p>
+          <div className="mt-2 grid gap-1.5">
+            {history.map((row) => (
+              <div key={row.id} className="flex justify-between gap-3 text-sm">
+                <span className="text-foreground/70">
+                  {row.state === "vested" && "Ready to spend"}
+                  {row.state === "pending" &&
+                    `Ready after their stay${row.departure ? `, ${row.departure}` : ""}`}
+                  {row.state === "expired" && "Expired"}
+                  {row.state === "lost" && "Booking cancelled"}
+                </span>
+                <span
+                  className={
+                    row.state === "vested"
+                      ? "font-semibold text-ink"
+                      : row.state === "pending"
+                        ? "text-foreground/70"
+                        : "text-foreground/50 line-through"
+                  }
+                >
+                  {formatKes(row.amount)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   );
