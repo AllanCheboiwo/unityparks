@@ -278,6 +278,13 @@ export async function setReferralOnSession(
  * sessions are never touched - their ownership is settled.
  */
 export async function stampSessionUser(id: string, userId: string): Promise<void> {
+  // A different identity taking over the walk drops any applied referral
+  // credit first: credit is bound to the account that applied it, and a
+  // stale application would spend the wrong pool at checkout.
+  await prisma.bookingSession.updateMany({
+    where: { id, state: { not: "completed" }, userId: { not: userId } },
+    data: { applyCredit: false, creditAmount: null },
+  });
   await prisma.bookingSession.updateMany({
     where: { id, state: { not: "completed" } },
     data: { userId, expiresAt: freshExpiry() },

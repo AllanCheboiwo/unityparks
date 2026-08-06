@@ -1,6 +1,14 @@
 # Referral system: design and implementation plan
 
-Status: PROPOSED for critique, 4 Aug 2026. Nothing here is built.
+Status: BUILT, 5 Aug 2026, on branch referral-system. All phases 0-6 are
+implemented, the Phase 0 spike passed all six items against UPNV (endpoint
+is POST /finance/v1/folio-actions/{folioId}/allowances, vatType "Without",
+scope folios.manage), and a live end-to-end referred booking verified the
+discount, deposit, attribution, earn and void against the real sandbox.
+A post-build adversarial review (four lenses plus refutation agents) found
+two blocking defects and several races; all fixes are in code and the
+design refinements are folded into sections 6.3 and 11 below, marked
+"(review)". This document remains the architecture reference.
 Scope: the original two groups from the Referral Growth System report v2.0
 (Drive): the influencer track (cash commission) and the client track
 (guest-to-guest credit). The Unity Family and group-organizer tracks are
@@ -579,6 +587,19 @@ If the authoritative re-derivation comes up short (balance changed since
 the pay page rendered), the checkout refuses with a friendly message and
 clears `applyCredit`, same discipline as a refused code.
 
+**The claim is authoritative, the flag is display (review).** The
+adversarial review found the original design's blocking flaw: a claim
+committed by a failed attempt while the guest could still untick the
+credit box would post no allowance yet count against the pool forever.
+The fix has two halves. Checkout adopts an unreleased claim for its
+session even when `applyCredit` is false (the claim, never the flag, is
+the money truth). And unticking the credit before a record exists
+*releases* the claim: the credit route appends the `credit_release` row
+itself, which is safe there and only there, because no record exists and
+the claim is that session's own. A released session slot cannot be
+re-claimed (one spend per session, ever), so re-applying credit on that
+same booking is refused with the credit staying good for the next one.
+
 **The locked-credit edge, stated honestly.** A spend rides a record that
 reaches `created` and then is abandoned forever: the money path can
 neither pay nor cancel it (`cancelBooking` refuses non-paid records,
@@ -842,9 +863,28 @@ post-create code in `ensureRecord` can run in a tab that created nothing
 `deposit_paid` booking that never completes payment earns nothing, and a
 `created`/`failed` one is displayed as lapsed; the existing email modules
 consume their once-only stamp even when Resend is unconfigured (skip
-counts as sent), and the referral email modules will copy the pattern
-as-is for consistency; money is Float whole KES with 0.01 epsilons, same
-demo caveat as everything else.
+counts as sent), and the referral email modules copy the pattern as-is
+for consistency; money is Float whole KES with 0.01 epsilons, same demo
+caveat as everything else.
+
+Two further edges from the adversarial review, accepted rather than
+engineered away (review):
+
+- **Stranded allowance on a crashed first attempt.** Allowances post
+  moments before the record create; a crash in that gap, followed by the
+  guest clearing or changing the code before retrying, can birth a record
+  whose folio carries an allowance with no matching attribution. The
+  window is sub-second, requires a code edit inside it, and the folio's
+  reason string (`UP-REFERRAL-<code>`) makes it auditable; the fix (a
+  pre-side-effect session lock) was judged not worth its complexity at
+  this scale.
+- **The in-flight freeze window, narrowed.** The route-level freeze
+  guards cannot see a checkout mid-flight inside `ensureRecord` (seconds
+  of Apaleo calls before the record exists). Checkout now re-checks for a
+  freshly committed record immediately before posting any allowance and
+  adopts instead of posting, which shrinks the exposed window from the
+  whole flight to milliseconds; the residual race is accepted and would
+  surface loudly as a settle drift wedge, not silent money loss.
 
 ---
 

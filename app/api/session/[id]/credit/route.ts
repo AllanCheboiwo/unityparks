@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/server/db";
 import { getSession, parseExtras } from "@/server/booking/session";
 import { getCurrentUser } from "@/server/auth/session";
@@ -71,35 +72,85 @@ export async function POST(
     const session = await getSession(id);
     if (!session) return jsonError(410, "Session expired.");
 
-    // Freeze rule, same as the details route: once a record exists the
-    // folio totals are frozen and a credit change could not be honoured.
-    const existingRecord = await prisma.bookingRecord.findUnique({
-      where: { sessionId: id },
-      select: { id: true },
-    });
-    if (existingRecord) {
-      return jsonError(409, "Your booking is already being confirmed. Press Buy now to finish.");
-    }
-
     const parsed = CreditBody.safeParse(await req.json());
     if (!parsed.success) return jsonError(400, "Invalid credit request.");
 
+    // A failed checkout attempt may already have claimed this session's
+    // spend row (the claim commits before the folio work). The claim, not
+    // the session flag, is authoritative for money, so toggling must deal
+    // with it: off releases it (safe here and only here, because no record
+    // exists yet and the claim is this session's own), and on adopts it.
+    const spend = await prisma.referralLedgerEntry.findUnique({
+      where: { spentOnSessionId: id },
+    });
+    const released = spend
+      ? await prisma.referralLedgerEntry.findUnique({
+          where: { releaseOfEntryId: spend.id },
+          select: { id: true },
+        })
+      : null;
+
     if (!parsed.data.apply) {
-      await prisma.bookingSession.update({
-        where: { id },
+      if (spend && !released) {
+        // Guarded by the unique releaseOfEntryId: a double-click cannot
+        // release twice. Once a record exists the guarded session write
+        // below refuses first, so a claim behind a live booking can never
+        // be released from here.
+        const recordExists = await prisma.bookingRecord.findUnique({
+          where: { sessionId: id },
+          select: { id: true },
+        });
+        if (recordExists) {
+          return jsonError(409, "Your booking is already being confirmed. Press Buy now to finish.");
+        }
+        try {
+          await prisma.referralLedgerEntry.create({
+            data: {
+              participantId: spend.participantId,
+              kind: "credit_release",
+              amount: Math.abs(spend.amount),
+              releaseOfEntryId: spend.id,
+            },
+          });
+        } catch (err) {
+          if (!(err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002")) {
+            throw err;
+          }
+        }
+      }
+      // Freeze rule folded into the write itself (check-then-act raced the
+      // record create): count 0 means a record landed and the session is
+      // frozen.
+      const cleared = await prisma.bookingSession.updateMany({
+        where: { id, booking: null },
         data: { applyCredit: false, creditAmount: null },
       });
+      if (cleared.count === 0) {
+        return jsonError(409, "Your booking is already being confirmed. Press Buy now to finish.");
+      }
       return NextResponse.json({ applied: false, amount: null });
     }
 
-    const available = await availableFor(session);
-    if (available <= 0) {
+    if (spend && released) {
+      // The claim slot for this session is spent-and-released; a fresh
+      // claim cannot reuse it (spentOnSessionId is one-per-session, ever).
+      return jsonError(
+        409,
+        "Referral credit was removed from this booking earlier and can't be re-applied here. It remains available for your next booking.",
+      );
+    }
+
+    const amount = spend ? Math.round(Math.abs(spend.amount)) : await availableFor(session);
+    if (amount <= 0) {
       return jsonError(409, "You have no referral credit available for this booking.");
     }
-    await prisma.bookingSession.update({
-      where: { id },
-      data: { applyCredit: true, creditAmount: available },
+    const stamped = await prisma.bookingSession.updateMany({
+      where: { id, booking: null },
+      data: { applyCredit: true, creditAmount: amount },
     });
-    return NextResponse.json({ applied: true, amount: available });
+    if (stamped.count === 0) {
+      return jsonError(409, "Your booking is already being confirmed. Press Buy now to finish.");
+    }
+    return NextResponse.json({ applied: true, amount });
   });
 }

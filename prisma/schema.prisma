@@ -499,4 +499,12 @@ model ReferralLedgerEntry {
 
   // One earn of each kind per attribution, ever.
   @@unique([attributionId, kind])
+  // One payout per influencer per batch, ever: the DB-level half of the
+  // deterministic-batch discipline (a re-run is a constraint violation,
+  // not a second payment).
+  @@unique([participantId, payoutBatchId])
+  // Keeps the Serializable spend-claim transaction's predicate locks to one
+  // participant's rows instead of the whole relation, so two guests
+  // redeeming at once never abort each other.
+  @@index([participantId])
 }

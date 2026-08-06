@@ -149,17 +149,37 @@ export async function POST(
       await prisma.user.update({ where: { id: user.id }, data: profileData(guest) });
     }
 
+    // Applied credit belongs to the signed-in identity that applied it. If
+    // the identity changed since (sign-out on a shared machine, a different
+    // user signing in mid-funnel), the stale application would either be
+    // silently skipped at checkout (display disagreeing with the charge) or
+    // spend the previous user's credit. Clear it; the guest re-applies at
+    // the pay step.
+    if (session.userId !== (user?.id ?? null)) {
+      await prisma.bookingSession.updateMany({
+        where: { id, booking: null },
+        data: { applyCredit: false, creditAmount: null },
+      });
+    }
+
     await setGuestDetails(id, guest, user?.id ?? null);
 
     // Referral: last code standing at details submit wins. Valid codes stamp
     // the code plus the advisory discount snapshot; anything else clears
     // both (the inline check already told the guest why). The record-exists
     // 409 above is the freeze rule: once folio totals exist, no code change.
+    // Field semantics: empty string = the guest cleared it; ABSENT = keep
+    // and revalidate whatever is stamped (a /r/ link stamps the code with
+    // no snapshot, and a client that never renders the field must not wipe
+    // it).
     let referral: { applied: boolean; discount: number | null } = {
       applied: false,
       discount: null,
     };
-    const typedCode = normalizeReferralCode(referralCode ?? "");
+    const typedCode =
+      referralCode === undefined
+        ? normalizeReferralCode(session.referralCode ?? "")
+        : normalizeReferralCode(referralCode);
     if (typedCode) {
       const check = await validateReferralCode({
         code: typedCode,

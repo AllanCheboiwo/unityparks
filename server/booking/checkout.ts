@@ -1194,9 +1194,14 @@ async function settlePayment(
           data: { state: "earned", earnedAt: new Date() },
         });
         if (earned.count === 1) {
-          try {
-            await tx.referralLedgerEntry.create({
-              data: {
+          // createMany + skipDuplicates compiles to ON CONFLICT DO NOTHING,
+          // so the (attributionId, kind) backstop can never error. That
+          // matters here: a caught unique violation would still abort the
+          // underlying Postgres transaction and take the whole settle (the
+          // status flip included) down with it on the next statement.
+          await tx.referralLedgerEntry.createMany({
+            data: [
+              {
                 participantId: attribution.participantId,
                 attributionId: attribution.id,
                 kind:
@@ -1205,16 +1210,9 @@ async function settlePayment(
                     : "credit_earn",
                 amount: Math.round(attribution.rewardAmount),
               },
-            });
-          } catch (err) {
-            // The unique (attributionId, kind) backstop: a historic partial
-            // replay already wrote the earn. Swallow so the settle commits.
-            if (
-              !(err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002")
-            ) {
-              throw err;
-            }
-          }
+            ],
+            skipDuplicates: true,
+          });
         }
       }
     }

@@ -96,8 +96,9 @@ export type SessionSummary = {
     vehiclePlates: string[];
   } | null;
   total: number | null;
-  /** Referral code applied to this walk, with its advisory discount. */
-  referral: { code: string; discount: number } | null;
+  /** Referral code on this walk. discount is null until the details step
+   *  validates it (a /r/ link stamps only the code at search time). */
+  referral: { code: string; discount: number | null } | null;
   /** Referral credit the guest chose to apply at the pay step. */
   credit: { amount: number } | null;
 };

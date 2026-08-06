@@ -55,6 +55,7 @@ export async function vestedCreditBalance(
   participantId: string,
   db: Db = prisma,
   now: Date = new Date(),
+  options: { floored?: boolean } = {},
 ): Promise<number> {
   const rows = await loadCreditRows(db, participantId);
   const released = releasedSpendIds(rows);
@@ -90,7 +91,9 @@ export async function vestedCreditBalance(
       sum += row.amount; // credit_release, stored positive
     }
   }
-  return Math.max(0, Math.round(sum));
+  // Floored for redemption and guest display; ops passes floored: false so
+  // a negative pool (the farming signal) is visible, not hidden (plan 9).
+  return options.floored === false ? Math.round(sum) : Math.max(0, Math.round(sum));
 }
 
 /**

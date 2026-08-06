@@ -230,10 +230,18 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
         setSummary(s.data);
         if (s.data.referral) {
           setReferralCode(s.data.referral.code);
-          setReferralStatus({ state: "valid", discount: s.data.referral.discount });
+          if (s.data.referral.discount != null) {
+            setReferralStatus({ state: "valid", discount: s.data.referral.discount });
+          } else {
+            // A /r/ link stamped the code at search time with no discount
+            // snapshot yet; validate it now so the guest sees what it is
+            // worth without having to touch the field.
+            checkReferral(s.data.referral.code);
+          }
         }
       }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
 
   if (!sessionId || expired) return <ExpiredNotice />;
@@ -317,8 +325,8 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
     router.refresh();
   }
 
-  async function checkReferral() {
-    const code = referralCode.trim().toUpperCase();
+  async function checkReferral(codeOverride?: string) {
+    const code = (codeOverride ?? referralCode).trim().toUpperCase();
     if (!code) {
       setReferralStatus({ state: "idle" });
       return;
@@ -774,7 +782,7 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
                       setReferralCode(e.target.value.toUpperCase());
                       setReferralStatus({ state: "idle" });
                     }}
-                    onBlur={checkReferral}
+                    onBlur={() => checkReferral()}
                     placeholder="e.g. AMINA"
                     maxLength={12}
                     className={`${inputClass} uppercase`}
@@ -782,7 +790,7 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
                   />
                   <button
                     type="button"
-                    onClick={checkReferral}
+                    onClick={() => checkReferral()}
                     disabled={referralStatus.state === "checking"}
                     className="btn-outline shrink-0"
                   >

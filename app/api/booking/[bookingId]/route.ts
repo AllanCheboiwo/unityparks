@@ -8,6 +8,22 @@ import { assertBookingAccess } from "@/server/booking/access";
 import { getCurrentUser } from "@/server/auth/session";
 import { handleRoute, jsonError } from "@/server/api-helpers";
 
+/** The credit actually posted onto this booking: the unreleased ledger
+ * spend row for its session, or null. A released spend means the guest
+ * detached the credit before the record existed, so nothing was posted. */
+async function creditAppliedFor(sessionId: string): Promise<number | null> {
+  const spend = await prisma.referralLedgerEntry.findUnique({
+    where: { spentOnSessionId: sessionId },
+    select: { id: true, amount: true },
+  });
+  if (!spend) return null;
+  const released = await prisma.referralLedgerEntry.findUnique({
+    where: { releaseOfEntryId: spend.id },
+    select: { id: true },
+  });
+  return released ? null : Math.round(Math.abs(spend.amount));
+}
+
 /**
  * Confirmation data, driven by our recorded state (never a redirect) plus a
  * live folio read so "settled" is Apaleo's word, not ours. Proof of access
@@ -113,17 +129,16 @@ export async function GET(
       // The referral discount that was posted to the folios at checkout, so
       // the itemised lodge lines reconcile with the (discounted) total and
       // the guest sees their discount applied. Credit applied by the buyer
-      // shows through the same surface.
+      // shows through the same surface, read from the ledger spend row (the
+      // money truth), never the session's advisory flags, which can drift
+      // from the folios under toggle-vs-Buy-now races.
       referral: record.referralAttribution
         ? {
             code: record.referralAttribution.participant.code,
             discount: record.referralAttribution.discountAmount,
           }
         : null,
-      creditApplied:
-        record.session.applyCredit && record.session.creditAmount
-          ? record.session.creditAmount
-          : null,
+      creditApplied: await creditAppliedFor(record.sessionId),
       stay: {
         arrival: record.session.arrival,
         departure: record.session.departure,

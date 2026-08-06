@@ -1,0 +1,251 @@
+import "server-only";
+import { Prisma, type PrismaClient } from "@prisma/client";
+import { prisma } from "../db";
+import { PublicError } from "../api-helpers";
+import { normalizeEmail } from "../auth/normalize";
+import { commissionOwed, pendingCreditBalance, vestedCreditBalance } from "./derive";
+import { isValidCodeFormat, normalizeReferralCode } from "@/lib/referral";
+
+/**
+ * Everything the /ops/referrals pages read and do. Reads are derived sums
+ * over the ledger (no stored balances anywhere); actions are the few
+ * writes the plan reserves for a human: onboarding an influencer, revoking
+ * a code, releasing locked credit, and running a payout batch.
+ */
+
+type Db = PrismaClient | Prisma.TransactionClient;
+
+/** Attributions per code over a rolling window; the velocity view. */
+export const VELOCITY_WINDOW_DAYS = 30;
+export const VELOCITY_ALERT_THRESHOLD = 10;
+
+export async function participantsOverview() {
+  const participants = await prisma.referralParticipant.findMany({
+    orderBy: { createdAt: "asc" },
+    include: {
+      attributions: { select: { state: true, createdAt: true, gift: true } },
+    },
+  });
+  const since = new Date(Date.now() - VELOCITY_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+  return Promise.all(
+    participants.map(async (p) => ({
+      id: p.id,
+      kind: p.kind,
+      name: p.name,
+      email: p.email,
+      phone: p.phone,
+      code: p.code,
+      commissionRate: p.commissionRate,
+      revokedAt: p.revokedAt,
+      attributionCount: p.attributions.length,
+      earnedCount: p.attributions.filter((a) => a.state === "earned").length,
+      recentCount: p.attributions.filter((a) => a.createdAt >= since).length,
+      owed:
+        p.kind === "influencer"
+          ? await commissionOwed(p.id)
+          : await vestedCreditBalance(p.id, prisma, new Date(), { floored: false }),
+      pending: p.kind === "influencer" ? 0 : await pendingCreditBalance(p.id),
+    })),
+  );
+}
+
+export async function recentAttributions(limit = 50) {
+  return prisma.referralAttribution.findMany({
+    orderBy: { createdAt: "desc" },
+    take: limit,
+    include: {
+      participant: { select: { code: true, kind: true, name: true } },
+      record: {
+        select: {
+          apaleoBookingId: true,
+          status: true,
+          totalGrossAmount: true,
+          currency: true,
+          session: { select: { departure: true } },
+        },
+      },
+    },
+  });
+}
+
+/**
+ * Credit locked in abandoned checkouts: spends whose booking sits at
+ * "created" past the session's freshness window, with no release yet. The
+ * one manual edge the plan accepts (6.3): created is resumable forever, so
+ * only a human may decide the checkout is truly dead.
+ */
+export async function lockedSpends() {
+  const spends = await prisma.referralLedgerEntry.findMany({
+    where: { kind: "credit_spend" },
+    include: {
+      participant: { select: { name: true, code: true } },
+      spentOnSession: {
+        select: {
+          expiresAt: true,
+          booking: { select: { apaleoBookingId: true, status: true } },
+        },
+      },
+    },
+  });
+  if (spends.length === 0) return [];
+  const releases = await prisma.referralLedgerEntry.findMany({
+    where: { kind: "credit_release", releaseOfEntryId: { in: spends.map((s) => s.id) } },
+    select: { releaseOfEntryId: true },
+  });
+  const released = new Set(releases.map((r) => r.releaseOfEntryId));
+  const now = new Date();
+  return spends.filter(
+    (s) =>
+      !released.has(s.id) &&
+      s.spentOnSession?.booking?.status === "created" &&
+      s.spentOnSession.expiresAt < now,
+  );
+}
+
+export async function createInfluencer(input: {
+  name: string;
+  email?: string | null;
+  phone?: string | null;
+  code: string;
+  commissionRate?: number | null;
+}) {
+  const code = normalizeReferralCode(input.code);
+  if (!isValidCodeFormat(code)) {
+    throw new PublicError(400, "Codes are 3-12 letters and digits.");
+  }
+  if (input.commissionRate != null && (input.commissionRate <= 0 || input.commissionRate >= 0.5)) {
+    throw new PublicError(400, "The rate is a fraction, e.g. 0.04 for 4%.");
+  }
+  try {
+    return await prisma.referralParticipant.create({
+      data: {
+        kind: "influencer",
+        name: input.name.trim(),
+        email: input.email ? normalizeEmail(input.email) : null,
+        phone: input.phone?.trim() || null,
+        code,
+        commissionRate: input.commissionRate ?? null,
+      },
+    });
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      throw new PublicError(409, "That code is already taken.");
+    }
+    throw err;
+  }
+}
+
+/** Revoking is revoking the person; codes are never reissued or deleted. */
+export async function setRevoked(participantId: string, revoked: boolean) {
+  await prisma.referralParticipant.update({
+    where: { id: participantId },
+    data: { revokedAt: revoked ? new Date() : null },
+  });
+}
+
+/** The ops release for locked credit: one per spend, ever (unique). */
+export async function releaseSpend(entryId: string) {
+  const spend = await prisma.referralLedgerEntry.findUnique({ where: { id: entryId } });
+  if (!spend || spend.kind !== "credit_spend") {
+    throw new PublicError(404, "No such credit spend.");
+  }
+  try {
+    return await prisma.referralLedgerEntry.create({
+      data: {
+        participantId: spend.participantId,
+        kind: "credit_release",
+        amount: Math.abs(spend.amount),
+        releaseOfEntryId: spend.id,
+      },
+    });
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      throw new PublicError(409, "That spend was already released.");
+    }
+    throw err;
+  }
+}
+
+export type PayoutDue = {
+  participantId: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  code: string;
+  owed: number;
+};
+
+/** Influencers with matured commission not yet paid out. Accepts a
+ * transaction client so runPayoutBatch derives dues INSIDE its own
+ * transaction: derived outside, two concurrent batches under different ids
+ * would each read the same owed sums and double-pay. */
+export async function payoutsDue(db: Db = prisma): Promise<PayoutDue[]> {
+  const influencers = await db.referralParticipant.findMany({
+    where: { kind: "influencer" },
+    orderBy: { name: "asc" },
+  });
+  const dues: PayoutDue[] = [];
+  for (const p of influencers) {
+    const owed = await commissionOwed(p.id, db);
+    if (owed > 0) {
+      dues.push({
+        participantId: p.id,
+        name: p.name,
+        phone: p.phone,
+        email: p.email,
+        code: p.code,
+        owed,
+      });
+    }
+  }
+  return dues;
+}
+
+/**
+ * Mark a payout batch paid: one negative payout row per influencer owed,
+ * all in one transaction. Idempotent two ways: the whole batch refuses to
+ * run twice under the same id, and the DB unique on (participantId,
+ * payoutBatchId) makes even a racing re-run a constraint error instead of
+ * a double payment. Allan moves the actual money by hand from the CSV.
+ */
+export async function runPayoutBatch(batchId: string): Promise<{ count: number; total: number }> {
+  if (!/^[a-z0-9-]{4,40}$/i.test(batchId)) {
+    throw new PublicError(400, "Batch ids are short slugs, e.g. 2026-08-influencers.");
+  }
+  try {
+    return await prisma.$transaction(
+      async (tx) => {
+        // Dues derived inside the transaction (Serializable), so two
+        // concurrent batches cannot both read the same owed sums; one of
+        // them aborts and reports a retry instead of double-paying.
+        const dues = await payoutsDue(tx);
+        if (dues.length === 0) throw new PublicError(409, "Nothing is owed right now.");
+        const existing = await tx.referralLedgerEntry.findFirst({
+          where: { kind: "payout", payoutBatchId: batchId },
+          select: { id: true },
+        });
+        if (existing) throw new PublicError(409, `Batch ${batchId} has already been run.`);
+        for (const due of dues) {
+          await tx.referralLedgerEntry.create({
+            data: {
+              participantId: due.participantId,
+              kind: "payout",
+              amount: -due.owed,
+              payoutBatchId: batchId,
+            },
+          });
+        }
+        return { count: dues.length, total: dues.reduce((s, d) => s + d.owed, 0) };
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      throw new PublicError(409, `Batch ${batchId} has already been run.`);
+    }
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2034") {
+      throw new PublicError(409, "Another payout run was in progress. Refresh and try again.");
+    }
+    throw err;
+  }
+}

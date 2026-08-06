@@ -101,11 +101,13 @@ export async function GET(
       total,
       // Referral display state. Advisory snapshots: the folio is the money
       // truth, these keep every totals surface honest with what checkout
-      // will actually collect.
-      referral:
-        session.referralCode && session.referralDiscount != null
-          ? { code: session.referralCode, discount: session.referralDiscount }
-          : null,
+      // will actually collect. The code is returned even before a discount
+      // snapshot exists (a /r/ link stamps only the code at search time);
+      // hiding it here would blank the details prefill and every link-based
+      // referral would be silently cleared at submit.
+      referral: session.referralCode
+        ? { code: session.referralCode, discount: session.referralDiscount }
+        : null,
       credit:
         session.applyCredit && session.creditAmount != null
           ? { amount: session.creditAmount }
