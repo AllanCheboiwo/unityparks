@@ -126,7 +126,6 @@ No new vendors. Split by how much sandbox work each needs.
 |---|---|
 | Promo / repeat-guest codes | The referral engine shipped the hard parts (code capture, validation, folio allowances, no stacking). A general promo layer would reuse the same allowance seam with its own config |
 | Basket hold | Apaleo has no soft holds. Our own timed hold with re-validation at pay (we already re-check at pay time) |
-| Lodge detail pages | Pure content: galleries, floor plans, what's included. No Apaleo at all. Today lodge marketing lives only on the homepage showcase and the funnel cards; there is no page to read about a lodge without an active search |
 
 **Needs sandbox provisioning (the careful, slow kind)**
 
@@ -162,16 +161,18 @@ booking SaaS could substitute, but it is not required.
 
 ## 5. Suggested order
 
-1. **Lodge detail pages**: content depth for the demo, no Apaleo at all.
-2. **Newsletter capture and small conversion anchors** (per-person-per-night
+1. **Newsletter capture and small conversion anchors** (per-person-per-night
    price line): small, real wins.
-3. **Dogs and adapted lodges**: inventory breadth, needs careful sandbox
+2. **Dogs and adapted lodges**: inventory breadth, needs careful sandbox
    provisioning.
-4. **Activities scheduling layer**: the big own-build, start small with one
+3. **Activities scheduling layer**: the big own-build, start small with one
    activity type and per-day (not per-slot) capacity.
-5. **More villages**: only when content and photography exist to justify it.
+4. **More villages**: only when content and photography exist to justify it.
 
-The previous first two items shipped on 7 August. Post-booking extras: the
+The previous first three items shipped on 7 August. Lodge detail pages:
+/lodges/[code] for all four tiers (intro, gallery, what's included, room by
+room, a schematic floor plan, cross-links), wired from the homepage
+showcase, all content in content/lodges.ts. Post-booking extras: the
 book-service wrapper (verified set-count semantics), an ExtrasOrder ledger
 with crash recovery, both payment-state money paths, a receipt email, and
 the Manage card. Balance reminders: "due soon" inside 14 days of the due
@@ -195,7 +196,9 @@ list is the digital experience.
 - [x] FAQ accordion (partial: on the homepage, not a full help centre)
 - [ ] Mega-menu navigation with grouped sub-headings and campaign slot
 - [ ] Village pages, one per village, with map and character content
-- [ ] Lodge-type detail pages: photo galleries, floor plans, what's included
+- [x] Lodge-type detail pages: photo galleries, floor plans, what's included
+      (built 7 Aug; partial: gallery shares placeholder photos across tiers,
+      floor plans are schematic diagrams)
 - [ ] Seasonal campaign landing pages (autumn, Winter Wonderland, summer)
 - [ ] Activity and experience marketing pages (200+ activities)
 - [ ] Spa (Aqua Sana) marketing and treatment pages
@@ -230,7 +233,8 @@ list is the digital experience.
 - [ ] Interactive village map with selectable lodge plots (ours is
       illustrative, selection is via cards)
 - [ ] Guaranteed neighbouring lodges for multi-lodge bookings
-- [ ] Floor plans per lodge
+- [x] Floor plans per lodge (partial: schematic diagrams on the detail
+      pages, not architectural plans)
 
 ### Checkout
 - [x] Enhancements page with add-on cards and running total
@@ -308,7 +312,7 @@ list is the digital experience.
       commission) with /r/ share links, an append-only ledger, and an ops
       console with payout batches
 
-Tally: roughly 46 of 87 checklist items done. The whole core booking spine
+Tally: roughly 48 of 87 checklist items done. The whole core booking spine
 (search to paid confirmation to manage, extras before and after booking),
 the payment plan, and the referral programme are complete; what remains is
 mostly content depth, scheduled communications, and the pre-arrival

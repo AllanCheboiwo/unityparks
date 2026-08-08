@@ -154,11 +154,14 @@ export default async function HomePage() {
                       {lodge.bedrooms} bedrooms · sleeps {lodge.sleeps}
                     </p>
                     <div className="mt-5 flex flex-wrap gap-3">
-                      <Link href="/#search" className="btn-primary">
-                        View lodges
+                      <Link
+                        href={`/lodges/${lodge.code.toLowerCase()}`}
+                        className="btn-primary"
+                      >
+                        Discover the {lodge.name}
                       </Link>
                       <Link href="/#search" className="btn-dark-outline">
-                        Compare all lodges
+                        Check dates and prices
                       </Link>
                     </div>
                   </div>
