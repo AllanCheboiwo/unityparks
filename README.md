@@ -40,9 +40,9 @@ Tests: `npx vitest run` (pure-logic suites over `lib/` and `server/`).
   `referral/`, `email/`, `auth/`.
 - `content/` marketing words and pictures; Apaleo owns names and prices.
 - `docs/` the real documentation. Start with `FEATURES-REPORT.md` (what is
-  built and what is not), `DESIGN.md` (the visual system),
-  `deposit-and-cancellation-plan.md` and `referral-system-plan.md` (the two
-  money engines, spec plus post-build truth).
+  built and what is not), `DESIGN.md` (the visual system), and the three
+  money engines: `deposit-and-cancellation-plan.md`,
+  `referral-system-plan.md`, `post-booking-extras.md`.
 
 ## House rules
 

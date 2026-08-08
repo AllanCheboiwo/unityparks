@@ -49,8 +49,9 @@ The full inventory of the site as it stands on the `referral-system` branch
 - Pay the outstanding balance in full, or part payments of KES 500+
 - Cancel with tiered refunds (the 30% deposit is never refunded)
 - Add or edit guest names after booking
-- Add extras after booking (built 7 Aug): charged at once on paid bookings,
-  folded into the outstanding balance on deposit bookings, receipt emailed
+- Add extras after booking (built 7 Aug, spec: docs/post-booking-extras.md):
+  charged at once on paid bookings, folded into the outstanding balance on
+  deposit bookings, receipt emailed
 
 **Referral programme** (two tracks, one engine)
 - /r/CODE links set a 30-day cookie; the code stamps every new search
