@@ -7,6 +7,7 @@ import {
   isDepositEligible,
   isValidPartPayment,
   refundPercentFor,
+  reminderStageFor,
 } from "./paymentPlan";
 
 describe("depositAmountFor", () => {
@@ -131,5 +132,27 @@ describe("isValidPartPayment", () => {
     expect(isValidPartPayment(0, 10_000)).toBe(false);
     expect(isValidPartPayment(-500, 10_000)).toBe(false);
     expect(isValidPartPayment(500, 0)).toBe(false);
+  });
+});
+
+describe("reminderStageFor", () => {
+  it("is quiet while the due date is more than 14 days away", () => {
+    expect(reminderStageFor("2026-08-01", "2026-08-16")).toBe(null);
+    expect(reminderStageFor("2026-08-01", "2026-12-01")).toBe(null);
+  });
+
+  it("says upcoming through the 14-day window, due date included", () => {
+    expect(reminderStageFor("2026-08-01", "2026-08-15")).toBe("upcoming");
+    expect(reminderStageFor("2026-08-14", "2026-08-15")).toBe("upcoming");
+    expect(reminderStageFor("2026-08-15", "2026-08-15")).toBe("upcoming");
+  });
+
+  it("says overdue the day after the due date and forever on", () => {
+    expect(reminderStageFor("2026-08-16", "2026-08-15")).toBe("overdue");
+    expect(reminderStageFor("2027-01-01", "2026-08-15")).toBe("overdue");
+  });
+
+  it("handles month and year boundaries like daysBetween does", () => {
+    expect(reminderStageFor("2026-12-28", "2027-01-04")).toBe("upcoming");
   });
 });

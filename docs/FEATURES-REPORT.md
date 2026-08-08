@@ -124,7 +124,6 @@ No new vendors. Split by how much sandbox work each needs.
 
 | Feature | Shape of the work |
 |---|---|
-| Balance reminder emails | Deposit-plan phase 2. The email rail exists; what is missing is a trigger. Boring shape: a protected ops route that sends every due reminder idempotently (stamped like the other emails), hit by an external scheduler or by hand from the ops page. Auto-cancel of overdue bookings is a separate policy decision, not a default |
 | Promo / repeat-guest codes | The referral engine shipped the hard parts (code capture, validation, folio allowances, no stacking). A general promo layer would reuse the same allowance seam with its own config |
 | Basket hold | Apaleo has no soft holds. Our own timed hold with re-validation at pay (we already re-check at pay time) |
 | Lodge detail pages | Pure content: galleries, floor plans, what's included. No Apaleo at all. Today lodge marketing lives only on the homepage showcase and the funnel cards; there is no page to read about a lodge without an active search |
@@ -144,7 +143,7 @@ No new vendors. Split by how much sandbox work each needs.
 
 | Feature | Integration | Notes |
 |---|---|---|
-| Transactional email | Resend (done) | Confirmation, balance receipt, cancellation, password reset, referral reward, velocity alerts all live. What remains is the scheduled kind: balance reminders and 12-week window emails (section 3) |
+| Transactional email | Resend (done) | Confirmation, balance receipt, extras receipt, cancellation, password reset, referral reward, velocity alerts, balance reminders all live. What remains is the 12-week window opening email, which belongs to the pre-arrival engine |
 | SMS notifications | Africa's Talking (natural for Kenya) or Twilio | Arrival reminders, gate codes |
 | Newsletter | Any email marketing provider | The footer form is decorative today. The cheapest real version: store sign-ups in our own Postgres and export |
 | Live chat | Crisp, Intercom | CP has a chat bubble on every page |
@@ -163,21 +162,22 @@ booking SaaS could substitute, but it is not required.
 
 ## 5. Suggested order
 
-1. **Balance reminder emails**: phase 2 of the deposit plan, rides the
-   existing email rail plus one protected trigger route.
-2. **Lodge detail pages**: content depth for the demo, no Apaleo at all.
-3. **Newsletter capture and small conversion anchors** (per-person-per-night
+1. **Lodge detail pages**: content depth for the demo, no Apaleo at all.
+2. **Newsletter capture and small conversion anchors** (per-person-per-night
    price line): small, real wins.
-4. **Dogs and adapted lodges**: inventory breadth, needs careful sandbox
+3. **Dogs and adapted lodges**: inventory breadth, needs careful sandbox
    provisioning.
-5. **Activities scheduling layer**: the big own-build, start small with one
+4. **Activities scheduling layer**: the big own-build, start small with one
    activity type and per-day (not per-slot) capacity.
-6. **More villages**: only when content and photography exist to justify it.
+5. **More villages**: only when content and photography exist to justify it.
 
-Post-booking extras, the previous first item, shipped on 7 August: the
+The previous first two items shipped on 7 August. Post-booking extras: the
 book-service wrapper (verified set-count semantics), an ExtrasOrder ledger
 with crash recovery, both payment-state money paths, a receipt email, and
-the Manage card.
+the Manage card. Balance reminders: "due soon" inside 14 days of the due
+date and "overdue" after it, each stamped once-only, triggered from
+/ops/reminders or by an external scheduler bearing REMINDERS_RUN_SECRET;
+auto-cancel of overdue bookings stays a deliberate human decision.
 
 ---
 
@@ -252,7 +252,7 @@ list is the digital experience.
 - [x] Real PSP integration (Pesapal sandbox: card and M-Pesa simulations)
 - [x] Payment settled onto the booking folio (Apaleo)
 - [x] Confirmation page with real booking reference and itemised receipt
-- [x] Deposit now, balance due 8 weeks before arrival (built 23 Jul, see docs/deposit-and-cancellation-plan.md); reminder emails are phase 2
+- [x] Deposit now, balance due 8 weeks before arrival (built 23 Jul, see docs/deposit-and-cancellation-plan.md; reminder emails built 7 Aug)
 - [x] Referral credit applied at the pay step (vested balance, KES 500 floor)
 - [ ] Wallet checkout (Click to Pay) and 3DS surfaced in our own UI
 - [x] Confirmation email (Resend, sent once when the folio settles)
@@ -292,9 +292,9 @@ list is the digital experience.
 - [ ] Per-item basket holds in the pre-arrival flow
 
 ### Communications and support
-- [x] Transactional email (partial: confirmation, balance receipt,
-      cancellation, password reset, referral reward live; balance
-      reminders and window-opening emails still to come)
+- [x] Transactional email (partial: confirmation, balance receipt, extras
+      receipt, cancellation, password reset, referral reward and balance
+      reminders live; the 12-week window-opening email still to come)
 - [ ] Marketing email programme
 - [x] Newsletter sign-up (partial: form exists, not wired to anything)
 - [ ] Live chat bubble on every page

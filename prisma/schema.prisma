@@ -266,6 +266,13 @@ model BookingRecord {
   refundAmount        Float?
   cancellationEmailAt DateTime?
 
+  // Balance reminder stamps (deposit plan phase 2), one per reminder stage,
+  // claimed atomically like every other email stamp. Each stage sends at
+  // most once in a booking's life; there is still no scheduler, the ops
+  // reminders route walks candidates whenever it is run.
+  reminderUpcomingEmailAt DateTime?
+  reminderOverdueEmailAt  DateTime?
+
   // Ownership. Copied from the session at creation, or adopted later by the
   // claim backfill when an account registers/logs in with the guest email.
   // claimedVia records how the link happened so a wrong adoption is visible

@@ -96,6 +96,25 @@ export function computeRefund(input: {
   };
 }
 
+/** How far before the due date the "balance due soon" reminder may go out. */
+export const REMINDER_WINDOW_DAYS = 14;
+
+/**
+ * Which balance reminder a deposit-paid booking is owed today, from dates
+ * alone: "upcoming" inside the 14 days up to and including the due date,
+ * "overdue" once the due date has passed, null while it is too early. The
+ * caller layers on everything stateful (status, outstanding, sent stamps).
+ */
+export function reminderStageFor(
+  todayIso: string,
+  dueDateIso: string,
+): "upcoming" | "overdue" | null {
+  const daysToDue = daysBetween(todayIso, dueDateIso);
+  if (daysToDue < 0) return "overdue";
+  if (daysToDue <= REMINDER_WINDOW_DAYS) return "upcoming";
+  return null;
+}
+
 /**
  * A part payment must either clear the balance exactly, or be at least the
  * minimum AND leave at least the minimum outstanding - otherwise a guest

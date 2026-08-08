@@ -34,9 +34,14 @@ export default async function ReferralOpsPage() {
     <div className="mx-auto max-w-5xl px-5 py-10">
       <div className="flex items-center justify-between">
         <h1 className="font-display text-3xl font-bold text-ink">Referral operations</h1>
-        <Link href="/ops/referrals/payouts" className="btn-outline text-sm">
-          Payouts
-        </Link>
+        <div className="flex gap-2">
+          <Link href="/ops/reminders" className="btn-outline text-sm">
+            Reminders
+          </Link>
+          <Link href="/ops/referrals/payouts" className="btn-outline text-sm">
+            Payouts
+          </Link>
+        </div>
       </div>
 
       <section className="mt-8 rounded-lg border border-line bg-white p-5">
