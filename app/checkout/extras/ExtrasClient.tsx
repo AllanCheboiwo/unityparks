@@ -225,7 +225,7 @@ export function ExtrasClient() {
           <p className="text-sm text-foreground/70 max-w-xl">
             Add something special to make your break even better. Don&apos;t worry
             if you can&apos;t decide now, you can add as many as you like once
-            you&apos;ve booked by going into my account.
+            you&apos;ve booked, from Manage my booking.
             {multi && " Extras are added per lodge."}
           </p>
 

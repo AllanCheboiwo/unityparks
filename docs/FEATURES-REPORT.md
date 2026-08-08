@@ -49,6 +49,8 @@ The full inventory of the site as it stands on the `referral-system` branch
 - Pay the outstanding balance in full, or part payments of KES 500+
 - Cancel with tiered refunds (the 30% deposit is never refunded)
 - Add or edit guest names after booking
+- Add extras after booking (built 7 Aug): charged at once on paid bookings,
+  folded into the outstanding balance on deposit bookings, receipt emailed
 
 **Referral programme** (two tracks, one engine)
 - /r/CODE links set a 30-day cookie; the code stamps every new search
@@ -122,7 +124,6 @@ No new vendors. Split by how much sandbox work each needs.
 
 | Feature | Shape of the work |
 |---|---|
-| Add extras post-booking | Amend the reservation's services (the removal wrapper exists, the add wrapper does not yet), settle the difference on the folio the way amend-dates already does, keep the frozen money snapshots in step. The 12-week pre-arrival upsell window in miniature. The extras page copy already promises it |
 | Balance reminder emails | Deposit-plan phase 2. The email rail exists; what is missing is a trigger. Boring shape: a protected ops route that sends every due reminder idempotently (stamped like the other emails), hit by an external scheduler or by hand from the ops page. Auto-cancel of overdue bookings is a separate policy decision, not a default |
 | Promo / repeat-guest codes | The referral engine shipped the hard parts (code capture, validation, folio allowances, no stacking). A general promo layer would reuse the same allowance seam with its own config |
 | Basket hold | Apaleo has no soft holds. Our own timed hold with re-validation at pay (we already re-check at pay time) |
@@ -162,18 +163,21 @@ booking SaaS could substitute, but it is not required.
 
 ## 5. Suggested order
 
-1. **Post-booking extras**: zero modelling, completes the manage story,
-   and the extras page already tells guests they can do it.
-2. **Balance reminder emails**: phase 2 of the deposit plan, rides the
+1. **Balance reminder emails**: phase 2 of the deposit plan, rides the
    existing email rail plus one protected trigger route.
-3. **Lodge detail pages**: content depth for the demo, no Apaleo at all.
-4. **Newsletter capture and small conversion anchors** (per-person-per-night
+2. **Lodge detail pages**: content depth for the demo, no Apaleo at all.
+3. **Newsletter capture and small conversion anchors** (per-person-per-night
    price line): small, real wins.
-5. **Dogs and adapted lodges**: inventory breadth, needs careful sandbox
+4. **Dogs and adapted lodges**: inventory breadth, needs careful sandbox
    provisioning.
-6. **Activities scheduling layer**: the big own-build, start small with one
+5. **Activities scheduling layer**: the big own-build, start small with one
    activity type and per-day (not per-slot) capacity.
-7. **More villages**: only when content and photography exist to justify it.
+6. **More villages**: only when content and photography exist to justify it.
+
+Post-booking extras, the previous first item, shipped on 7 August: the
+book-service wrapper (verified set-count semantics), an ExtrasOrder ledger
+with crash recovery, both payment-state money paths, a receipt email, and
+the Manage card.
 
 ---
 
@@ -273,7 +277,8 @@ list is the digital experience.
       cancel + folio refund + email)
 - [x] Balance and part payments from Manage (KES 500 minimum, no stranded
       slivers)
-- [ ] Add extras after booking
+- [x] Add extras after booking (charged at once when paid in full, folded
+      into the balance on deposit bookings, receipt emailed)
 - [ ] Shared itinerary across guests
 
 ### The 12-week pre-arrival window
@@ -303,7 +308,8 @@ list is the digital experience.
       commission) with /r/ share links, an append-only ledger, and an ops
       console with payout batches
 
-Tally: roughly 45 of 87 checklist items done. The whole core booking spine
-(search to paid confirmation to manage), the payment plan, and the referral
-programme are complete; what remains is mostly content depth, scheduled
-communications, and the pre-arrival ancillary engine.
+Tally: roughly 46 of 87 checklist items done. The whole core booking spine
+(search to paid confirmation to manage, extras before and after booking),
+the payment plan, and the referral programme are complete; what remains is
+mostly content depth, scheduled communications, and the pre-arrival
+ancillary engine.

@@ -7,6 +7,12 @@
       "runtimeArgs": ["run", "dev"],
       "port": 3000,
       "autoPort": true
+    },
+    {
+      "name": "unity-parks-simulated",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["PAYMENTS_PROVIDER=simulated", "npm", "run", "dev", "--", "-p", "3901"],
+      "port": 3901
     }
   ]
 }

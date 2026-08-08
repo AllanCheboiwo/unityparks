@@ -41,6 +41,21 @@ export async function POST(
       return jsonError(400, "This booking is not payable.");
     }
 
+    // Mirror of the extras engine's live-payment check: a live ExtrasOrder
+    // is about to move this booking's folio and totals, and the settle that
+    // follows this payment derives paid amounts from folio balances. Wait
+    // it out rather than interleave.
+    const liveExtras = await prisma.extrasOrder.findFirst({
+      where: { liveForRecordId: record.id },
+      select: { id: true },
+    });
+    if (liveExtras) {
+      return jsonError(
+        409,
+        "Extras are still being added to this booking. Give it a moment and try again.",
+      );
+    }
+
     // The exact remainder, unrounded: settlePayment validates the collected
     // amount against this same figure with the same epsilon. Rounding here
     // could overshoot the folio (wedging the payment in the 502 path) or

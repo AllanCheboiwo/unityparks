@@ -103,6 +103,37 @@ export type SessionSummary = {
   credit: { amount: number } | null;
 };
 
+/** One extra offered on the Manage add-extras card. */
+export type ManageExtraOfferDto = {
+  serviceId: string;
+  code: string;
+  name: string;
+  description: string;
+  pricingUnit: string;
+  unitPrice: number;
+  currency: string;
+  /** How many the reservation already holds (from checkout or earlier adds). */
+  ownedCount: number;
+  /** How many more can be added (0 disables adding on quantity rows;
+   *  one-off rows render as already-added). */
+  maxAdd: number;
+};
+
+/** GET /api/booking/[id]/extras: live offers per lodge plus money handling. */
+export type ManageExtrasDto = {
+  kind: "charge_now" | "on_balance";
+  lodges: { slot: number; extras: ManageExtraOfferDto[] }[];
+};
+
+/** POST /api/booking/[id]/extras outcome. */
+export type AddExtrasResultDto = {
+  ok: boolean;
+  kind: "charge_now" | "on_balance";
+  amount: number;
+  totalGrossAmount: number;
+  paidAmount: number;
+};
+
 export type GuestRowDto = {
   slot: number;
   position: number;

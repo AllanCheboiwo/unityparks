@@ -278,6 +278,51 @@ model BookingRecord {
   reservations BookingReservation[]
   pesapalTransactions PesapalTransaction[]
   referralAttribution ReferralAttribution?
+  extrasOrders        ExtrasOrder[]
+}
+
+// One "add extras after booking" operation for one lodge, created BEFORE any
+// Apaleo write so a crash mid-operation always leaves a row to recover from.
+// The verified book-service semantics make recovery exact: booking a service
+// sets its count absolutely (2 bikes then count 3 = 3 bikes, not 5), so
+// writing previousCount back is a clean rollback and writing targetCount
+// again is a clean retry.
+model ExtrasOrder {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  recordId String
+  record   BookingRecord @relation(fields: [recordId], references: [id])
+  slot     Int
+
+  // JSON [{ serviceId, code, name, pricingUnit, previousCount, addCount,
+  //         targetCount, amount }] - counts are absolute before/after values
+  // for book-service, amount is the quoted price for the added quantity.
+  additions String
+
+  // What the guest approved (sum of addition amounts). The folio delta must
+  // match within a whole KES or the whole order rolls back.
+  expectedDelta Float
+  // The folio delta actually observed; equals expectedDelta on the happy path.
+  chargedDelta  Float?
+  currency      String
+
+  // "charge_now": paid bookings settle the new charge on the folio at once,
+  // amend-style. "on_balance": deposit-paid bookings fold it into the
+  // outstanding balance and the existing pay route collects it later.
+  kind String
+
+  status String @default("created") // created | settled | failed
+
+  // Once-only stamp for the extras receipt email, same claim-release
+  // discipline as BookingRecord.confirmationEmailAt.
+  emailAt DateTime?
+
+  // The serializer, exactly like PesapalTransaction: holds the record id
+  // while this order is live, cleared when it settles or fails, so two
+  // concurrent adds become a constraint violation instead of a double booking.
+  liveForRecordId String? @unique
 }
 
 // One Pesapal order per payment attempt for a booking (the guest sees one
