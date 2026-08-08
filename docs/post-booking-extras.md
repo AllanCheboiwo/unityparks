@@ -77,12 +77,19 @@ carrying the priced additions with `previousCount`, `addCount` and
 `PesapalTransaction`: two concurrent adds on one booking become a
 constraint violation, not two bookings.
 
-Mutual exclusion with the payment engine is advisory and mutual: the extras
-engine refuses while a live `PesapalTransaction` exists, and `/pay` refuses
-while a live `ExtrasOrder` exists. Neither engine can see the other's
-mid-flight folio moves, and `settlePayment` derives paid amounts from folio
-balances, so they take turns. The residual millisecond window surfaces as
-the settle engine's loud drift wedge, never as silent money.
+Mutual exclusion with the other engines is advisory and mutual: the extras
+engine refuses while a live `PesapalTransaction` exists, and both `/pay` and
+`/amend` run `recoverStaleExtrasOrder` before they touch a folio. Neither
+engine can see the other's mid-flight folio moves, `settlePayment` derives
+paid amounts from folio balances, and the amend route's step-3 sweep pays
+off whatever a folio owes, so they take turns. The residual millisecond
+window surfaces as the settle engine's loud drift wedge, never as silent
+money.
+
+Those two callers deliberately go through recovery rather than a bare
+existence check. A bare check would refuse forever if an order ever crashed:
+recovery is otherwise reachable only from the extras card, which stops
+rendering once arrival passes, so a wedged balance could never be paid.
 
 Before any quote or add, `recoverStaleExtrasOrder` resolves a live order
 older than the five-minute grace (generous because the Apaleo client
@@ -120,13 +127,6 @@ cancelled break.
 
 Documented rather than built, in the spirit of the other two engines.
 
-- **Amend racing an add.** The amend route is not serialized against
-  extras. Its step-3 folio sweep pays off any negative balance it finds, so
-  in a narrow window it could pay an extras order's transient charge, after
-  which the extras rollback leaves that money as folio credit no column
-  records. Pre-existing weakness of the amend route rather than something
-  extras introduced, and the mirror guard is the obvious fix if it ever
-  bites.
 - **Rollback at changed rates.** If a service's rate changes mid-request,
   the rollback restores counts exactly but the surviving services reprice
   at the new rate, so the folio can land off its baseline. Detected and
@@ -150,6 +150,20 @@ Documented rather than built, in the spirit of the other two engines.
 | UI | `app/manage/[bookingId]/AddExtrasCard.tsx` |
 | Schema | `ExtrasOrder` in `prisma/schema.prisma` |
 
+## The legacy paidAmount sentinel
+
+Worth knowing before touching the settle. Records from before the deposit
+feature store `paidAmount = 0` while being fully paid, and the schema says
+so: every consumer normalises it (cancellation's `effectivePaid`,
+`settlePayment`'s split basis via the child's `paidAt`, the booking GET).
+The first version of this engine grew `paidAmount` with a blind increment,
+which turned a legacy record's 0 into just the extra's value: the sentinel
+was gone, `effectivePaid` stopped falling back, and a guest who had paid
+KES 100,000 and added one KES 3,000 bike would have been refunded nothing
+instead of KES 70,000 on cancellation. The settle now lifts the sentinel to
+the truth before adding the delta, on both the record and the child, and
+`lib/paymentPlan.test.ts` pins the arithmetic in both directions.
+
 ## Verification
 
 Live E2E against the UPNV sandbox and a dev server on the simulated
@@ -157,6 +171,7 @@ payments provider, 7 Aug: 27 checks covering both money paths, the folio
 staying settled on the paid path, the outstanding balance growing then
 settling cleanly on the deposit path (the drift-wedge test), owned-count
 requoting, the one-off re-add refusal, the quantity cap, the LOCATION
-refusal, and the proof-of-access refusals. Plus 15 unit tests on the pure
-math and a four-dimension adversarial review whose confirmed findings are
-fixed in the same commit.
+refusal, and the proof-of-access refusals. Plus unit tests on the pure math
+and the refund arithmetic, and two adversarial review rounds (eight
+dimensions in total, every finding independently verified before it was
+acted on) whose confirmed findings are all fixed.

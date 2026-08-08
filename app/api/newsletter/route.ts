@@ -4,7 +4,9 @@ import { prisma } from "@/server/db";
 import { normalizeEmail } from "@/server/auth/normalize";
 import { handleRoute, jsonError } from "@/server/api-helpers";
 
-const SignupBody = z.object({ email: z.string().trim().email() });
+// The RFC 5321 cap: without it an oversized address sails past validation
+// and dies on Postgres' btree index limit, or stores multi-KB junk forever.
+const SignupBody = z.object({ email: z.string().trim().email().max(254) });
 
 /**
  * The footer newsletter sign-up. Stores the lowercase email and nothing

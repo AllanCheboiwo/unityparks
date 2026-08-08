@@ -156,3 +156,36 @@ describe("reminderStageFor", () => {
     expect(reminderStageFor("2026-12-28", "2027-01-04")).toBe("upcoming");
   });
 });
+
+describe("computeRefund after post-booking extras", () => {
+  // The legacy sentinel (paidAmount 0 on a fully paid pre-deposit record)
+  // must be lifted to the truth before extras grow it, or the refund
+  // collapses. This pins the arithmetic the extras settle relies on.
+  it("still refunds the balance beyond the deposit once extras were added", () => {
+    const originalTotal = 100_000;
+    const extra = 3_000;
+    const result = computeRefund({
+      total: originalTotal + extra,
+      // What settleExtrasOrder writes for a legacy paid record: the whole
+      // original total, plus the extra it just charged.
+      paidAmount: originalTotal + extra,
+      depositAmount: null, // legacy record, deposit derived as 30% of total
+      daysToArrival: 60,
+    });
+    expect(result.refundPercent).toBe(100);
+    expect(result.depositKept).toBe(30_900); // 30% of the grown total
+    expect(result.refundAmount).toBe(72_100);
+  });
+
+  it("would have refunded nothing if the sentinel had been incremented", () => {
+    // The bug this guards against: paidAmount 0 + 3000 = 3000, so the
+    // deposit swallows everything and the guest gets nothing back.
+    const collapsed = computeRefund({
+      total: 103_000,
+      paidAmount: 3_000,
+      depositAmount: null,
+      daysToArrival: 60,
+    });
+    expect(collapsed.refundAmount).toBe(0);
+  });
+});

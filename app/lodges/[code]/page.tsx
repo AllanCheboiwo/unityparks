@@ -110,7 +110,7 @@ function FloorPlan({ lodge }: { lodge: LodgeContent }) {
       viewBox={`0 0 ${W} ${H}`}
       role="img"
       aria-label={`Schematic floor plan of the ${lodge.name}`}
-      className="w-full max-w-xl"
+      className="w-full min-w-[420px] max-w-xl"
     >
       {deck && (
         <Room x={M} y={innerBottom} w={W - 2 * M} h={DECK_H} name={deck.name} fill={`${lodge.accent}22`} />
@@ -216,7 +216,19 @@ export default async function LodgeDetailPage({
                 index === 0 ? "aspect-[4/3] sm:col-span-2 sm:row-span-2 sm:aspect-auto" : "aspect-[4/3]"
               }`}
             >
-              <Image src={photo.src} alt={photo.alt} fill className="object-cover" />
+              <Image
+                src={photo.src}
+                alt={photo.alt}
+                fill
+                // Without sizes, a fill image asks for 100vw and downloads a
+                // full-viewport file for a thumbnail.
+                sizes={
+                  index === 0
+                    ? "(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 560px"
+                    : "(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 280px"
+                }
+                className="object-cover"
+              />
             </div>
           ))}
         </div>
@@ -273,7 +285,9 @@ export default async function LodgeDetailPage({
               A schematic, not a blueprint: what the lodge has and roughly
               where it sits.
             </p>
-            <div className="mt-5 rounded-lg border border-line bg-white p-5">
+            {/* Scrolls rather than shrinks: the labels are sized in viewBox
+                units, so a squeezed plan renders them at about 7px. */}
+            <div className="mt-5 overflow-x-auto rounded-lg border border-line bg-white p-5">
               <FloorPlan lodge={lodge} />
             </div>
           </div>
@@ -313,6 +327,7 @@ export default async function LodgeDetailPage({
                   src={other.image}
                   alt={other.name}
                   fill
+                  sizes="(max-width: 640px) 100vw, 380px"
                   className="object-cover transition-transform duration-300 group-hover:scale-105"
                 />
               </div>

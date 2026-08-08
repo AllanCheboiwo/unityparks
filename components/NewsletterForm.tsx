@@ -13,8 +13,10 @@ export function NewsletterForm() {
   const [error, setError] = useState<string | null>(null);
 
   if (done) {
+    // A lightened leaf, not the moss token: moss on the dark footer is under
+    // 3:1, and this line is the only confirmation the guest ever gets.
     return (
-      <p className="flex items-center gap-2 text-sm font-semibold text-moss">
+      <p className="flex items-center gap-2 text-sm font-semibold text-[#a3c14a]">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
           <path d="M4 12.5 9.5 18 20 6.5" />
         </svg>
@@ -43,6 +45,7 @@ export function NewsletterForm() {
       >
         <input
           type="email"
+          required
           placeholder="Email address"
           aria-label="Email address"
           value={email}

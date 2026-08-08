@@ -465,13 +465,30 @@ async function settleExtrasOrder(
       throw new PublicError(409, "This change was already processed. Reload to see your extras.");
     }
 
+    // Records from before the deposit feature store paidAmount 0 while being
+    // fully paid (schema: "a legacy paid record is read as fully paid"), the
+    // sentinel that cancellation's effectivePaid, settlePayment and the
+    // booking GET all normalise. Incrementing it would leave the record
+    // reading as if only the extra had ever been paid, which collapses the
+    // guest's cancellation refund to nothing, so lift it to the truth first.
+    // Safe as an absolute write: a fully paid record's paidAmount cannot move
+    // under us (the pay route refuses "paid", another add is serialized out,
+    // and a cancellation changes the status this update guards on).
+    const legacyPaidRecord = record.paidAmount === 0 && record.status === "paid";
+    const recordPaid =
+      kind !== "charge_now"
+        ? {}
+        : legacyPaidRecord
+          ? { paidAmount: record.totalGrossAmount + actualDelta }
+          : { paidAmount: { increment: actualDelta } };
+
     // The record must still be in the state the money move assumed; a
     // cancellation racing this exact window is a human matter, loudly.
     const recordUpdated = await tx.bookingRecord.updateMany({
       where: { id: record.id, status: record.status },
       data: {
         totalGrossAmount: { increment: actualDelta },
-        ...(kind === "charge_now" ? { paidAmount: { increment: actualDelta } } : {}),
+        ...recordPaid,
       },
     });
     if (recordUpdated.count === 0) {
@@ -487,11 +504,21 @@ async function settleExtrasOrder(
     }
 
     if (lodge.child) {
+      // Same legacy sentinel one level down, where paidAt is the signal a
+      // zero means "settled long ago" rather than "nothing paid" (the rule
+      // settlePayment's split basis follows).
+      const legacyPaidChild = lodge.child.paidAmount === 0 && lodge.child.paidAt !== null;
+      const childPaid =
+        kind !== "charge_now"
+          ? {}
+          : legacyPaidChild
+            ? { paidAmount: lodge.child.grossAmount + actualDelta }
+            : { paidAmount: { increment: actualDelta } };
       await tx.bookingReservation.update({
         where: { id: lodge.child.id },
         data: {
           grossAmount: { increment: actualDelta },
-          ...(kind === "charge_now" ? { paidAmount: { increment: actualDelta } } : {}),
+          ...childPaid,
         },
       });
     }

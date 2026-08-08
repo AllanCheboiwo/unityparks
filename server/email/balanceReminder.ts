@@ -39,6 +39,7 @@ export async function sendBalanceReminder(
   stage: ReminderStage,
 ): Promise<boolean> {
   const stampField = stage === "upcoming" ? "reminderUpcomingEmailAt" : "reminderOverdueEmailAt";
+  let claimedHere = false;
   try {
     // The claim carries the status filter: a booking that got paid (or
     // cancelled) between listing and sending must not claim a stamp.
@@ -47,6 +48,7 @@ export async function sendBalanceReminder(
       data: { [stampField]: new Date() },
     });
     if (claimed.count === 0) return false;
+    claimedHere = true;
 
     const record = await prisma.bookingRecord.findUniqueOrThrow({
       where: { id: recordId },
@@ -153,7 +155,17 @@ export async function sendBalanceReminder(
     // behave like production without emailing anyone twice later.
     return result.sent === false && result.skipped === true;
   } catch (err) {
+    // A transport-level failure (DNS, reset connection) rejects rather than
+    // returning an error result, so the release above never runs. Give the
+    // claim back here too, or this booking would never be chased again.
     console.error(`[email] ${stage} reminder crashed`, err);
+    if (claimedHere) {
+      await prisma.bookingRecord
+        .update({ where: { id: recordId }, data: { [stampField]: null } })
+        .catch((releaseErr) =>
+          console.error(`[email] ${stage} reminder could not release its stamp`, releaseErr),
+        );
+    }
     return false;
   }
 }
