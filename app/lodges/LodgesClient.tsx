@@ -208,6 +208,12 @@ export function LodgesClient() {
 
   const multi = session.lodges.length > 1;
   const activeLodge = session.lodges.find((l) => l.slot === activeSlot) ?? session.lodges[0];
+  // The per-person price anchor counts everyone with a bed: adults plus
+  // children aged 2 and over. Cot infants ride free, same as occupancy.
+  const activeHeads = Math.max(
+    1,
+    activeLodge.adults + activeLodge.childrenAges.filter((age) => age >= 2).length,
+  );
   const activeOffers = offersBySlot[activeSlot] ?? [];
   const offersByCode = new Map(activeOffers.map((o) => [o.unitGroupCode, o]));
   const allChosen = session.lodges.every((l) => l.lodge);
@@ -550,6 +556,11 @@ export function LodgesClient() {
                           {formatKes(offer.totalGrossAmount)}
                         </p>
                         <p className="text-[13px] text-foreground/60">per lodge</p>
+                        <p className="text-[12px] text-foreground/50">
+                          about{" "}
+                          {formatKes(offer.totalGrossAmount / session.nights / activeHeads)}{" "}
+                          per person per night
+                        </p>
                         <p className="mt-1 text-xs text-foreground/50">
                           {offer.cancellationName ?? "flexible"} rate
                         </p>

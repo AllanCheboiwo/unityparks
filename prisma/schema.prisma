@@ -414,6 +414,15 @@ model BookingReservation {
   @@unique([recordId, slot])
 }
 
+// A footer newsletter sign-up: the cheapest real version of the feature.
+// Lowercase unique email and nothing else; stored here for a later export
+// to whatever marketing provider gets chosen, never sent anywhere today.
+model NewsletterSubscriber {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  email     String   @unique // always lowercase
+}
+
 // ---------------------------------------------------------------------------
 // Referral engine (docs/referral-system-plan.md). Two tracks: influencers
 // earn cash commission, clients earn resort credit. The PMS knows nothing

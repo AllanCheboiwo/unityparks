@@ -144,7 +144,7 @@ No new vendors. Split by how much sandbox work each needs.
 |---|---|---|
 | Transactional email | Resend (done) | Confirmation, balance receipt, extras receipt, cancellation, password reset, referral reward, velocity alerts, balance reminders all live. What remains is the 12-week window opening email, which belongs to the pre-arrival engine |
 | SMS notifications | Africa's Talking (natural for Kenya) or Twilio | Arrival reminders, gate codes |
-| Newsletter | Any email marketing provider | The footer form is decorative today. The cheapest real version: store sign-ups in our own Postgres and export |
+| Newsletter | Any email marketing provider | The cheapest real version shipped 7 Aug: the footer form stores lowercase sign-ups in our Postgres for a later export. A provider integration remains for actual sends |
 | Live chat | Crisp, Intercom | CP has a chat bubble on every page |
 | Reviews | Own DB, or a Trustpilot-style widget | CP's "unforgettable moments" wall |
 | ANPR gate | Hardware/venue system | We already capture the plate; the gate is a physical integration |
@@ -161,15 +161,14 @@ booking SaaS could substitute, but it is not required.
 
 ## 5. Suggested order
 
-1. **Newsletter capture and small conversion anchors** (per-person-per-night
-   price line): small, real wins.
-2. **Dogs and adapted lodges**: inventory breadth, needs careful sandbox
+1. **Dogs and adapted lodges**: inventory breadth, needs careful sandbox
    provisioning.
-3. **Activities scheduling layer**: the big own-build, start small with one
+2. **Activities scheduling layer**: the big own-build, start small with one
    activity type and per-day (not per-slot) capacity.
-4. **More villages**: only when content and photography exist to justify it.
+3. **More villages**: only when content and photography exist to justify it.
 
-The previous first three items shipped on 7 August. Lodge detail pages:
+The previous first four items shipped on 7 August, newsletter capture and
+the per-person-per-night price anchor included. Lodge detail pages:
 /lodges/[code] for all four tiers (intro, gallery, what's included, room by
 room, a schematic floor plan, cross-links), wired from the homepage
 showcase, all content in content/lodges.ts. Post-booking extras: the
@@ -226,7 +225,8 @@ list is the digital experience.
 - [x] Live availability with scarcity messaging and sold-out reasons
 - [x] Price-calendar view of nearby dates (our month strip)
 - [x] Cancellation policy shown on cards
-- [ ] Per-person-per-night secondary price anchor
+- [x] Per-person-per-night secondary price anchor (on the lodge cards,
+      counting everyone with a bed; cot infants ride free)
 - [ ] Staggered access-time ladder by tier (1pm to 4pm) as an upgrade cue
 - [x] Location step: pick the exact lodge for a fee, or free no-preference
 - [ ] Area-level location choice (near pool, quiet zone) at a smaller fee
@@ -300,7 +300,8 @@ list is the digital experience.
       receipt, cancellation, password reset, referral reward and balance
       reminders live; the 12-week window-opening email still to come)
 - [ ] Marketing email programme
-- [x] Newsletter sign-up (partial: form exists, not wired to anything)
+- [x] Newsletter sign-up (partial: stored in our Postgres since 7 Aug, no
+      marketing provider behind it yet)
 - [ ] Live chat bubble on every page
 - [ ] Customer service platform integration
 - [ ] Mobile apps (iOS and Android) wrapping My Booking
@@ -312,7 +313,7 @@ list is the digital experience.
       commission) with /r/ share links, an append-only ledger, and an ops
       console with payout batches
 
-Tally: roughly 48 of 87 checklist items done. The whole core booking spine
+Tally: roughly 49 of 87 checklist items done. The whole core booking spine
 (search to paid confirmation to manage, extras before and after booking),
 the payment plan, and the referral programme are complete; what remains is
 mostly content depth, scheduled communications, and the pre-arrival
