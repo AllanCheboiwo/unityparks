@@ -2,13 +2,22 @@ import Image from "next/image";
 import Link from "next/link";
 import { BookingBar } from "@/components/BookingBar";
 import { MemoriesCounter } from "@/components/MemoriesCounter";
-import { StickySearch } from "@/app/StickySearch";
+import { StickySearch } from "./StickySearch";
 import { LODGES, TIER_ORDER } from "@/content/lodges";
-import { ACTIVITIES, DISCOVER, FAQS, SEASONS } from "@/content/home";
+import { getHomeContent, mediaRef } from "@/server/content";
 import { countMemories, MEMORIES_GOAL } from "@/server/memories";
 
+// CMS edits must show on the next request; declared rather than relying on
+// the layout's cookie read to keep this page dynamic.
+export const dynamic = "force-dynamic";
+
 export default async function HomePage() {
-  const memories = await countMemories();
+  const [{ home, activities, seasons, faqs }, memories] = await Promise.all([
+    getHomeContent(),
+    countMemories(),
+  ]);
+  const heroVideo = mediaRef(home.hero.video);
+  const heroPoster = mediaRef(home.hero.poster);
 
   return (
     <div>
@@ -16,23 +25,18 @@ export default async function HomePage() {
       <section className="bg-white">
         <div className="mx-auto grid max-w-6xl items-center gap-10 px-5 py-14 sm:py-20 md:grid-cols-2">
           <h1 className="font-display text-5xl font-light leading-[1.1] text-ink sm:text-6xl lg:text-[68px]">
-            For a <em className="font-light italic">billion</em> happy memories
+            {home.hero.headingBefore}{" "}
+            <em className="font-light italic">{home.hero.headingEmphasis}</em>{" "}
+            {home.hero.headingAfter}
           </h1>
           <div>
             <h2 className="font-display text-2xl font-bold text-[#6b6248]">
-              Your forest break at Lake Naivasha
+              {home.hero.subheading}
             </h2>
-            <p className="mt-3 text-base">
-              A lodge of your own among the trees, a lagoon to splash in and
-              time together that nobody has to plan. Breaks start every Friday
-              and Monday at Unity Parks Naivasha.
-            </p>
-            <p className="mt-3 text-base font-bold text-ink">
-              School holiday breaks are booking fast. Find yours before they
-              fill.
-            </p>
+            <p className="mt-3 text-base">{home.hero.intro}</p>
+            <p className="mt-3 text-base font-bold text-ink">{home.hero.urgency}</p>
             <a href="#search" className="btn-primary btn-hero mt-6 inline-block">
-              Find your break
+              {home.hero.ctaLabel}
             </a>
           </div>
         </div>
@@ -44,13 +48,13 @@ export default async function HomePage() {
           {/* Muted looping video, poster first so the band never flashes empty. */}
           <video
             className="absolute inset-0 h-full w-full object-cover"
-            src="/videos/hero-family-lake.mp4"
-            poster="/photos/hero-forest.jpg"
+            src={heroVideo.url}
+            poster={heroPoster.url}
             autoPlay
             muted
             loop
             playsInline
-            aria-label="A family walking together by the lake"
+            aria-label={home.hero.videoDescription}
           />
         </div>
         <div className="absolute inset-x-0 top-6 z-10 sm:top-10">
@@ -63,34 +67,27 @@ export default async function HomePage() {
       {/* 3. Village intro. */}
       <section id="discover" className="mx-auto max-w-6xl px-5 py-16">
         <h2 className="font-display text-3xl font-bold text-ink sm:text-4xl">
-          One village, endless memories
+          {home.village.heading}
         </h2>
-        <p className="mt-3 max-w-2xl text-base">
-          Unity Parks Naivasha sits in the forest on the shore of Lake
-          Naivasha, Kenya. Every lodge, trail and splash of the lagoon is part
-          of one village built for time together.
-        </p>
+        <p className="mt-3 max-w-2xl text-base">{home.village.intro}</p>
         <div className="mt-8 grid items-center gap-8 overflow-hidden rounded-lg border border-line bg-white p-5 sm:p-6 md:grid-cols-2">
           <div className="relative aspect-[3/2] overflow-hidden rounded-md">
             <Image
               src="/village-map.svg"
-              alt="Illustrated map of the Unity Parks Naivasha village"
+              alt={home.village.mapAlt}
               fill
               className="object-cover"
             />
           </div>
           <div>
             <h3 className="font-display text-2xl font-bold text-navy">
-              Unity Parks Naivasha
+              {home.village.cardName}
             </h3>
             <p className="mt-1 flex items-center gap-1.5 text-sm">
               <PinIcon />
-              Lake Naivasha, Kenya
+              {home.village.locationLine}
             </p>
-            <p className="mt-3 text-base">
-              Lakeside forest, four lodge styles, one swimming lagoon and
-              room for the whole family.
-            </p>
+            <p className="mt-3 text-base">{home.village.blurb}</p>
             <a
               href="#lodges"
               className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-navy"
@@ -106,12 +103,9 @@ export default async function HomePage() {
       <section id="lodges" className="bg-mist py-16">
         <div className="mx-auto max-w-6xl px-5">
           <h2 className="font-display text-3xl font-bold text-ink sm:text-4xl">
-            Find the lodge that fits
+            {home.sections.lodgesHeading}
           </h2>
-          <p className="mt-3 max-w-2xl text-base">
-            Every lodge is yours alone for the whole break. One price per
-            lodge, however many of you come.
-          </p>
+          <p className="mt-3 max-w-2xl text-base">{home.sections.lodgesIntro}</p>
           <div className="mt-10 space-y-12">
             {TIER_ORDER.map((code, index) => {
               const lodge = LODGES[code];
@@ -177,25 +171,24 @@ export default async function HomePage() {
         <div className="bg-olive py-10">
           <div className="mx-auto max-w-6xl px-5">
             <h2 className="font-display text-3xl font-bold text-white sm:text-4xl">
-              Things to do, together
+              {home.sections.activitiesHeading}
             </h2>
             <p className="mt-2 max-w-2xl text-base text-white/90">
-              Days in the village fill themselves. Here is where they usually
-              start.
+              {home.sections.activitiesIntro}
             </p>
           </div>
         </div>
         <div className="mx-auto -mt-4 max-w-6xl px-5">
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {ACTIVITIES.map((activity) => (
+            {activities.map((activity) => (
               <div
-                key={activity.title}
+                key={activity.slug}
                 className="overflow-hidden rounded-lg border border-line bg-white"
               >
                 <div className="relative aspect-[3/2]">
                   <Image
-                    src={activity.image}
-                    alt={activity.title}
+                    src={mediaRef(activity.photo).url}
+                    alt={mediaRef(activity.photo).alt}
                     fill
                     className="object-cover"
                   />
@@ -205,13 +198,6 @@ export default async function HomePage() {
                     {activity.title}
                   </h3>
                   <p className="mt-1 text-sm">{activity.copy}</p>
-                  <a
-                    href="#"
-                    className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-navy"
-                  >
-                    Discover more
-                    <ChevronIcon />
-                  </a>
                 </div>
               </div>
             ))}
@@ -222,29 +208,32 @@ export default async function HomePage() {
       {/* 6. Seasonal trio with placeholder from-prices. */}
       <section className="mx-auto max-w-6xl px-5 pb-16">
         <h2 className="font-display text-3xl font-bold text-ink sm:text-4xl">
-          A forest for every season
+          {home.sections.seasonsHeading}
         </h2>
-        <div className="mt-8 grid gap-6 md:grid-cols-3">
-          {SEASONS.map((season) => (
+        <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          {seasons.map((season) => (
             <div
-              key={season.title}
+              key={season.slug}
               className="overflow-hidden rounded-lg border border-line bg-white"
             >
               <div className="relative aspect-video">
                 <Image
-                  src={season.image}
-                  alt={season.title}
+                  src={mediaRef(season.photo).url}
+                  alt={mediaRef(season.photo).alt}
                   fill
                   className="object-cover"
                 />
               </div>
               <div className="p-5">
-                <h3 className="font-display text-xl font-bold text-ink">
+                <p className="text-xs font-semibold uppercase tracking-wide text-foreground/50">
+                  {season.months}
+                </p>
+                <h3 className="mt-1 font-display text-xl font-bold text-ink">
                   {season.title}
                 </h3>
                 <p className="mt-1 text-sm">{season.copy}</p>
                 <p className="mt-3 text-base font-bold text-ink">
-                  {season.price}
+                  {season.fromPrice}
                 </p>
                 <Link href="/#search" className="btn-outline mt-4 inline-block">
                   Explore breaks
@@ -254,7 +243,7 @@ export default async function HomePage() {
           ))}
         </div>
         <p className="mt-6 text-sm text-foreground/60">
-          *Lowest lodge price for the season, subject to availability.
+          {home.sections.seasonsFootnote}
         </p>
       </section>
 
@@ -266,10 +255,10 @@ export default async function HomePage() {
             className="font-display text-6xl font-light text-olive sm:text-7xl lg:text-8xl"
           />
           <p className="mt-3 font-display text-xl font-bold text-ink sm:text-2xl">
-            memories made so far, counting our way to a billion
+            {home.memories.caption}
           </p>
           <p className="mt-2 text-sm text-foreground/60">
-            One memory is one guest, one stay in the forest. Just{" "}
+            {home.memories.explainer} Just{" "}
             {(MEMORIES_GOAL - memories).toLocaleString("en-GB")} to go.
           </p>
         </div>
@@ -278,18 +267,18 @@ export default async function HomePage() {
       {/* 8. Discover trio. */}
       <section className="mx-auto max-w-6xl px-5 py-16">
         <h2 className="font-display text-3xl font-bold text-ink sm:text-4xl">
-          More from Unity Parks
+          {home.sections.discoverHeading}
         </h2>
         <div className="mt-8 grid gap-6 md:grid-cols-3">
-          {DISCOVER.map((card) => (
+          {(home.discoverCards ?? []).map((card) => (
             <div
               key={card.title}
               className="overflow-hidden rounded-lg border border-line bg-white"
             >
               <div className="relative aspect-[3/2]">
                 <Image
-                  src={card.image}
-                  alt={card.title}
+                  src={mediaRef(card.photo).url}
+                  alt={mediaRef(card.photo).alt}
                   fill
                   className="object-cover"
                 />
@@ -299,13 +288,6 @@ export default async function HomePage() {
                   {card.title}
                 </h3>
                 <p className="mt-1 text-sm">{card.copy}</p>
-                <a
-                  href="#"
-                  className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-navy"
-                >
-                  Discover more
-                  <ChevronIcon />
-                </a>
               </div>
             </div>
           ))}
@@ -315,10 +297,10 @@ export default async function HomePage() {
       {/* 9. FAQ accordion, native details so it stays server-rendered. */}
       <section id="faq" className="mx-auto max-w-3xl px-5 pb-20">
         <h2 className="font-display text-3xl font-bold text-ink sm:text-4xl">
-          Questions, answered
+          {home.sections.faqsHeading}
         </h2>
         <div className="mt-6 border-t border-line">
-          {FAQS.map((faq) => (
+          {faqs.map((faq) => (
             <details key={faq.question} className="group border-b border-line">
               <summary className="flex cursor-pointer list-none items-center justify-between gap-4 py-4 text-lg font-semibold text-ink [&::-webkit-details-marker]:hidden">
                 {faq.question}
