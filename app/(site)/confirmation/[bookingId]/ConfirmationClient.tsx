@@ -207,6 +207,21 @@ export function ConfirmationClient({ bookingId }: { bookingId: string }) {
               </div>
             );
           })}
+          {/* Without these rows the itemised lodge lines sum to MORE than
+              the total below: the discount lives on the folio, not in the
+              per-lodge snapshots. */}
+          {booking.referral && booking.referral.discount > 0 && (
+            <div className="mt-2 flex justify-between text-sm text-foreground">
+              <span>Referral discount ({booking.referral.code})</span>
+              <span>-{formatKes(booking.referral.discount)}</span>
+            </div>
+          )}
+          {booking.creditApplied != null && booking.creditApplied > 0 && (
+            <div className="mt-1 flex justify-between text-sm text-foreground">
+              <span>Referral credit applied</span>
+              <span>-{formatKes(booking.creditApplied)}</span>
+            </div>
+          )}
           <div className="mt-4 flex justify-between border-t border-line pt-4 text-lg font-bold text-ink">
             <span className="font-display">
               {booking.status === "deposit_paid" ? "Total (deposit paid)" : "Paid"}
@@ -253,6 +268,24 @@ export function ConfirmationClient({ bookingId }: { bookingId: string }) {
             Saved to your account.{" "}
             <Link href="/account" className="font-semibold text-navy underline underline-offset-2">
               See all your breaks
+            </Link>
+          </div>
+        )}
+        {/* Every departing guest is offered their own code, Center Parcs
+            style: the growth loop closes here, on the page they reached in
+            the best mood they will be in all journey. */}
+        {booking.account.status === "ownedByYou" && booking.status !== "cancelled" && (
+          <div className="border-t border-line bg-white p-6 text-sm text-foreground">
+            <p className="font-display text-base font-bold text-ink">
+              Know someone who&apos;d love this?
+            </p>
+            <p className="mt-1">
+              Share your referral code and they save on their first break. You
+              earn resort credit towards your next one once they&apos;ve
+              stayed.
+            </p>
+            <Link href="/account" className="btn-outline mt-3 inline-block text-sm">
+              My referral code
             </Link>
           </div>
         )}

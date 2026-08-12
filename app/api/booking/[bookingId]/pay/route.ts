@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/server/db";
 import { assertBookingAccess } from "@/server/booking/access";
 import { runPaymentAttempt } from "@/server/booking/checkout";
+import { recoverStaleExtrasOrder } from "@/server/booking/extras";
 import { getCurrentUser } from "@/server/auth/session";
 import { handleRoute, jsonError } from "@/server/api-helpers";
 import { isValidPartPayment, MIN_PART_PAYMENT } from "@/lib/paymentPlan";
@@ -23,7 +24,10 @@ export async function POST(
     const record = await prisma.bookingRecord.findFirst({
       where: { apaleoBookingId: bookingId },
       include: {
-        session: true,
+        // Lodges ride along so the record satisfies the extras engine's
+        // recovery below; runPaymentAttempt reads the session structurally
+        // and is unaffected by the extra relation.
+        session: { include: { lodges: { orderBy: { slot: "asc" } } } },
         reservations: { orderBy: { slot: "asc" } },
       },
     });
@@ -40,6 +44,17 @@ export async function POST(
     if (record.status !== "deposit_paid") {
       return jsonError(400, "This booking is not payable.");
     }
+
+    // Mirror of the extras engine's live-payment check: a live ExtrasOrder
+    // is about to move this booking's folio and totals, and the settle that
+    // follows this payment derives paid amounts from folio balances. Wait it
+    // out rather than interleave - but through the extras engine's own
+    // recovery, so an order genuinely in flight still refuses (409) while a
+    // crashed one is resolved from folio truth here. A bare existence check
+    // would wedge the balance forever: nothing else on this page ever
+    // reaches the extras engine, and the browse-extras card that does stops
+    // rendering once arrival passes.
+    await recoverStaleExtrasOrder(record);
 
     // The exact remainder, unrounded: settlePayment validates the collected
     // amount against this same figure with the same epsilon. Rounding here

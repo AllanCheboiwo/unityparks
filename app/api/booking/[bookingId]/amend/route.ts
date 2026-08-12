@@ -11,6 +11,7 @@ import { payFolio } from "@/server/apaleo/payments";
 import { ApaleoError } from "@/server/apaleo/client";
 import { nightsBetween, validateStay } from "@/server/booking/rules";
 import { assertBookingAccess } from "@/server/booking/access";
+import { recoverStaleExtrasOrder } from "@/server/booking/extras";
 import { getCurrentUser } from "@/server/auth/session";
 import { handleRoute, jsonError, PublicError } from "@/server/api-helpers";
 
@@ -41,7 +42,9 @@ export async function POST(
     const record = await prisma.bookingRecord.findFirst({
       where: { apaleoBookingId: bookingId },
       include: {
-        session: true,
+        // Lodges ride along so the record satisfies the extras engine's
+        // recovery below.
+        session: { include: { lodges: { orderBy: { slot: "asc" } } } },
         reservations: { orderBy: { slot: "asc" } },
       },
     });
@@ -64,6 +67,12 @@ export async function POST(
     if (record.status !== "paid") {
       return jsonError(409, "Finish paying for your break before changing it.");
     }
+
+    // Step 3 below pays off whatever the folio owes, which would silently
+    // swallow an extras order's transient charge and leave the guest's money
+    // as unreachable folio credit once that order rolled back. Same guard the
+    // pay route carries: an order in flight refuses, a crashed one resolves.
+    await recoverStaleExtrasOrder(record);
 
     const parsed = AmendBody.safeParse(await req.json());
     if (!parsed.success) return jsonError(400, "Please choose new dates.");

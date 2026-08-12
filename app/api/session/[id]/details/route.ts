@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/server/db";
-import { getSession, setGuestDetails } from "@/server/booking/session";
+import { getSession, setGuestDetails, setReferralOnSession } from "@/server/booking/session";
+import { validateReferralCode } from "@/server/referral/validate";
+import { findClaim, isLiveClaim, releaseClaim } from "@/server/referral/claim";
+import { normalizeReferralCode } from "@/lib/referral";
 import { getCurrentUser, createAuthSession } from "@/server/auth/session";
 import { hashPassword } from "@/server/auth/password";
 import { normalizeEmail } from "@/server/auth/normalize";
@@ -31,6 +34,9 @@ const DetailsBody = z.object({
   termsAccepted: z.literal(true),
   // Present when the guest ticked "Create my Unity Parks account".
   password: z.string().min(8).optional(),
+  // The referral code field, always sent (prefilled from the session);
+  // empty string means the guest cleared it. Last code standing wins.
+  referralCode: z.string().trim().max(40).optional(),
 });
 
 /** The profile columns shared by account creation and write-back. Email is
@@ -95,7 +101,7 @@ export async function POST(
     const parsed = DetailsBody.safeParse(await req.json());
     if (!parsed.success) return jsonError(400, "Please check the details form.");
     // termsAccepted is validated by Zod (must be true) and not stored.
-    const { password, termsAccepted, ...guest } = parsed.data;
+    const { password, termsAccepted, referralCode, ...guest } = parsed.data;
     void termsAccepted;
     if (!adultAtArrival(guest.dateOfBirth, session.arrival)) {
       return jsonError(400, "The lead booker must be over 18 at the time of arrival.");
@@ -144,7 +150,67 @@ export async function POST(
       await prisma.user.update({ where: { id: user.id }, data: profileData(guest) });
     }
 
+    // Applied credit belongs to the signed-in identity that applied it. If
+    // the identity changed since (sign-out on a shared machine, a different
+    // user signing in mid-funnel), the stale application would either be
+    // silently skipped at checkout (display disagreeing with the charge) or
+    // spend the previous user's credit. Give any committed claim back to
+    // its owner and clear the flags; the guest re-applies at the pay step.
+    if (session.userId !== (user?.id ?? null)) {
+      const claim = await findClaim(id);
+      if (isLiveClaim(claim)) {
+        const released = await releaseClaim(claim);
+        if (!released) {
+          // The claim is already on this booking's folio, so the credit
+          // cannot go home and a different account must not inherit the
+          // discount it paid for. This walk belongs to whoever applied it.
+          return jsonError(
+            409,
+            "This booking already has referral credit applied by another account. Please start a new search.",
+          );
+        }
+      }
+      await prisma.bookingSession.updateMany({
+        where: { id, booking: null },
+        data: { applyCredit: false, creditAmount: null },
+      });
+    }
+
     await setGuestDetails(id, guest, user?.id ?? null);
-    return NextResponse.json({ ok: true, accountCreated });
+
+    // Referral: last code standing at details submit wins. Valid codes stamp
+    // the code plus the advisory discount snapshot; anything else clears
+    // both (the inline check already told the guest why). The record-exists
+    // 409 above is the freeze rule: once folio totals exist, no code change.
+    // Field semantics: empty string = the guest cleared it; ABSENT = keep
+    // and revalidate whatever is stamped (a /r/ link stamps the code with
+    // no snapshot, and a client that never renders the field must not wipe
+    // it).
+    let referral: { applied: boolean; discount: number | null } = {
+      applied: false,
+      discount: null,
+    };
+    const typedCode =
+      referralCode === undefined
+        ? normalizeReferralCode(session.referralCode ?? "")
+        : normalizeReferralCode(referralCode);
+    if (typedCode) {
+      const check = await validateReferralCode({
+        code: typedCode,
+        guestEmail: email,
+        guestPhone: guest.phone,
+        sessionUserId: user?.id ?? null,
+      });
+      if (check.ok) {
+        await setReferralOnSession(id, { code: typedCode, discount: check.discount });
+        referral = { applied: true, discount: check.discount };
+      } else {
+        await setReferralOnSession(id, { code: null, discount: null });
+      }
+    } else {
+      await setReferralOnSession(id, { code: null, discount: null });
+    }
+
+    return NextResponse.json({ ok: true, accountCreated, referral });
   });
 }

@@ -9,6 +9,7 @@ import { isValidPartPayment, MIN_PART_PAYMENT } from "@/lib/paymentPlan";
 import { LODGES } from "@/content/lodges";
 import type { BookingConfirmation } from "@/lib/types";
 import { TurnoverCalendar } from "@/components/TurnoverCalendar";
+import { AddExtrasCard } from "./AddExtrasCard";
 
 type AmendResponse = {
   ok: boolean;
@@ -106,23 +107,27 @@ export function ManageClient({ bookingId }: { bookingId: string }) {
       );
       if (q.ok) setQuote(q.data);
     }
+    // Seed the party form only on first load: reloads after a payment, a
+    // move or an extras add must not wipe names typed but not yet saved.
     setGuestRows(
-      result.data.lodges.flatMap((lodge) => {
-        const saved = new Map(lodge.guests.map((g) => [g.position, g]));
-        return lodge.bands.map((band, position) => {
-          const g = saved.get(position);
-          const isLeadSeat = lodge.slot === 0 && position === 0;
-          return {
-            slot: lodge.slot,
-            position,
-            band,
-            firstName: g?.firstName ?? (isLeadSeat ? (result.data.guest.firstName ?? "") : ""),
-            lastName: g?.lastName ?? (isLeadSeat ? (result.data.guest.lastName ?? "") : ""),
-            dateOfBirth: g?.dateOfBirth ?? "",
-            email: g?.email ?? "",
-          };
-        });
-      }),
+      (prev) =>
+        prev ??
+        result.data.lodges.flatMap((lodge) => {
+          const saved = new Map(lodge.guests.map((g) => [g.position, g]));
+          return lodge.bands.map((band, position) => {
+            const g = saved.get(position);
+            const isLeadSeat = lodge.slot === 0 && position === 0;
+            return {
+              slot: lodge.slot,
+              position,
+              band,
+              firstName: g?.firstName ?? (isLeadSeat ? (result.data.guest.firstName ?? "") : ""),
+              lastName: g?.lastName ?? (isLeadSeat ? (result.data.guest.lastName ?? "") : ""),
+              dateOfBirth: g?.dateOfBirth ?? "",
+              email: g?.email ?? "",
+            };
+          });
+        }),
     );
   }
 
@@ -421,6 +426,16 @@ export function ManageClient({ bookingId }: { bookingId: string }) {
           </div>
         </div>
       )}
+
+      {(booking.status === "paid" || depositPaid) &&
+        booking.stay.arrival > new Date().toISOString().slice(0, 10) && (
+          <AddExtrasCard
+            bookingId={bookingId}
+            proofQuery={proofQuery}
+            booking={booking}
+            onChanged={load}
+          />
+        )}
 
       {cancelled && (
         <div className="mt-6 rounded-lg border border-line bg-mist p-6">

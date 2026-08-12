@@ -50,10 +50,15 @@ export function BookingSummary({
       : null;
   };
 
-  const total = lodges.reduce((sum, l) => {
+  const grossTotal = lodges.reduce((sum, l) => {
     const extras = extrasFor(l.slot, l.extras).reduce((a, e) => a + e.grossAmount, 0);
     return sum + (l.lodge?.stayGrossAmount ?? 0) + extras + (locationFor(l)?.fee ?? 0);
   }, 0);
+  // Advisory, like every number here: the folio is the money truth, these
+  // rows keep the rail honest with what checkout will collect.
+  const referralDiscount = summary.referral?.discount ?? 0;
+  const creditApplied = summary.credit?.amount ?? 0;
+  const total = Math.max(0, grossTotal - referralDiscount - creditApplied);
 
   const row = "flex justify-between gap-3";
   const label = "text-foreground/60";
@@ -132,6 +137,25 @@ export function BookingSummary({
               </Fragment>
             );
           })}
+
+          {(referralDiscount > 0 || creditApplied > 0) && (
+            <div className="px-4 py-3 grid gap-1.5 border-b border-line">
+              {referralDiscount > 0 && (
+                <div className={row}>
+                  <span className={label}>
+                    Referral discount{summary.referral ? ` (${summary.referral.code})` : ""}
+                  </span>
+                  <span className={value}>-{formatKes(referralDiscount)}</span>
+                </div>
+              )}
+              {creditApplied > 0 && (
+                <div className={row}>
+                  <span className={label}>Referral credit applied</span>
+                  <span className={value}>-{formatKes(creditApplied)}</span>
+                </div>
+              )}
+            </div>
+          )}
         </>
       )}
 

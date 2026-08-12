@@ -9,7 +9,8 @@
     "start": "next start",
     "lint": "eslint",
     "postinstall": "prisma generate",
-    "seed:cms": "tsx --env-file=.env scripts/seed-cms.ts"
+    "seed:cms": "tsx --env-file=.env scripts/seed-cms.ts",
+    "seed:referral": "tsx --env-file=.env scripts/seed-referral-config.ts"
   },
   "dependencies": {
     "@payloadcms/db-postgres": "3.86.0",

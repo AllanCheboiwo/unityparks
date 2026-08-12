@@ -23,6 +23,8 @@ import { getSession, parseChildrenAges, parseExtras, parseVehiclePlates } from "
 import { loadGuests } from "./guests";
 import { sendBookingConfirmation } from "../email/bookingConfirmation";
 import { sendBalanceReceipt } from "../email/balanceReceipt";
+import { applyReferralAtCheckout, reconcileCreditFlags } from "../referral/checkout";
+import { sendReferralReward } from "../email/referralReward";
 import {
   balanceDueDateFor,
   daysBetween,
@@ -594,7 +596,15 @@ async function ensureRecord(sessionId: string): Promise<{
   if (!session) {
     throw new PublicError(410, "Your booking session has expired. Please search again.");
   }
-  if (existing) return { record: existing, session };
+  if (existing) {
+    // The record's totals are frozen. Make the funnel's advisory credit
+    // flags agree with the ledger before the pay page renders again: a
+    // credit toggled on while this record was mid-flight would otherwise
+    // show a discount the frozen total never absorbed (and vice versa
+    // after a refused attempt).
+    await reconcileCreditFlags(session.id);
+    return { record: existing, session };
+  }
 
   if (
     session.lodges.length === 0 ||
@@ -654,9 +664,27 @@ async function ensureRecord(sessionId: string): Promise<{
 
   // One folio per reservation, read before the record exists so it is
   // born carrying the real total of every lodge.
-  const folios: FolioSummary[] = [];
+  let folios: FolioSummary[] = [];
   for (const reservationId of reservationIds) {
     folios.push(await getFolioForReservation(reservationId));
+  }
+
+  // The referral moment: discount and applied credit land on the folios as
+  // allowances NOW, after the fee fallback above and before the balance
+  // reads below freeze the totals - the one point in the booking's life a
+  // discount can exist (docs/referral-system-plan.md 5.1). The re-read then
+  // absorbs it into the total, the deposit, the Pesapal order, the settle
+  // basis and refunds with no further referral code anywhere downstream.
+  const referral = await applyReferralAtCheckout({
+    session,
+    feeDroppedBySlot: assignments.map((a) => a.locationFeeDropped),
+    folios,
+  });
+  if (referral.postedAllowances) {
+    folios = [];
+    for (const reservationId of reservationIds) {
+      folios.push(await getFolioForReservation(reservationId));
+    }
   }
   const total = folios.reduce((sum, folio) => sum + Math.abs(folio.balance), 0);
 
@@ -692,6 +720,13 @@ async function ensureRecord(sessionId: string): Promise<{
             locationFeeDropped: assignments[slot].locationFeeDropped,
           })),
         },
+        // The attribution rides the same nested create as the record, so it
+        // exists exactly when the record exists: the P2002 race below means
+        // any write placed "after creation" can run in a tab that created
+        // nothing.
+        ...(referral.attribution
+          ? { referralAttribution: { create: referral.attribution } }
+          : {}),
       },
       include: { reservations: { orderBy: { slot: "asc" } } },
     });
@@ -1149,6 +1184,46 @@ async function settlePayment(
       where: { id: transaction.id },
       data: { liveForRecordId: null },
     });
+
+    // Referral earn, DB-only like everything in this transaction. The
+    // attribution's own guarded flip is the gate: settle twins (callback vs
+    // IPN) both reach here with the record already paid, so gating on the
+    // record flip above would double-fire; booked -> earned matches exactly
+    // once ever. Amount is the frozen rewardAmount, never recomputed. Gift
+    // attributions earn nothing (nobody earns on their own payment).
+    if (fullyPaid) {
+      const attribution = await tx.referralAttribution.findUnique({
+        where: { recordId: record.id },
+        include: { participant: { select: { kind: true } } },
+      });
+      if (attribution && !attribution.gift) {
+        const earned = await tx.referralAttribution.updateMany({
+          where: { id: attribution.id, state: "booked" },
+          data: { state: "earned", earnedAt: new Date() },
+        });
+        if (earned.count === 1) {
+          // createMany + skipDuplicates compiles to ON CONFLICT DO NOTHING,
+          // so the (attributionId, kind) backstop can never error. That
+          // matters here: a caught unique violation would still abort the
+          // underlying Postgres transaction and take the whole settle (the
+          // status flip included) down with it on the next statement.
+          await tx.referralLedgerEntry.createMany({
+            data: [
+              {
+                participantId: attribution.participantId,
+                attributionId: attribution.id,
+                kind:
+                  attribution.participant.kind === "influencer"
+                    ? "commission_earn"
+                    : "credit_earn",
+                amount: Math.round(attribution.rewardAmount),
+              },
+            ],
+            skipDuplicates: true,
+          });
+        }
+      }
+    }
     return tx.bookingRecord.findUniqueOrThrow({ where: { id: record.id } });
   });
 
@@ -1175,6 +1250,10 @@ async function settlePayment(
   } else {
     await sendBalanceReceipt(transaction.id);
   }
+  // The referrer's reward email, once per attribution. Called on every
+  // settle because a balance payment can be the one that completes the
+  // booking; the module checks earned-state and owns its own claim.
+  await sendReferralReward(paid.id);
 
   return paid;
 }

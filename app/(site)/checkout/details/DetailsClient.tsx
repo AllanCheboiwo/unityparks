@@ -210,13 +210,38 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  // Referral code: prefilled from the session (the /r/ link stamped it),
+  // editable until submit. The check is advisory, like the email gate; the
+  // server validates again at submit and once more at checkout.
+  const [referralCode, setReferralCode] = useState("");
+  const [referralStatus, setReferralStatus] = useState<
+    | { state: "idle" }
+    | { state: "checking" }
+    | { state: "valid"; discount: number }
+    | { state: "invalid"; message: string }
+  >({ state: "idle" });
+
   useEffect(() => {
     if (!sessionId) return;
     (async () => {
       const s = await apiFetch<SessionSummary>(`/api/session/${sessionId}`);
       if (isExpired(s)) return setExpired(true);
-      if (s.ok) setSummary(s.data);
+      if (s.ok) {
+        setSummary(s.data);
+        if (s.data.referral) {
+          setReferralCode(s.data.referral.code);
+          if (s.data.referral.discount != null) {
+            setReferralStatus({ state: "valid", discount: s.data.referral.discount });
+          } else {
+            // A /r/ link stamped the code at search time with no discount
+            // snapshot yet; validate it now so the guest sees what it is
+            // worth without having to touch the field.
+            checkReferral(s.data.referral.code);
+          }
+        }
+      }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
 
   if (!sessionId || expired) return <ExpiredNotice />;
@@ -300,6 +325,33 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
     router.refresh();
   }
 
+  async function checkReferral(codeOverride?: string) {
+    const code = (codeOverride ?? referralCode).trim().toUpperCase();
+    if (!code) {
+      setReferralStatus({ state: "idle" });
+      return;
+    }
+    setReferralStatus({ state: "checking" });
+    const result = await apiFetch<
+      { valid: true; discount: number } | { valid: false; message: string }
+    >(`/api/referral/validate`, {
+      method: "POST",
+      body: JSON.stringify({
+        code,
+        email: form.email.trim() || undefined,
+        phone: joinPhone(form.phoneCountry, form.phoneNumber) || undefined,
+      }),
+    });
+    // Advisory: on API failure, keep quiet and let the server decide at
+    // submit, same discipline as the email gate.
+    if (!result.ok) return setReferralStatus({ state: "idle" });
+    if (result.data.valid) {
+      setReferralStatus({ state: "valid", discount: result.data.discount });
+    } else {
+      setReferralStatus({ state: "invalid", message: result.data.message });
+    }
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
@@ -322,6 +374,7 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
           marketingSms,
           termsAccepted,
           password: wantsAccount ? newPassword : undefined,
+          referralCode: referralCode.trim(),
         }),
       },
     );
@@ -713,6 +766,46 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
                     SMS
                   </label>
                 </div>
+              </div>
+
+              <div className={`${cardClass} text-sm text-foreground/70`}>
+                <p className={cardTitleClass}>Have a referral code?</p>
+                <p className="mt-2">
+                  If a friend or one of our partners sent you, their code takes
+                  the discount off this booking.
+                </p>
+                <div className="mt-3 flex gap-2">
+                  <input
+                    type="text"
+                    value={referralCode}
+                    onChange={(e) => {
+                      setReferralCode(e.target.value.toUpperCase());
+                      setReferralStatus({ state: "idle" });
+                    }}
+                    onBlur={() => checkReferral()}
+                    placeholder="e.g. AMINA"
+                    maxLength={12}
+                    className={`${inputClass} uppercase`}
+                    style={{ maxWidth: "12rem" }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => checkReferral()}
+                    disabled={referralStatus.state === "checking"}
+                    className="btn-outline shrink-0"
+                  >
+                    {referralStatus.state === "checking" ? "Checking…" : "Apply"}
+                  </button>
+                </div>
+                {referralStatus.state === "valid" && (
+                  <p className="mt-2 text-[#536917] font-semibold">
+                    KSh {referralStatus.discount.toLocaleString()} off will be
+                    applied at checkout.
+                  </p>
+                )}
+                {referralStatus.state === "invalid" && (
+                  <p className="mt-2 text-red-700">{referralStatus.message}</p>
+                )}
               </div>
 
               <label className="flex items-start gap-3 text-sm text-foreground/70">

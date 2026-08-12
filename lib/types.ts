@@ -96,6 +96,42 @@ export type SessionSummary = {
     vehiclePlates: string[];
   } | null;
   total: number | null;
+  /** Referral code on this walk. discount is null until the details step
+   *  validates it (a /r/ link stamps only the code at search time). */
+  referral: { code: string; discount: number | null } | null;
+  /** Referral credit the guest chose to apply at the pay step. */
+  credit: { amount: number } | null;
+};
+
+/** One extra offered on the Manage add-extras card. */
+export type ManageExtraOfferDto = {
+  serviceId: string;
+  code: string;
+  name: string;
+  description: string;
+  pricingUnit: string;
+  unitPrice: number;
+  currency: string;
+  /** How many the reservation already holds (from checkout or earlier adds). */
+  ownedCount: number;
+  /** How many more can be added (0 disables adding on quantity rows;
+   *  one-off rows render as already-added). */
+  maxAdd: number;
+};
+
+/** GET /api/booking/[id]/extras: live offers per lodge plus money handling. */
+export type ManageExtrasDto = {
+  kind: "charge_now" | "on_balance";
+  lodges: { slot: number; extras: ManageExtraOfferDto[] }[];
+};
+
+/** POST /api/booking/[id]/extras outcome. */
+export type AddExtrasResultDto = {
+  ok: boolean;
+  kind: "charge_now" | "on_balance";
+  amount: number;
+  totalGrossAmount: number;
+  paidAmount: number;
 };
 
 export type GuestRowDto = {
@@ -126,6 +162,10 @@ export type BookingConfirmation = {
   paidAmount: number;
   folioBalance: number;
   account: { status: "ownedByYou" | "existingAccount" | "none" };
+  /** The referral discount posted to the folios at checkout, if any. */
+  referral: { code: string; discount: number } | null;
+  /** Referral credit the buyer applied at checkout, if any. */
+  creditApplied: number | null;
   /** One entry per lodge in the booking, manifest included. */
   lodges: {
     slot: number;

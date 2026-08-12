@@ -51,6 +51,16 @@ export async function requireUser(): Promise<User> {
   return user;
 }
 
+/** The /ops gate for API routes. Pages use getCurrentUser + notFound()
+ * instead: a thrown PublicError only turns into a clean status inside
+ * handleRoute, and a 404 keeps the admin area's existence quiet. */
+export async function requireAdmin(): Promise<User> {
+  const user = await getCurrentUser();
+  if (!user) throw new PublicError(401, "Please sign in.");
+  if (!user.isAdmin) throw new PublicError(403, "Not available.");
+  return user;
+}
+
 /** Deletes the DB session and clears the cookie. Route handlers only. */
 export async function destroyAuthSession(): Promise<void> {
   const store = await cookies();

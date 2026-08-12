@@ -3,6 +3,7 @@ import { Fira_Sans, Open_Sans } from "next/font/google";
 import Link from "next/link";
 import { getCurrentUser } from "@/server/auth/session";
 import { SignOutButton } from "@/components/SignOutButton";
+import { NewsletterForm } from "@/components/NewsletterForm";
 import "./globals.css";
 
 // Fira Sans is the display face per docs/DESIGN.md: humanist, slightly warm,
@@ -117,17 +118,7 @@ export default async function RootLayout({
               Sign up for village news, seasonal openings and a first look at
               new lodges.
             </p>
-            <form className="flex gap-2" action="#">
-              <input
-                type="email"
-                placeholder="Email address"
-                aria-label="Email address"
-                className="rounded-md bg-white text-ink placeholder:text-foreground/50 px-3 py-2 text-sm w-56"
-              />
-              <button type="button" className="btn-primary text-sm" title="Demo only, not wired up yet">
-                Sign up
-              </button>
-            </form>
+            <NewsletterForm />
           </div>
 
           <div className="mx-auto max-w-7xl px-5 py-10 grid gap-10 sm:grid-cols-3">

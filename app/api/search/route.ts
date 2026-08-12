@@ -6,6 +6,7 @@ import { bandsToAges, occupancyAges } from "@/server/booking/party";
 import { createSession } from "@/server/booking/session";
 import { getCurrentUser } from "@/server/auth/session";
 import { handleRoute, jsonError } from "@/server/api-helpers";
+import { isValidCodeFormat, normalizeReferralCode } from "@/lib/referral";
 
 const PartyBody = z.object({
   adults: z.number().int().min(1).max(8),
@@ -66,6 +67,11 @@ export async function POST(req: NextRequest) {
     }
 
     const user = await getCurrentUser();
+    // Referral capture handoff: the up_ref cookie (set by /r/[code]) is read
+    // exactly once, here, and stamped onto the session. The funnel never
+    // looks at the cookie again - checkout retries can arrive cookieless.
+    const rawReferral = req.cookies.get("up_ref")?.value ?? "";
+    const referralCode = normalizeReferralCode(rawReferral);
     // The response carries offers for the first lodge's party; the results
     // page fetches per-slot offers itself when there is more than one.
     const offers = await getStayOffers({
@@ -79,6 +85,7 @@ export async function POST(req: NextRequest) {
       departure,
       parties,
       userId: user?.id ?? null,
+      referralCode: isValidCodeFormat(referralCode) ? referralCode : null,
     });
 
     return NextResponse.json({

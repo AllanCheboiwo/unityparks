@@ -86,6 +86,15 @@ an 8-week anchor instead of their 10 weeks.
 - Out of scope for this plan (phase 2, do not build): reminder emails,
   auto-cancel of overdue bookings, any scheduler or jobs table. Overdue is
   display-only, derived at read time.
+  - Phase 2 update, 7 Aug 2026: reminder emails are BUILT, still with no
+    scheduler. "Due soon" goes out inside the 14 days up to the due date,
+    "overdue" after it, each claimed once-only on the record
+    (reminderUpcomingEmailAt / reminderOverdueEmailAt). The trigger is
+    POST /api/ops/reminders/run: an admin button on /ops/reminders, or an
+    external scheduler presenting the REMINDERS_RUN_SECRET bearer.
+    Auto-cancel stays unbuilt on purpose: cancelling money a guest still
+    intends to pay is a human decision, and the cancellation engine is
+    already there for when a human makes it.
 
 ## The policy (source of truth)
 

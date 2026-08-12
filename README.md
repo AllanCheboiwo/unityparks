@@ -1,36 +1,72 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Unity Parks
 
-## Getting Started
+A Center Parcs-style booking demo for a fictional Kenyan holiday village on
+Lake Naivasha. Real inventory, pricing, bookings and folios live in an
+Apaleo sandbox (property UPNV); payments run through the Pesapal sandbox;
+everything else (accounts, sessions, referrals, extras orders, reminders)
+lives in our own Postgres.
 
-First, run the development server:
+## Stack
+
+Next.js (App Router) + Prisma + Postgres, with Payload CMS driving the
+homepage content. Tailwind for styling, Vitest for unit tests, Resend for
+transactional email, deployed on Railway.
+
+**Two schemas share one database.** Prisma owns `public` (bookings,
+accounts, referrals, everything transactional). Payload owns `payload`,
+pinned by `schemaName` in `payload.config.ts`. Prisma cannot see Payload's
+tables, which is what keeps the two migration styles below from colliding.
+
+## Getting started
 
 ```bash
+npm install
+npx prisma db push   # public schema; never prisma migrate (see house rules)
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Payload's own schema auto-pushes in development, so `/admin` works without
+any migration step locally. In production it does not: `payload migrate` is
+a separate, manual deploy action, and `next build` runs neither.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Environment (`.env`): `DATABASE_URL` (local Postgres, e.g.
+`unity_parks_dev`), `PAYLOAD_SECRET` (without it the whole app fails to
+boot, not just `/admin`), `CLIENT_ID`/`CLIENT_SECRET` (Apaleo),
+`PESAPAL_CONSUMER_KEY`/`PESAPAL_CONSUMER_SECRET`/`PESAPAL_IPN_ID`/`PESAPAL_BASE_URL`,
+`APP_BASE_URL`, and optionally `RESEND_API_KEY`/`EMAIL_FROM` (absent =
+emails logged, never sent), `PAYMENTS_PROVIDER=simulated` (folio-post
+payments with no processor, useful locally), `OPS_ALERT_EMAIL`,
+`REMINDERS_RUN_SECRET` (lets an external scheduler trigger balance
+reminders).
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Tests: `npx vitest run` (pure-logic suites over `lib/` and `server/`).
 
-## Learn More
+## Where things live
 
-To learn more about Next.js, take a look at the following resources:
+- `app/(site)/` every guest-facing page: the funnel (`checkout/*`),
+  `manage/`, `account`, `lodges/` (funnel results plus `[code]` marketing
+  pages), and `ops/` (admin console, gated by `User.isAdmin` via
+  `scripts/make-admin.mjs`). The route group carries the site layout, so a
+  page outside it renders with no chrome and no styles while still
+  returning 200. `app/(payload)/` is the CMS admin; `app/api/` and
+  `app/r/[code]/` are route handlers and need no layout.
+- `server/` the engine: `apaleo/` (the only HTTP surface to Apaleo),
+  `pesapal/`, `booking/` (checkout, cancellation, extras, reminders),
+  `referral/`, `email/`, `auth/`.
+- `content/` marketing words and pictures; Apaleo owns names and prices.
+- `docs/` the real documentation. Start with `FEATURES-REPORT.md` (what is
+  built and what is not), `DESIGN.md` (the visual system), and the three
+  money engines: `deposit-and-cancellation-plan.md`,
+  `referral-system-plan.md`, `post-booking-extras.md`.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## House rules
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- `prisma db push` only, never `prisma migrate`. Local database first; the
+  Railway database is pushed by hand **before** deploying schema-touching
+  changes. The root `migrations/` directory is **Payload's**, driven by
+  `payload migrate`, and has nothing to do with Prisma: never point one
+  tool at the other's schema.
+- Apaleo owns inventory, prices and money movement; Prisma owns commercial
+  policy and bookkeeping. Never invent an amount a folio could tell you.
+- Every Apaleo write carries an idempotency key or is naturally idempotent.
+- No em dashes anywhere: code, comments, copy.

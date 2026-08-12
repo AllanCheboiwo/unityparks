@@ -4,8 +4,14 @@ import { prisma } from "@/server/db";
 import { getCurrentUser } from "@/server/auth/session";
 import { parseChildrenAges } from "@/server/booking/session";
 import { partyLabel } from "@/server/booking/party";
+import {
+  creditHistory,
+  pendingCreditBalance,
+  vestedCreditBalance,
+} from "@/server/referral/derive";
 import { formatDate, formatKes, nightsLabel } from "@/lib/format";
 import { LODGES } from "@/content/lodges";
+import { ReferralCard } from "./ReferralCard";
 
 function nightsBetween(arrival: string, departure: string): number {
   return Math.round((Date.parse(departure) - Date.parse(arrival)) / 86_400_000);
@@ -23,6 +29,27 @@ export default async function AccountPage() {
     orderBy: { createdAt: "desc" },
   });
 
+  // The referral card's numbers, derived at read like every referral figure
+  // (no stored balances anywhere). Null participant renders the claim card.
+  const participant = await prisma.referralParticipant.findUnique({
+    where: { userId: user.id },
+  });
+  const referral =
+    participant && !participant.revokedAt
+      ? {
+          code: participant.code,
+          vested: await vestedCreditBalance(participant.id),
+          pending: await pendingCreditBalance(participant.id),
+          history: (await creditHistory(participant.id)).map((row) => ({
+            id: row.id,
+            amount: row.amount,
+            state: row.state,
+            departure: row.departure ? formatDate(row.departure) : null,
+          })),
+        }
+      : null;
+  const shareBase = process.env.APP_BASE_URL ?? "http://localhost:3000";
+
   return (
     <div className="mx-auto max-w-xl px-5 py-10">
       <h1 className="font-display text-3xl font-bold text-ink">
@@ -32,6 +59,8 @@ export default async function AccountPage() {
         Signed in as {user.email}. Breaks booked with this email land here
         automatically.
       </p>
+
+      <ReferralCard participant={referral} shareBase={shareBase} />
 
       {records.length === 0 && (
         <div className="mt-8 rounded-lg border border-line contour-bg p-8 text-center">
