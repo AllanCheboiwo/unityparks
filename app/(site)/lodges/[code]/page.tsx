@@ -34,6 +34,60 @@ export async function generateMetadata({
  * block, everything else fills a grid on the right. Deliberately a diagram,
  * not architecture - it shows what the lodge has and roughly where.
  */
+/** Two-line labels for long room names, split at the middle-most space. */
+function labelLines(name: string): string[] {
+  if (name.length <= 16) return [name];
+  const middle = Math.floor(name.length / 2);
+  let split = -1;
+  for (let i = 0; i < name.length; i++) {
+    if (name[i] === " " && (split === -1 || Math.abs(i - middle) < Math.abs(split - middle))) {
+      split = i;
+    }
+  }
+  if (split === -1) return [name];
+  return [name.slice(0, split), name.slice(split + 1)];
+}
+
+/** One labelled room box. Declared at module level, not inside FloorPlan: a
+ *  component created during render is a fresh type every pass. */
+function Room({
+  x,
+  y,
+  w,
+  h,
+  name,
+  fill,
+}: {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  name: string;
+  fill: string;
+}) {
+  const lines = labelLines(name);
+  return (
+    <g>
+      <rect x={x} y={y} width={w} height={h} fill={fill} stroke="#b9b4a8" strokeWidth="1.5" />
+      <text
+        x={x + w / 2}
+        y={y + h / 2 - (lines.length - 1) * 6}
+        textAnchor="middle"
+        dominantBaseline="middle"
+        fontSize="11"
+        fontWeight="600"
+        fill="#1d1d1d"
+      >
+        {lines.map((line, i) => (
+          <tspan key={i} x={x + w / 2} dy={i === 0 ? 0 : 13}>
+            {line}
+          </tspan>
+        ))}
+      </text>
+    </g>
+  );
+}
+
 function FloorPlan({ lodge }: { lodge: LodgeContent }) {
   const rooms = lodge.detail.rooms;
   const deck = rooms.find((r) => /deck|terrace/i.test(r.name));
@@ -52,58 +106,6 @@ function FloorPlan({ lodge }: { lodge: LodgeContent }) {
   const cols = 2;
   const rowCount = Math.ceil(rest.length / cols);
   const rowH = (innerBottom - innerTop) / Math.max(1, rowCount);
-
-  // Two-line labels for long room names, split at the middle-most space.
-  function labelLines(name: string): string[] {
-    if (name.length <= 16) return [name];
-    const middle = Math.floor(name.length / 2);
-    let split = -1;
-    for (let i = 0; i < name.length; i++) {
-      if (name[i] === " " && (split === -1 || Math.abs(i - middle) < Math.abs(split - middle))) {
-        split = i;
-      }
-    }
-    if (split === -1) return [name];
-    return [name.slice(0, split), name.slice(split + 1)];
-  }
-
-  function Room({
-    x,
-    y,
-    w,
-    h,
-    name,
-    fill,
-  }: {
-    x: number;
-    y: number;
-    w: number;
-    h: number;
-    name: string;
-    fill: string;
-  }) {
-    const lines = labelLines(name);
-    return (
-      <g>
-        <rect x={x} y={y} width={w} height={h} fill={fill} stroke="#b9b4a8" strokeWidth="1.5" />
-        <text
-          x={x + w / 2}
-          y={y + h / 2 - (lines.length - 1) * 6}
-          textAnchor="middle"
-          dominantBaseline="middle"
-          fontSize="11"
-          fontWeight="600"
-          fill="#1d1d1d"
-        >
-          {lines.map((line, i) => (
-            <tspan key={i} x={x + w / 2} dy={i === 0 ? 0 : 13}>
-              {line}
-            </tspan>
-          ))}
-        </text>
-      </g>
-    );
-  }
 
   return (
     <svg

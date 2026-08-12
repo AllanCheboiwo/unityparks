@@ -53,6 +53,10 @@ export default async function ReferralPayoutsPage() {
               run once.
             </p>
             <div className="mt-2">
+              {/* A real file download, so a plain anchor is correct; Link would
+                  client-navigate. The rule only misfires here because Payload's
+                  /api/[...slug] catch-all makes eslint read /api/* as a page. */}
+              {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
               <a href="/api/ops/referrals/payouts" className="btn-outline text-sm">
                 Export CSV
               </a>
