@@ -127,8 +127,8 @@ flowchart TB
     subgraph storefront [Next.js monolith]
         R["/r/CODE route handler<br/>sets up_ref cookie (30 days), redirects home"]
         SEARCH["POST /api/search<br/>stamps code from cookie onto new BookingSession"]
-        DETAILS["Details step<br/>editable code field, advisory validate,<br/>authoritative re-check on submit"]
-        PAY["Pay step<br/>discount and credit lines in totals,<br/>apply-credit toggle"]
+        DETAILS["Details step<br/>no code field; omits referralCode so a<br/>/r/ stamp is kept and revalidated on submit"]
+        PAY["Pay step<br/>editable code field (POST /api/session/[id]/referral),<br/>discount and credit lines in totals,<br/>apply-credit toggle"]
         CHK["ensureRecord (checkout.ts)<br/>1 create Apaleo booking<br/>2 assign units<br/>3 read one folio per lodge (ids for the posts)<br/>4 adopt-don't-post check: did a racing record freeze first?<br/>5 claim or adopt the credit_spend row (Serializable tx)<br/>6 mark the claim committed, then POST allowance(s)<br/>7 re-read folio balances = discounted total<br/>8 create BookingRecord + ReferralAttribution"]
         SETTLE["settlePayment tx<br/>on fully paid: attribution -> earned,<br/>ledger earn row"]
         CANCEL["cancelBooking flipped gate<br/>attribution -> void (best effort)<br/>spent credit restored by derivation"]
@@ -211,7 +211,8 @@ Payload's own system and unrelated).
 `BookingRecord` gains only a back-relation, omitted here for brevity.
 `BookingSession` gains four real columns as well: `referralCode` and
 `referralDiscount` (the code stamped from the cookie at search, and the
-advisory discount snapshot the details step writes), `applyCredit` and
+advisory discount snapshot the details submit and the pay step's code
+field write), `applyCredit` and
 `creditAmount` (the pay step's redemption choice), plus the back-relation
 to its one credit spend. `User` gains `isAdmin Boolean @default(false)`,
 which is what gates the ops pages (section 8); it is flagged by hand with
@@ -468,17 +469,19 @@ the session's referral fields are read-only.** The details route refuses
 the whole submit with a 409 the moment it finds a record, before it
 parses a field, and the referral write is guarded a second time inside
 `setReferralOnSession`, whose `updateMany` filters on `booking: null`
-(`server/booking/session.ts:261-272`). The details screen itself does not
-yet render the code as fixed; the guest can edit the field and see an
+(`server/booking/session.ts:261-275`). The pay screen itself does not yet
+render the code as fixed; the guest can edit the field and see an
 advisory discount line, and the 409 is what stops them. That is honest
 but not pretty, and it is the one piece of this rule still owed a UI.
 
 The rule exists for a concrete failure: without it a guest returning to
-the details step after a failed payment could stamp a new code the frozen
+the code field after a failed payment could stamp a new code the frozen
 record will never honour, and the pay page would then display a discount
 Pesapal will not collect. `setGuestDetails` still updates its own columns
 unconditionally, which is why the referral write needed its own guard
-rather than inheriting one.
+rather than inheriting one. Since the field lives on the pay step, that
+same guard is what `POST /api/session/[id]/referral` turns into the 409:
+`setReferralOnSession` returns whether its write landed.
 
 Crash windows: `ensureRecord` is a sequence of network calls with no
 umbrella transaction; recovery is by idempotency keys plus the P2002
@@ -541,8 +544,9 @@ referral credit:
 1. The session GET (`app/api/session/[id]/route.ts:102-114`), which feeds
    every funnel page. It returns the code with its advisory discount
    snapshot, which is null when a `/r/` link stamped the code at search
-   time and the details step has not revalidated it yet, plus a separate
-   credit block holding the amount the pay step stamped.
+   time and neither the details submit nor the pay step's Apply has
+   revalidated it yet, plus a separate credit block holding the amount
+   the pay step stamped.
 2. The right-rail `BookingSummary`
    (`components/BookingSummary.tsx:141-157`): a discount row and a credit
    row, both feeding its total bar.
@@ -579,28 +583,40 @@ like everything else in the funnel.
    the auth cookie there) and stamps the code onto the new session row,
    same pattern as `userId`. The stamp is a format check only, with no
    database lookup, so an unknown but well-formed code rides the session
-   until the details step refuses it with a face. The cookie is not
+   until the details submit refuses it silently and the pay step shows an
+   empty field. The cookie is not
    consumed by that first search: it lives its full 30 days, so a guest
    who came in through `/r/AMINA` carries the code onto every new search
-   in that window. Clearing the field at the details step clears only
+   in that window. Clearing the field at the pay step clears only
    that session's columns, never the cookie, so the next fresh search
    stamps the same code again until it expires. Within a checkout the
    cookie is irrelevant from here on: the session row is the attribution
    source, and retries can arrive cookieless.
-3. At the details step Brian sees "Referral code: AMINA" prefilled and
-   editable, with an advisory `POST /api/referral/validate` check (same
-   degrade-to-unknown shape as the email-status gate) showing what it is
-   worth. Last code standing at submit wins. It persists via
-   `setReferralOnSession`, a separate guarded write from the guest
-   columns, so the freeze rule lives in the write itself. The field's two
-   empty states are not the same: an absent `referralCode` means keep and
-   revalidate whatever is already stamped (a `/r/` link stamps a code
-   with no snapshot, and a client that never renders the field must not
-   wipe it), while an empty string means the guest cleared it. Either way
-   the submit revalidates authoritatively against the final guest email
-   and phone, and a code that fails there is cleared from the session
-   with no message on that step, which is a small honesty gap the
-   checkout refusal later covers loudly. (Route naming caveat: explicit
+3. The details step renders no code field at all and omits `referralCode`
+   from its submit body. That absence is load-bearing: an absent
+   `referralCode` means keep and revalidate whatever is already stamped
+   (a `/r/` link stamps a code with no snapshot, and a client that never
+   renders the field must not wipe it), while an empty string would mean
+   the guest cleared it. So Brian's AMINA stamp survives the step and
+   picks up a fresh discount snapshot, revalidated authoritatively
+   against the guest email and phone he just typed. A code that fails
+   there is cleared from the session with no message on that step, which
+   is a small honesty gap the pay step then shows plainly: the field
+   arrives empty.
+3a. At the pay step Brian sees "Referral code: AMINA" prefilled and
+   editable, next to the credit toggle and directly above the total it
+   changes. Apply calls `POST /api/session/[id]/referral`, which
+   validates against the lead guest already saved at the details step
+   (better contact data than that step could offer, since the guest is
+   still typing it there) and persists via `setReferralOnSession`, the
+   same separate guarded write, so the freeze rule still lives in the
+   write itself. Last code standing at Buy now wins. A refused code
+   clears the stamp rather than leaving a discount on screen that
+   checkout would not honour. Because a bigger discount shrinks the room
+   the credit cap allows, the route re-clamps any credit already stamped
+   (no-claim case only; once a ledger claim exists `ensureRecord` owns
+   the clamping), so the payable on screen is the payable charged.
+   (Route naming caveat: explicit
    `app/api` routes beat Payload's catch-all, but a future Payload
    collection slugged `referral` would collide with `/api/referral/*`.
    Acceptable, noted.)

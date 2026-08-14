@@ -251,24 +251,45 @@ export async function setVehicles(id: string, plates: string[]): Promise<void> {
 }
 
 /**
- * The referral fields, written by the details route. Guarded here rather
- * than trusted to callers: once a BookingRecord exists the folio totals are
- * frozen and a late code change could never be honoured, so the write
- * refuses via the relation filter and the stale code simply keeps its
+ * The referral fields, written by the details and referral routes. Guarded
+ * here rather than trusted to callers: once a BookingRecord exists the folio
+ * totals are frozen and a late code change could never be honoured, so the
+ * write refuses via the relation filter and the stale code simply keeps its
  * stamp. referralDiscount is the advisory display snapshot from validation;
  * ensureRecord recomputes from config and never reads it for money.
+ *
+ * Returns false when the write was refused, so a caller that needs to tell
+ * the guest "too late" can.
  */
 export async function setReferralOnSession(
   id: string,
   referral: { code: string | null; discount: number | null },
-): Promise<void> {
-  await prisma.bookingSession.updateMany({
+): Promise<boolean> {
+  const written = await prisma.bookingSession.updateMany({
     where: { id, booking: null },
     data: {
       referralCode: referral.code,
       referralDiscount: referral.discount,
     },
   });
+  return written.count > 0;
+}
+
+/**
+ * What the break costs before any referral discount or credit: the sum of
+ * every lodge's stay, extras and location fee. The advisory basis the pay
+ * step's cap rule works against, shared so the credit and referral routes
+ * cannot drift apart on what "the total" means.
+ */
+export function sessionSnapshotTotal(session: SessionWithLodges): number {
+  return session.lodges.reduce(
+    (sum, l) =>
+      sum +
+      (l.stayGrossAmount ?? 0) +
+      parseExtras(l).reduce((a, e) => a + e.grossAmount, 0) +
+      (l.locationFee ?? 0),
+    0,
+  );
 }
 
 /**

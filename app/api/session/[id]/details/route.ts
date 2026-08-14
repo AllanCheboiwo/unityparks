@@ -6,6 +6,7 @@ import { getSession, setGuestDetails, setReferralOnSession } from "@/server/book
 import { validateReferralCode } from "@/server/referral/validate";
 import { findClaim, isLiveClaim, releaseClaim } from "@/server/referral/claim";
 import { normalizeReferralCode } from "@/lib/referral";
+import { adultAtArrival } from "@/lib/guestRules";
 import { getCurrentUser, createAuthSession } from "@/server/auth/session";
 import { hashPassword } from "@/server/auth/password";
 import { normalizeEmail } from "@/server/auth/normalize";
@@ -60,13 +61,6 @@ function profileData(
     marketingEmail: guest.marketingEmail ?? false,
     marketingSms: guest.marketingSms ?? false,
   };
-}
-
-/** True when someone born on dob is 18 or older on the arrival date. Pure
- * ISO string arithmetic - no timezones to get wrong. */
-function adultAtArrival(dob: string, arrival: string): boolean {
-  const cutoff = `${Number(arrival.slice(0, 4)) - 18}${arrival.slice(4)}`;
-  return dob <= cutoff;
 }
 
 /**

@@ -295,7 +295,8 @@ New signature: `beginCheckout(sessionId: string, paymentChoice: "deposit" | "ful
   record at creation. Every new record gets them, regardless of choice.
 - Server-side eligibility: `deposit` is honoured only when
   `isDepositEligible(daysBetween(todayIso, session.arrival))`. Otherwise
-  silently treat as `full` (the UI hides the option, this is belt and braces).
+  silently treat as `full` (the UI offers no deposit radio there, this is
+  belt and braces).
 - Early return: if `record.status` is `"deposit_paid"` or `"paid"`, return
   `{ kind: "paid", record }` (the Buy-now moment is over; top-ups happen via
   the Manage endpoint). The PayClient already routes this to the confirmation
@@ -514,6 +515,12 @@ retries, check `receiptEmailAt`).
   Pay any time from Manage my booking." Note in a code comment that the
   display amount is advisory: the server recomputes from folio totals, which
   can differ if a location fee is dropped at checkout.
+- When NOT eligible, render one static row in the same place and styling:
+  "Pay in full · KES {total}", with a line naming the rule and the actual
+  distance to arrival. Hiding the block entirely was the first cut, and it
+  read as a bare handoff link: inside 8 weeks the guest saw no amount on
+  the card at all, only the button label and the rail. There is no choice
+  to make here, but there is still something to state.
 - The button label uses the chosen amount. POST body becomes
   `JSON.stringify({ payment: choice })`.
 - The "One payment covers your whole break" copy: keep for full, swap for a
