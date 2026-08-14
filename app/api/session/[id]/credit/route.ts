@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/server/db";
 import { findClaim, isLiveClaim, releaseClaim } from "@/server/referral/claim";
-import { getSession, parseExtras } from "@/server/booking/session";
+import { getSession, sessionSnapshotTotal } from "@/server/booking/session";
 import { getCurrentUser } from "@/server/auth/session";
 import { handleRoute, jsonError } from "@/server/api-helpers";
 import { vestedCreditBalance } from "@/server/referral/derive";
@@ -15,18 +15,6 @@ import { capApplicableCredit } from "@/lib/referral";
  * only the session. Both numbers are advisory: ensureRecord re-derives the
  * balance authoritatively inside the spend-claim transaction and clamps.
  */
-
-/** The session-snapshot total the cap rule works against. */
-function snapshotTotal(session: NonNullable<Awaited<ReturnType<typeof getSession>>>): number {
-  return session.lodges.reduce(
-    (sum, l) =>
-      sum +
-      (l.stayGrossAmount ?? 0) +
-      parseExtras(l).reduce((a, e) => a + e.grossAmount, 0) +
-      (l.locationFee ?? 0),
-    0,
-  );
-}
 
 async function availableFor(
   session: NonNullable<Awaited<ReturnType<typeof getSession>>>,
@@ -49,7 +37,7 @@ async function availableFor(
   }
   const vested = await vestedCreditBalance(participant.id);
   return capApplicableCredit({
-    bookingTotal: snapshotTotal(session),
+    bookingTotal: sessionSnapshotTotal(session),
     discount: session.referralDiscount ?? 0,
     vestedBalance: vested,
   });

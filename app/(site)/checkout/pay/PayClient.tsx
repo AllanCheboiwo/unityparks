@@ -47,6 +47,16 @@ export function PayClient({ provider }: { provider: "simulated" | "pesapal" }) {
   // else; the server is the judge either way.
   const [creditAvailable, setCreditAvailable] = useState(0);
   const [creditBusy, setCreditBusy] = useState(false);
+  // Referral code. Prefilled from the session (a /r/ link stamped it, or the
+  // guest typed it here on an earlier pass) and editable until checkout
+  // freezes the totals. Advisory: the server validates again at checkout.
+  const [referralCode, setReferralCode] = useState("");
+  const [referralBusy, setReferralBusy] = useState(false);
+  const [referralStatus, setReferralStatus] = useState<
+    | { state: "idle" }
+    | { state: "valid"; discount: number }
+    | { state: "invalid"; message: string }
+  >({ state: "idle" });
 
   useEffect(() => {
     if (!sessionId) return;
@@ -55,12 +65,37 @@ export function PayClient({ provider }: { provider: "simulated" | "pesapal" }) {
       if (isExpired(s)) return setExpired(true);
       if (!s.ok) return setError(s.error);
       setSession(s.data);
+      if (s.data.referral) {
+        setReferralCode(s.data.referral.code);
+        if (s.data.referral.discount != null) {
+          setReferralStatus({ state: "valid", discount: s.data.referral.discount });
+        } else {
+          // A code with no discount snapshot: the details step never ran its
+          // revalidation (the guest reached this page by URL). Settle it now
+          // so the total on the button is the one checkout will charge.
+          applyReferral(s.data.referral.code);
+        }
+      }
       const c = await apiFetch<{ available: number; applied: boolean }>(
         `/api/session/${sessionId}/credit`,
       );
       if (c.ok) setCreditAvailable(c.data.available);
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
+
+  // The summary rail, the deposit split and the button amount all read from
+  // the session, and what credit is offerable can change with any of it (a
+  // refused apply, an untick that burned this booking's slot, a discount
+  // that ate the room left for credit). So every money change re-reads both.
+  async function refreshTotals() {
+    const [fresh, credit] = await Promise.all([
+      apiFetch<SessionSummary>(`/api/session/${sessionId}`),
+      apiFetch<{ available: number }>(`/api/session/${sessionId}/credit`),
+    ]);
+    if (fresh.ok) setSession(fresh.data);
+    if (credit.ok) setCreditAvailable(credit.data.available);
+  }
 
   async function toggleCredit(apply: boolean) {
     if (!sessionId) return;
@@ -72,15 +107,36 @@ export function PayClient({ provider }: { provider: "simulated" | "pesapal" }) {
     setCreditBusy(false);
     if (!result.ok) setError(result.error);
     else setError(null);
-    // Re-fetch both, always: the summary rail and totals must move
-    // together, and what is offerable can change with the toggle (a
-    // refused apply, or an untick that burned this booking's slot).
-    const [fresh, credit] = await Promise.all([
-      apiFetch<SessionSummary>(`/api/session/${sessionId}`),
-      apiFetch<{ available: number }>(`/api/session/${sessionId}/credit`),
-    ]);
-    if (fresh.ok) setSession(fresh.data);
-    if (credit.ok) setCreditAvailable(credit.data.available);
+    await refreshTotals();
+  }
+
+  async function applyReferral(codeOverride?: string) {
+    if (!sessionId) return;
+    const code = (codeOverride ?? referralCode).trim().toUpperCase();
+    setReferralBusy(true);
+    const result = await apiFetch<{
+      applied: boolean;
+      discount: number | null;
+      message?: string;
+    }>(`/api/session/${sessionId}/referral`, {
+      method: "POST",
+      body: JSON.stringify({ code }),
+    });
+    setReferralBusy(false);
+    if (isExpired(result)) return setExpired(true);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    setError(null);
+    if (result.data.applied && result.data.discount != null) {
+      setReferralStatus({ state: "valid", discount: result.data.discount });
+    } else if (result.data.message) {
+      setReferralStatus({ state: "invalid", message: result.data.message });
+    } else {
+      setReferralStatus({ state: "idle" });
+    }
+    await refreshTotals();
   }
 
   // Browser back from Pesapal can restore this page from the bfcache with
@@ -148,9 +204,11 @@ export function PayClient({ provider }: { provider: "simulated" | "pesapal" }) {
   // The deposit option, 57+ days out only. These numbers are advisory: the
   // server recomputes eligibility and the amount from the folio totals,
   // which can differ if a location fee is dropped at checkout.
-  const depositEligible = isDepositEligible(
-    daysBetween(new Date().toISOString().slice(0, 10), session.arrival),
+  const daysToArrival = daysBetween(
+    new Date().toISOString().slice(0, 10),
+    session.arrival,
   );
+  const depositEligible = isDepositEligible(daysToArrival);
   const depositChosen = depositEligible && payment === "deposit";
   const deposit = depositAmountFor(bookingTotal);
   const balanceDue = balanceDueDateFor(session.arrival);
@@ -174,12 +232,7 @@ export function PayClient({ provider }: { provider: "simulated" | "pesapal" }) {
       // server-side ("review your total and press Buy now again"), so the
       // rail, the deposit split and this button must re-render from the
       // server before the guest can press again.
-      const [fresh, credit] = await Promise.all([
-        apiFetch<SessionSummary>(`/api/session/${sessionId}`),
-        apiFetch<{ available: number }>(`/api/session/${sessionId}/credit`),
-      ]);
-      if (fresh.ok) setSession(fresh.data);
-      if (credit.ok) setCreditAvailable(credit.data.available);
+      await refreshTotals();
       setBusy(false);
       return;
     }
@@ -298,6 +351,49 @@ export function PayClient({ provider }: { provider: "simulated" | "pesapal" }) {
             </div>
           )}
 
+          {/* Money adjustments live together, directly above the total they
+              change: the code first, then any credit it leaves room for. */}
+          <div className="mt-4 rounded-lg bg-white border border-line p-5 text-sm text-foreground/70">
+            <p className="font-semibold text-ink">Have a referral code?</p>
+            <p className="mt-1 text-xs">
+              If a friend or one of our partners sent you, their code takes the
+              discount off this booking.
+            </p>
+            <div className="mt-3 flex gap-2">
+              <input
+                type="text"
+                value={referralCode}
+                onChange={(e) => {
+                  setReferralCode(e.target.value.toUpperCase());
+                  setReferralStatus({ state: "idle" });
+                }}
+                placeholder="e.g. AMINA"
+                maxLength={12}
+                // Locked while Buy now runs, same reason as the credit box:
+                // the server is settling this booking's discount right now.
+                disabled={referralBusy || busy}
+                className="w-48 rounded-md border border-line px-3 py-2 uppercase"
+              />
+              <button
+                type="button"
+                onClick={() => applyReferral()}
+                disabled={referralBusy || busy}
+                className="btn-outline shrink-0"
+              >
+                {referralBusy ? "Checking…" : "Apply"}
+              </button>
+            </div>
+            {referralStatus.state === "valid" && (
+              <p className="mt-2 font-semibold text-[#536917]">
+                {formatKes(referralStatus.discount)} off, already in your total
+                below.
+              </p>
+            )}
+            {referralStatus.state === "invalid" && (
+              <p className="mt-2 text-[#b3261e]">{referralStatus.message}</p>
+            )}
+          </div>
+
           {(creditAvailable > 0 || creditApplied > 0) && (
             <div className="mt-4 rounded-lg bg-white border border-line p-5">
               <label className="flex cursor-pointer items-start gap-3">
@@ -318,7 +414,7 @@ export function PayClient({ provider }: { provider: "simulated" | "pesapal" }) {
                   </span>
                   <span className="mt-0.5 block text-xs text-foreground/60">
                     Earned from your referrals. It comes straight off this
-                    booking's total.
+                    booking&apos;s total.
                   </span>
                 </span>
               </label>
@@ -337,6 +433,23 @@ export function PayClient({ provider }: { provider: "simulated" | "pesapal" }) {
                   ? "One payment covers your whole break. We'll hold your lodge while you pay on Pesapal's secure page, then bring you straight back for your confirmation."
                   : "One payment covers your whole break. Confirm below and your lodge is booked straight away."}
             </p>
+
+            {/* Inside 8 weeks there is no choice to make, but the guest must
+                still see what they are about to pay and why the deposit they
+                may have read about isn't on offer. */}
+            {!depositEligible && (
+              <div className="mt-4 rounded-md border border-line bg-mist p-3 text-sm">
+                <span className="font-semibold text-ink">
+                  Pay in full · {formatKes(bookingTotal)}
+                </span>
+                <span className="mt-0.5 block text-xs text-foreground/60">
+                  A 30% deposit is only offered 8 weeks or more before arrival.
+                  Your break is{" "}
+                  {daysToArrival === 1 ? "1 day" : `${daysToArrival} days`} away,
+                  so this one is paid in full today.
+                </span>
+              </div>
+            )}
 
             {depositEligible && (
               <div className="mt-4 grid gap-2">

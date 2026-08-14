@@ -1,14 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { apiFetch, isExpired } from "@/lib/api";
+import { adultAtArrival, isUsablePhone } from "@/lib/guestRules";
 import type { SessionSummary } from "@/lib/types";
 import { Stepper } from "@/components/Stepper";
 import { BookingSummary } from "@/components/BookingSummary";
 import { ExpiredNotice } from "@/components/ExpiredNotice";
 import { CheckoutBreadcrumb } from "../Breadcrumb";
-import { AlertIcon } from "../icons";
+import { AlertIcon, TickIcon } from "../icons";
 
 type KnownUser = {
   firstName: string;
@@ -156,11 +157,121 @@ const cardTitleClass = "text-xl font-bold text-ink";
 const errorClass =
   "flex items-start gap-2 rounded-md border border-[#b3261e]/30 bg-[#b3261e]/5 px-4 py-3 text-sm text-[#b3261e]";
 
+/** Index of the last step, the one holding the terms box and Continue. */
+const LAST_STEP = 2;
+
+/** The message under a field that failed its step's check. */
+function FieldError({ message }: { message?: string }) {
+  if (!message) return null;
+  return (
+    <span className="mt-1 flex items-start gap-1.5 text-sm text-[#b3261e]">
+      <AlertIcon />
+      {message}
+    </span>
+  );
+}
+
+/**
+ * How a section is being shown. "plain" is the whole form open at once, for
+ * a guest who is reviewing prefilled details rather than entering them.
+ */
+type SectionState = "plain" | "open" | "done" | "upcoming";
+
+/**
+ * One numbered section of the form. In "done" and "upcoming" it renders NO
+ * fields at all, which is the point: a disabled input is skipped by autofill
+ * and by screen readers, so an unreached step is better left unrendered than
+ * rendered dead. Whichever step is open has all of its fields live, so a
+ * browser filling a whole address in one go still works.
+ */
+function Section({
+  index,
+  title,
+  subtitle,
+  state,
+  summary,
+  onEdit,
+  children,
+}: {
+  index: number;
+  title: string;
+  subtitle?: string;
+  state: SectionState;
+  /** The one-line recap shown in place of the fields once the step is done. */
+  summary?: string;
+  onEdit: () => void;
+  children: React.ReactNode;
+}) {
+  if (state === "plain") {
+    return (
+      <div className={cardClass}>
+        <p className={cardTitleClass}>{title}</p>
+        {subtitle && <p className="mt-1 text-sm text-foreground/60">{subtitle}</p>}
+        <div className="mt-4 grid gap-5">{children}</div>
+      </div>
+    );
+  }
+
+  const upcoming = state === "upcoming";
+  return (
+    <div
+      id={`details-step-${index}`}
+      className={`rounded-lg border p-6 ${
+        upcoming ? "border-line bg-mist/60" : "border-line bg-white"
+      }`}
+    >
+      <div className="flex items-start gap-3">
+        <span
+          className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-sm font-bold ${
+            state === "done"
+              ? "bg-olive text-white"
+              : upcoming
+                ? "bg-line text-foreground/50"
+                : "bg-navy text-white"
+          }`}
+        >
+          {state === "done" ? <TickIcon className="h-3.5 w-3.5" /> : index + 1}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-baseline justify-between gap-3">
+            <p className={`${cardTitleClass} ${upcoming ? "text-foreground/50" : ""}`}>
+              {title}
+            </p>
+            {state === "done" && (
+              <button
+                type="button"
+                onClick={onEdit}
+                className="shrink-0 text-sm text-navy underline underline-offset-2"
+              >
+                Edit
+              </button>
+            )}
+          </div>
+          {state === "done" && summary && (
+            <p className="mt-1 text-sm text-foreground/70">{summary}</p>
+          )}
+          {state === "open" && subtitle && (
+            <p className="mt-1 text-sm text-foreground/60">{subtitle}</p>
+          )}
+        </div>
+      </div>
+      {state === "open" && <div className="mt-5 grid gap-5">{children}</div>}
+    </div>
+  );
+}
+
 /**
  * The details step: an email-first gate card ("Have an account
  * with us?"), then the lead booker form, then account creation as a
  * side-effect of booking. The gate card lives OUTSIDE the main form element
  * so pressing Enter on a password can never submit the booking as a guest.
+ *
+ * A guest whose email turns out to be new fills the form in three numbered
+ * steps, one open at a time (Center Parcs parity, and a 15-field form is
+ * punishing on a phone otherwise). Everyone else - signed in, prefilled from
+ * an account, or an email check that failed - gets the whole form open,
+ * because reviewing details is a different job from entering them and it is
+ * worse when chopped up.
  */
 export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }) {
   const router = useRouter();
@@ -210,39 +321,43 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // Referral code: prefilled from the session (the /r/ link stamped it),
-  // editable until submit. The check is advisory, like the email gate; the
-  // server validates again at submit and once more at checkout.
-  const [referralCode, setReferralCode] = useState("");
-  const [referralStatus, setReferralStatus] = useState<
-    | { state: "idle" }
-    | { state: "checking" }
-    | { state: "valid"; discount: number }
-    | { state: "invalid"; message: string }
-  >({ state: "idle" });
+  // The phased form: which step is open, and how many are behind us. They
+  // are separate because editing a finished step must not un-finish the ones
+  // after it - re-locking the page under someone who came back to fix a typo
+  // is the rudest thing this screen could do.
+  const [openStep, setOpenStep] = useState(0);
+  const [stepsDone, setStepsDone] = useState(0);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  // The referral code box lives on the pay step, next to the credit toggle
+  // and the total it changes. This form deliberately omits referralCode from
+  // its submit body: absent means "keep and revalidate whatever is stamped",
+  // so a code a /r/ link left on the session survives this step untouched
+  // and reaches the pay page with a fresh discount snapshot.
 
   useEffect(() => {
     if (!sessionId) return;
     (async () => {
       const s = await apiFetch<SessionSummary>(`/api/session/${sessionId}`);
       if (isExpired(s)) return setExpired(true);
-      if (s.ok) {
-        setSummary(s.data);
-        if (s.data.referral) {
-          setReferralCode(s.data.referral.code);
-          if (s.data.referral.discount != null) {
-            setReferralStatus({ state: "valid", discount: s.data.referral.discount });
-          } else {
-            // A /r/ link stamped the code at search time with no discount
-            // snapshot yet; validate it now so the guest sees what it is
-            // worth without having to touch the field.
-            checkReferral(s.data.referral.code);
-          }
-        }
-      }
+      if (s.ok) setSummary(s.data);
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
+
+  // A finished step collapses from a screenful to one line, which yanks the
+  // page up under the guest and can leave the newly opened step off-screen
+  // below them. Put it back in view. Skipped on the first render, where
+  // nothing has moved and step 0 is already where they are looking.
+  const firstStepRender = useRef(true);
+  useEffect(() => {
+    if (firstStepRender.current) {
+      firstStepRender.current = false;
+      return;
+    }
+    document
+      .getElementById(`details-step-${openStep}`)
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [openStep]);
 
   if (!sessionId || expired) return <ExpiredNotice />;
 
@@ -254,6 +369,35 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
   // The lead form unlocks once we know who is booking: a signed-in user, a
   // checked email, or a check that failed (never block the funnel on it).
   const formUnlocked = knownUser !== null || gate !== null;
+
+  const showGate = !knownUser;
+  const showSignInPanel = gate?.status === "active" && !knownUser && !declinedSignIn;
+  const showCreateAccount = !knownUser && gate?.status === "none";
+  // Who gets the phased form: an email we have never seen, so someone typing
+  // all of this from scratch. Anyone else is reviewing rather than entering -
+  // signed in, prefilled, or an email check that failed and left us unsure -
+  // and gets the whole form open. Same condition as the account offer,
+  // because it is the same person: a brand new guest.
+  const phased = showCreateAccount;
+
+  function stepState(index: number): SectionState {
+    if (!phased) return "plain";
+    if (index === openStep) return "open";
+    return index < stepsDone ? "done" : "upcoming";
+  }
+
+  // What a finished step says in place of its fields: enough to recognise as
+  // yours at a glance, and to notice a typo without pressing Edit.
+  const aboutSummary = [
+    [form.title, form.firstName, form.lastName].filter(Boolean).join(" "),
+    joinPhone(form.phoneCountry, form.phoneNumber),
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const addressSummary = [form.addressLine1, form.townCity, form.country]
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .join(", ");
 
   async function checkEmail() {
     const email = form.email.trim();
@@ -325,35 +469,78 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
     router.refresh();
   }
 
-  async function checkReferral(codeOverride?: string) {
-    const code = (codeOverride ?? referralCode).trim().toUpperCase();
-    if (!code) {
-      setReferralStatus({ state: "idle" });
+  /**
+   * What each step must satisfy before the next one opens. These mirror the
+   * server's own rules (Zod plus adultAtArrival), so a step can never pass
+   * here and be refused at submit. Optional fields are absent on purpose:
+   * address line 2, county and postcode are patchy in Kenya.
+   */
+  function checkStep(index: number): Record<string, string> {
+    const e: Record<string, string> = {};
+    if (index === 0) {
+      if (!form.firstName.trim()) e.firstName = "Please enter your first name.";
+      if (!form.lastName.trim()) e.lastName = "Please enter your last name.";
+      if (knownUser && !form.email.trim().includes("@")) {
+        e.email = "Please enter a valid email address.";
+      }
+      if (!form.dateOfBirth) {
+        e.dateOfBirth = "Please enter your date of birth.";
+      } else if (summary && !adultAtArrival(form.dateOfBirth, summary.arrival)) {
+        e.dateOfBirth = "The lead booker must be over 18 at the time of arrival.";
+      }
+      if (!isUsablePhone(form.phoneNumber)) {
+        e.phoneNumber = "Please enter a mobile number we can reach you on.";
+      }
+    }
+    if (index === 1) {
+      if (!form.country.trim()) e.country = "Please enter your country.";
+      if (!form.addressLine1.trim()) e.addressLine1 = "Please enter the first line of your address.";
+      if (!form.townCity.trim()) e.townCity = "Please enter your town or city.";
+    }
+    if (index === 2) {
+      if (showCreateAccount && createAccount && newPassword.length < 8) {
+        e.newPassword = "Please choose a password of at least 8 characters.";
+      }
+      if (!termsAccepted) {
+        e.termsAccepted = "Please accept the booking terms to continue.";
+      }
+    }
+    return e;
+  }
+
+  /**
+   * Advance past step index, or save an edit to one already behind us. The
+   * button is never disabled: a dead button that will not say what is wrong
+   * is the worst thing a checkout form can do, so it is always pressable and
+   * answers with the missing fields.
+   */
+  function leaveStep(index: number) {
+    const found = checkStep(index);
+    setFieldErrors(found);
+    if (Object.keys(found).length > 0) return;
+    if (index < stepsDone) {
+      // Editing something finished: hand them back to where they were.
+      setOpenStep(Math.min(stepsDone, LAST_STEP));
       return;
     }
-    setReferralStatus({ state: "checking" });
-    const result = await apiFetch<
-      { valid: true; discount: number } | { valid: false; message: string }
-    >(`/api/referral/validate`, {
-      method: "POST",
-      body: JSON.stringify({
-        code,
-        email: form.email.trim() || undefined,
-        phone: joinPhone(form.phoneCountry, form.phoneNumber) || undefined,
-      }),
-    });
-    // Advisory: on API failure, keep quiet and let the server decide at
-    // submit, same discipline as the email gate.
-    if (!result.ok) return setReferralStatus({ state: "idle" });
-    if (result.data.valid) {
-      setReferralStatus({ state: "valid", discount: result.data.discount });
-    } else {
-      setReferralStatus({ state: "invalid", message: result.data.message });
-    }
+    setStepsDone(index + 1);
+    setOpenStep(Math.min(index + 1, LAST_STEP));
   }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    // Belt and braces for the phased path: a guest can reopen a finished
+    // step, break it, and reach this button without pressing Save. Refuse,
+    // and open the step that is wrong rather than reporting it from afar.
+    for (let i = 0; i <= LAST_STEP; i++) {
+      const found = checkStep(i);
+      if (Object.keys(found).length > 0) {
+        setFieldErrors(found);
+        if (phased) setOpenStep(i);
+        return;
+      }
+    }
+    setFieldErrors({});
     setBusy(true);
     setError(null);
     const wantsAccount =
@@ -374,7 +561,6 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
           marketingSms,
           termsAccepted,
           password: wantsAccount ? newPassword : undefined,
-          referralCode: referralCode.trim(),
         }),
       },
     );
@@ -396,11 +582,6 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
     // After the navigation so the header chip re-renders on the next page.
     if (result.data.accountCreated) router.refresh();
   }
-
-  const showGate = !knownUser;
-  const showSignInPanel =
-    gate?.status === "active" && !knownUser && !declinedSignIn;
-  const showCreateAccount = !knownUser && gate?.status === "none";
 
   return (
     <div className="mx-auto max-w-5xl px-5 py-8">
@@ -532,306 +713,330 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
             </div>
           )}
 
-          <form onSubmit={submit} className="mt-6 grid gap-5">
+          {/* noValidate, with the `required` attributes left on for their
+              accessibility semantics: checkStep covers every one of them, and
+              letting the browser fire first would mean two different error
+              styles on the same form - a native bubble on the last step and
+              our own inline messages on the two before it. */}
+          <form onSubmit={submit} noValidate className="mt-6 grid gap-5">
             <fieldset
               disabled={!formUnlocked}
               className={`grid gap-5 border-0 p-0 m-0 ${formUnlocked ? "" : "opacity-40"}`}
             >
-              <div className={cardClass}>
-                <p className={cardTitleClass}>Lead guest</p>
-                <div className="mt-4 grid gap-5">
-                  <label className="max-w-[10rem] block">
-                    <span className={labelClass}>Title</span>
-                    <select
-                      value={form.title}
-                      onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-                      className={inputClass}
-                    >
-                      <option value="">Select title</option>
-                      <option>Mr</option>
-                      <option>Mrs</option>
-                      <option>Ms</option>
-                      <option>Miss</option>
-                      <option>Dr</option>
-                    </select>
-                  </label>
+              <Section
+                index={0}
+                title="About you"
+                subtitle="The lead booker for the break."
+                state={stepState(0)}
+                summary={aboutSummary}
+                onEdit={() => setOpenStep(0)}
+              >
+                <label className="max-w-[10rem] block">
+                  <span className={labelClass}>Title</span>
+                  <select
+                    value={form.title}
+                    onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+                    className={inputClass}
+                  >
+                    <option value="">Select title</option>
+                    <option>Mr</option>
+                    <option>Mrs</option>
+                    <option>Ms</option>
+                    <option>Miss</option>
+                    <option>Dr</option>
+                  </select>
+                </label>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <label>
-                      <span className={labelClass}>First name</span>
-                      <input required value={form.firstName} onChange={update("firstName")} className={inputClass} />
-                    </label>
-                    <label>
-                      <span className={labelClass}>Last name</span>
-                      <input required value={form.lastName} onChange={update("lastName")} className={inputClass} />
-                    </label>
-                  </div>
-
-                  <label className="block">
-                    <span className={labelClass}>Date of birth</span>
+                <div className="grid grid-cols-2 gap-4">
+                  <label>
+                    <span className={labelClass}>First name</span>
                     <input
-                      type="date"
                       required
-                      value={form.dateOfBirth}
-                      onChange={update("dateOfBirth")}
+                      value={form.firstName}
+                      onChange={update("firstName")}
                       className={inputClass}
                     />
-                    <span className="mt-1 block text-xs text-foreground/50">
-                      The lead booker must be over 18 at the time of arrival.
-                    </span>
+                    <FieldError message={fieldErrors.firstName} />
                   </label>
+                  <label>
+                    <span className={labelClass}>Last name</span>
+                    <input
+                      required
+                      value={form.lastName}
+                      onChange={update("lastName")}
+                      className={inputClass}
+                    />
+                    <FieldError message={fieldErrors.lastName} />
+                  </label>
+                </div>
 
-                  {knownUser && (
-                    <label className="block">
-                      <span className={labelClass}>
-                        Email <span className="font-normal">(lead guest)</span>
-                      </span>
-                      <input
-                        type="email"
-                        required
-                        value={form.email}
-                        onChange={update("email")}
+                <label className="block">
+                  <span className={labelClass}>Date of birth</span>
+                  <input
+                    type="date"
+                    required
+                    value={form.dateOfBirth}
+                    onChange={update("dateOfBirth")}
+                    className={inputClass}
+                  />
+                  <span className="mt-1 block text-xs text-foreground/50">
+                    The lead booker must be over 18 at the time of arrival.
+                  </span>
+                  <FieldError message={fieldErrors.dateOfBirth} />
+                </label>
+
+                {knownUser && (
+                  <label className="block">
+                    <span className={labelClass}>
+                      Email <span className="font-normal">(lead guest)</span>
+                    </span>
+                    <input
+                      type="email"
+                      required
+                      value={form.email}
+                      onChange={update("email")}
+                      className={inputClass}
+                    />
+                    <FieldError message={fieldErrors.email} />
+                  </label>
+                )}
+
+                <div>
+                  <span className={labelClass}>Mobile phone</span>
+                  <div className="flex gap-3">
+                    <label className="w-36 shrink-0">
+                      <span className="sr-only">Country code</span>
+                      <select
+                        value={form.phoneCountry}
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, phoneCountry: e.target.value }))
+                        }
                         className={inputClass}
+                      >
+                        {PHONE_CODES.map((c) => (
+                          <option key={c.label} value={c.label}>
+                            {c.label} {c.code}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="flex-1">
+                      <span className="sr-only">Phone number</span>
+                      <input
+                        type="tel"
+                        required
+                        minLength={7}
+                        value={form.phoneNumber}
+                        onChange={update("phoneNumber")}
+                        className={inputClass}
+                        placeholder="717 464 236"
                       />
                     </label>
-                  )}
+                  </div>
+                  <FieldError message={fieldErrors.phoneNumber} />
+                </div>
 
+                {phased && (
                   <div>
-                    <span className={labelClass}>Mobile phone</span>
-                    <div className="flex gap-3">
-                      <label className="w-36 shrink-0">
-                        <span className="sr-only">Country code</span>
-                        <select
-                          value={form.phoneCountry}
-                          onChange={(e) =>
-                            setForm((f) => ({ ...f, phoneCountry: e.target.value }))
-                          }
-                          className={inputClass}
-                        >
-                          {PHONE_CODES.map((c) => (
-                            <option key={c.label} value={c.label}>
-                              {c.label} {c.code}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className="flex-1">
-                        <span className="sr-only">Phone number</span>
-                        <input
-                          type="tel"
-                          required
-                          minLength={7}
-                          value={form.phoneNumber}
-                          onChange={update("phoneNumber")}
-                          className={inputClass}
-                          placeholder="717 464 236"
-                        />
-                      </label>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => leaveStep(0)}
+                      className="btn-primary"
+                    >
+                      {stepsDone > 0 ? "Save" : "Continue to your address"}
+                    </button>
                   </div>
-                </div>
-              </div>
+                )}
+              </Section>
 
-              <div className={cardClass}>
-                <p className={cardTitleClass}>Postal address</p>
-                <p className="mt-1 text-sm text-foreground/60">
-                  We ask for your address so we can send a welcome pack with
-                  all of your break details.
-                </p>
-                <div className="mt-4 grid gap-5">
-                  <label className="block max-w-[14rem]">
-                    <span className={labelClass}>Country</span>
+              <Section
+                index={1}
+                title="Your address"
+                subtitle="We ask for your address so we can send a welcome pack with all of your break details."
+                state={stepState(1)}
+                summary={addressSummary}
+                onEdit={() => setOpenStep(1)}
+              >
+                <label className="block max-w-[14rem]">
+                  <span className={labelClass}>Country</span>
+                  <input
+                    required
+                    value={form.country}
+                    onChange={update("country")}
+                    className={inputClass}
+                  />
+                  <FieldError message={fieldErrors.country} />
+                </label>
+                <label className="block">
+                  <span className={labelClass}>Address line 1</span>
+                  <input
+                    required
+                    value={form.addressLine1}
+                    onChange={update("addressLine1")}
+                    className={inputClass}
+                  />
+                  <FieldError message={fieldErrors.addressLine1} />
+                </label>
+                <label className="block">
+                  <span className={labelClass}>
+                    Address line 2 <span className="font-normal">(optional)</span>
+                  </span>
+                  <input
+                    value={form.addressLine2}
+                    onChange={update("addressLine2")}
+                    className={inputClass}
+                  />
+                </label>
+                <div className="grid grid-cols-2 gap-4">
+                  <label>
+                    <span className={labelClass}>Town/City</span>
                     <input
                       required
-                      value={form.country}
-                      onChange={update("country")}
+                      value={form.townCity}
+                      onChange={update("townCity")}
                       className={inputClass}
                     />
+                    <FieldError message={fieldErrors.townCity} />
                   </label>
-                  <label className="block">
-                    <span className={labelClass}>Address line 1</span>
-                    <input
-                      required
-                      value={form.addressLine1}
-                      onChange={update("addressLine1")}
-                      className={inputClass}
-                    />
-                  </label>
-                  <label className="block">
+                  <label>
                     <span className={labelClass}>
-                      Address line 2 <span className="font-normal">(optional)</span>
+                      County / State / Region{" "}
+                      <span className="font-normal">(optional)</span>
                     </span>
                     <input
-                      value={form.addressLine2}
-                      onChange={update("addressLine2")}
+                      value={form.county}
+                      onChange={update("county")}
                       className={inputClass}
                     />
                   </label>
-                  <div className="grid grid-cols-2 gap-4">
-                    <label>
-                      <span className={labelClass}>Town/City</span>
+                </div>
+                <label className="block max-w-[14rem]">
+                  <span className={labelClass}>
+                    Postcode <span className="font-normal">(optional)</span>
+                  </span>
+                  <input
+                    value={form.postcode}
+                    onChange={update("postcode")}
+                    className={inputClass}
+                  />
+                </label>
+
+                {phased && (
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => leaveStep(1)}
+                      className="btn-primary"
+                    >
+                      {stepsDone > 1 ? "Save" : "Continue to the last bit"}
+                    </button>
+                  </div>
+                )}
+              </Section>
+
+              <Section
+                index={2}
+                title="Finishing up"
+                state={stepState(2)}
+                onEdit={() => setOpenStep(2)}
+              >
+                {showCreateAccount && (
+                  <div>
+                    <label className="flex items-start gap-3">
                       <input
-                        required
-                        value={form.townCity}
-                        onChange={update("townCity")}
-                        className={inputClass}
+                        type="checkbox"
+                        checked={createAccount}
+                        onChange={(e) => setCreateAccount(e.target.checked)}
+                        className="mt-1 h-4 w-4 accent-[#536917]"
                       />
-                    </label>
-                    <label>
-                      <span className={labelClass}>
-                        County / State / Region{" "}
-                        <span className="font-normal">(optional)</span>
+                      <span>
+                        <span className="block font-semibold text-ink">
+                          Create my Unity Parks account
+                        </span>
+                        <span className="text-sm text-foreground/60 block mt-0.5">
+                          We&apos;ll set it up as part of this booking, so you can
+                          see and manage your breaks any time.
+                        </span>
                       </span>
+                    </label>
+                    {createAccount && (
+                      <label className="block mt-4">
+                        <span className={labelClass}>Choose a password</span>
+                        <input
+                          type="password"
+                          required
+                          minLength={8}
+                          value={newPassword}
+                          onChange={(e) => setNewPassword(e.target.value)}
+                          className={inputClass}
+                        />
+                        <span className="mt-1 block text-xs text-foreground/50">
+                          At least 8 characters.
+                        </span>
+                        <FieldError message={fieldErrors.newPassword} />
+                      </label>
+                    )}
+                  </div>
+                )}
+
+                <div className="text-sm text-foreground/70">
+                  <p className="font-semibold text-ink">Keeping in touch</p>
+                  <p className="mt-2">
+                    To hear about the latest Unity Parks news, including repeat
+                    guest offers, tick below.
+                  </p>
+                  <div className="mt-3 flex gap-6">
+                    <label className="flex items-center gap-2">
                       <input
-                        value={form.county}
-                        onChange={update("county")}
-                        className={inputClass}
+                        type="checkbox"
+                        checked={marketingEmail}
+                        onChange={(e) => setMarketingEmail(e.target.checked)}
+                        className="h-4 w-4 accent-[#536917]"
                       />
+                      Email
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={marketingSms}
+                        onChange={(e) => setMarketingSms(e.target.checked)}
+                        className="h-4 w-4 accent-[#536917]"
+                      />
+                      SMS
                     </label>
                   </div>
-                  <label className="block max-w-[14rem]">
-                    <span className={labelClass}>
-                      Postcode <span className="font-normal">(optional)</span>
-                    </span>
-                    <input
-                      value={form.postcode}
-                      onChange={update("postcode")}
-                      className={inputClass}
-                    />
-                  </label>
                 </div>
-              </div>
 
-              {showCreateAccount && (
-                <div className={cardClass}>
-                  <label className="flex items-start gap-3">
+                <div>
+                  <label className="flex items-start gap-3 text-sm text-foreground/70">
                     <input
                       type="checkbox"
-                      checked={createAccount}
-                      onChange={(e) => setCreateAccount(e.target.checked)}
-                      className="mt-1 h-4 w-4 accent-[#536917]"
+                      required
+                      checked={termsAccepted}
+                      onChange={(e) => setTermsAccepted(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 accent-[#536917]"
                     />
                     <span>
-                      <span className={`${cardTitleClass} block`}>
-                        Create my Unity Parks account
-                      </span>
-                      <span className="text-sm text-foreground/60 block mt-0.5">
-                        We&apos;ll set it up as part of this booking, so you can
-                        see and manage your breaks any time.
-                      </span>
+                      I have read and accept the booking terms and conditions and
+                      the safety information for my break.
                     </span>
                   </label>
-                  {createAccount && (
-                    <label className="block mt-4">
-                      <span className={labelClass}>Choose a password</span>
-                      <input
-                        type="password"
-                        required
-                        minLength={8}
-                        value={newPassword}
-                        onChange={(e) => setNewPassword(e.target.value)}
-                        className={inputClass}
-                      />
-                      <span className="mt-1 block text-xs text-foreground/50">
-                        At least 8 characters.
-                      </span>
-                    </label>
-                  )}
+                  <FieldError message={fieldErrors.termsAccepted} />
                 </div>
-              )}
 
-              <div className={`${cardClass} text-sm text-foreground/70`}>
-                <p className={cardTitleClass}>Keeping in touch</p>
-                <p className="mt-2">
-                  To hear about the latest Unity Parks news, including repeat
-                  guest offers, tick below.
-                </p>
-                <div className="mt-3 flex gap-6">
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={marketingEmail}
-                      onChange={(e) => setMarketingEmail(e.target.checked)}
-                      className="h-4 w-4 accent-[#536917]"
-                    />
-                    Email
-                  </label>
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={marketingSms}
-                      onChange={(e) => setMarketingSms(e.target.checked)}
-                      className="h-4 w-4 accent-[#536917]"
-                    />
-                    SMS
-                  </label>
-                </div>
-              </div>
+                {error && (
+                  <div className={errorClass}>
+                    <AlertIcon />
+                    <span>{error}</span>
+                  </div>
+                )}
 
-              <div className={`${cardClass} text-sm text-foreground/70`}>
-                <p className={cardTitleClass}>Have a referral code?</p>
-                <p className="mt-2">
-                  If a friend or one of our partners sent you, their code takes
-                  the discount off this booking.
-                </p>
-                <div className="mt-3 flex gap-2">
-                  <input
-                    type="text"
-                    value={referralCode}
-                    onChange={(e) => {
-                      setReferralCode(e.target.value.toUpperCase());
-                      setReferralStatus({ state: "idle" });
-                    }}
-                    onBlur={() => checkReferral()}
-                    placeholder="e.g. AMINA"
-                    maxLength={12}
-                    className={`${inputClass} uppercase`}
-                    style={{ maxWidth: "12rem" }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => checkReferral()}
-                    disabled={referralStatus.state === "checking"}
-                    className="btn-outline shrink-0"
-                  >
-                    {referralStatus.state === "checking" ? "Checking…" : "Apply"}
+                <div>
+                  <button type="submit" disabled={busy} className="btn-primary">
+                    {busy ? "Saving…" : "Continue"}
                   </button>
                 </div>
-                {referralStatus.state === "valid" && (
-                  <p className="mt-2 text-[#536917] font-semibold">
-                    KSh {referralStatus.discount.toLocaleString()} off will be
-                    applied at checkout.
-                  </p>
-                )}
-                {referralStatus.state === "invalid" && (
-                  <p className="mt-2 text-red-700">{referralStatus.message}</p>
-                )}
-              </div>
-
-              <label className="flex items-start gap-3 text-sm text-foreground/70">
-                <input
-                  type="checkbox"
-                  required
-                  checked={termsAccepted}
-                  onChange={(e) => setTermsAccepted(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 accent-[#536917]"
-                />
-                <span>
-                  I have read and accept the booking terms and conditions and
-                  the safety information for my break.
-                </span>
-              </label>
-
-              {error && (
-                <div className={errorClass}>
-                  <AlertIcon />
-                  <span>{error}</span>
-                </div>
-              )}
-
-              <button type="submit" disabled={busy} className="btn-primary">
-                {busy ? "Saving…" : "Continue"}
-              </button>
+              </Section>
             </fieldset>
           </form>
         </div>
