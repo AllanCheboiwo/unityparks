@@ -1,3 +1,4 @@
+import { VILLAGE_LOCALE_LINE } from "@/content/village";
 import "server-only";
 import { sendEmail } from "./resend";
 
@@ -31,7 +32,7 @@ export async function sendPasswordResetEmail(params: {
     ``,
     `If this wasn't you, ignore this email. Your password is unchanged.`,
     ``,
-    `Unity Parks · Lake Naivasha, Kenya`,
+    `Unity Parks · ${VILLAGE_LOCALE_LINE}`,
   ].join("\n");
 
   const html = `
@@ -57,7 +58,7 @@ export async function sendPasswordResetEmail(params: {
       </p>
     </div>
     <div style="background:#333333;color:#bbbbbb;padding:14px 28px;font-size:12px;">
-      Unity Parks · Lake Naivasha, Kenya
+      Unity Parks · ${VILLAGE_LOCALE_LINE}
     </div>
   </div>
 </div>`;

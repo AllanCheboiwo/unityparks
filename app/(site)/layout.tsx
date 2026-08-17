@@ -4,6 +4,7 @@ import Link from "next/link";
 import { getCurrentUser } from "@/server/auth/session";
 import { SignOutButton } from "@/components/SignOutButton";
 import { NewsletterForm } from "@/components/NewsletterForm";
+import { VILLAGE_LOCALE_LINE } from "@/content/village";
 import "./globals.css";
 
 // Fira Sans is the display face per docs/DESIGN.md: humanist, slightly warm,
@@ -21,9 +22,9 @@ const body = Open_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Unity Parks | Forest & Lake Breaks",
+  title: "Unity Parks | Forest Breaks on Mount Kenya",
   description:
-    "Self-contained lodges in a lakeside forest village near Naivasha. Breaks start on a Friday or Monday.",
+    "Self-contained lodges in a car-free forest village on the slopes of Mount Kenya. Breaks start on a Friday or Monday.",
 };
 
 function BrandMark() {
@@ -75,7 +76,7 @@ export default async function RootLayout({
                 </Link>
               )}
               <span className="text-sm text-foreground/70 hidden sm:block">
-                Lake Naivasha, Kenya
+                {VILLAGE_LOCALE_LINE}
               </span>
             </div>
           </div>

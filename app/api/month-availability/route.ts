@@ -11,9 +11,9 @@ const Query = z.object({
   month: z.string().regex(/^\d{4}-\d{2}$/),
   nights: z.coerce.number().int(),
   dow: z.enum(["fri", "mon"]),
-  adults: z.coerce.number().int().min(1).max(8),
-  children: z.coerce.number().int().min(0).max(7),
-  toddlers: z.coerce.number().int().min(0).max(7),
+  adults: z.coerce.number().int().min(1).max(6),
+  children: z.coerce.number().int().min(0).max(5),
+  toddlers: z.coerce.number().int().min(0).max(5),
   infants: z.coerce.number().int().min(0).max(2),
 });
 

@@ -1,6 +1,13 @@
 /**
- * Marketing content for each lodge tier, keyed by Apaleo unit-group code.
+ * Marketing content for each lodge type, keyed by Apaleo unit-group code.
  * Apaleo owns inventory and prices; this file owns words and pictures.
+ *
+ * The model (docs/village-and-content-direction.md section 5): two axes and
+ * nothing else. Size is a number, grade is a name. Cedar is the base spec,
+ * Signature is the seven things, identical at both sizes, and the 3 bedroom
+ * gets more of the same, never different things. Anything sold as an extra
+ * (firewood, grocery packs, spa passes) must never appear in a grade.
+ *
  * Swap the image paths for real photography when it exists - nothing else
  * needs to change.
  */
@@ -33,201 +40,211 @@ export type LodgeContent = {
   };
 };
 
+/** The Cedar base spec, word for word the same in both sizes. */
+const CEDAR_INCLUDED_CORE = [
+  "Wood-burning stove in the living room",
+  "Insulated and double glazed throughout",
+  "Full kitchen with oven, hob and fridge-freezer",
+  "Hot water that copes with a full house at six in the morning",
+  "Made-up beds, towels and linen on arrival",
+  "Private deck with a built-in braai",
+  "Free Wi-Fi throughout the lodge",
+  "Parking beside your lodge",
+  "Cot and high chair free on request",
+];
+
+/** The seven Signature things, identical in every Signature lodge. */
+const SIGNATURE_INCLUDED_CORE = [
+  "Private outdoor hot tub, deck-mounted, facing the mountain",
+  "Wraparound deck, roofed at one end, with outdoor dining and a built-in braai",
+  "Underfloor heating in the bathrooms",
+  "En-suite to the main bedroom, plus a second bathroom",
+  "Upgraded kitchen: dishwasher, full oven and coffee machine",
+  "Robes, slippers, heavier linen and better beds",
+  "A bigger plot with a wider tree screen",
+  "Everything in the Cedar spec: the stove, the full kitchen, Wi-Fi, parking, cot and high chair on request",
+];
+
 export const LODGES: Record<string, LodgeContent> = {
   WDL: {
     code: "WDL",
-    name: "Woodland Lodge",
-    tagline: "Practical and stylish",
+    name: "Cedar Lodge 2 bedroom",
+    tagline: "The break, made simple",
     blurb:
-      "Our most popular lodge. Three bedrooms with a private timber deck set among indigenous trees, a fully equipped kitchen and easy access to the village trails.",
+      "Two bedrooms sleeping four, with a wood-burning stove, a full kitchen and a private deck with its own built-in braai, deep among the cedars.",
     sleeps: 4,
-    bedrooms: 3,
-    features: ["Private timber deck", "Full kitchen", "Trail access", "Free Wi-Fi"],
+    bedrooms: 2,
+    features: [
+      "Wood-burning stove",
+      "Full kitchen",
+      "Deck with built-in braai",
+      "Free Wi-Fi",
+    ],
     accent: "#536917",
     image: "/photos/lodge-wdl.jpg",
     detail: {
       intro: [
-        "The Woodland is the lodge most families come back to. It sits in the thick of the indigenous trees, close enough to the village heart that the pool and restaurants are a short walk or an easy cycle, far enough that all you hear from the deck is the forest.",
-        "Inside it is simple and right: three bedrooms off a central living space, a kitchen with everything you would have at home, and sliding doors that open the whole living area onto the deck.",
+        "The Cedar is the lodge the village is built from. It sits in a lane of four to six around a shared green, in the indigenous forest, a short walk from the square. It is insulated and double glazed, because at 2,100 metres the nights are properly cold, and it is warmed by its own wood-burning stove.",
+        "Inside it is simple and right: two bedrooms off a central living space, a kitchen with everything you would have at home, and sliding doors onto a private deck with a built-in braai. Light the stove, close the doors, and the cold outside becomes the point.",
       ],
-      included: [
-        "Fully equipped kitchen with oven, hob and fridge-freezer",
-        "Towels, linen and made-up beds on arrival",
-        "Private timber deck with outdoor furniture",
-        "Free Wi-Fi throughout the lodge",
-        "Parking beside your lodge",
-        "Direct access to the car-free forest trails",
-        "Highchair and cot available on request",
-      ],
+      included: CEDAR_INCLUDED_CORE,
       gallery: [
-        { src: "/photos/lodge-wdl.jpg", alt: "Woodland Lodge among the trees" },
-        { src: "/photos/hero-forest.jpg", alt: "The forest around the lodges" },
+        { src: "/photos/lodge-wdl.jpg", alt: "A Cedar Lodge among the trees" },
+        { src: "/photos/hero-forest.jpg", alt: "The forest around the lanes" },
         { src: "/photos/activity-cycle.jpg", alt: "Cycling the village trails" },
-        { src: "/photos/band-lake.jpg", alt: "Lake Naivasha at golden hour" },
+        { src: "/photos/activity-pool.jpg", alt: "Warm water, included every day" },
       ],
       rooms: [
-        { name: "Living and dining", description: "Open-plan with sliding doors onto the deck, seating the whole party for meals and evenings in." },
+        { name: "Living and dining", description: "Open plan around the stove, with sliding doors onto the deck and a table that seats four properly." },
         { name: "Kitchen", description: "Oven, hob, fridge-freezer, kettle and everything needed to cook for four." },
-        { name: "Bedroom 1", description: "Double bed with wardrobe and forest outlook." },
-        { name: "Bedrooms 2 and 3", description: "A twin and a single, easily swapped around for your party." },
-        { name: "Bathroom", description: "Walk-in shower, WC and basin." },
-        { name: "Deck", description: "Private timber deck with a table for six and the braai stand." },
+        { name: "Bedroom 1", description: "A double with a wardrobe and a forest outlook." },
+        { name: "Bedroom 2", description: "A twin, easily swapped around for your party." },
+        { name: "Bathroom", description: "Walk-in shower, WC and basin, with hot water that never runs out." },
+        { name: "Deck", description: "Private timber deck with the built-in braai and outdoor seating." },
       ],
       goodToKnow: [
         "Check-in from 2pm, check-out by 11am",
         "Breaks start on a Friday or a Monday",
         "One price per lodge, however many of you come (sleeps 4)",
-        "The lodge is yours alone for the whole break",
+        "At 2,100 metres the evenings are cold all year. Bring a jumper; the stove does the rest",
       ],
     },
   },
   FST: {
     code: "FST",
-    name: "Forest Lodge",
-    tagline: "A touch of added luxury",
+    name: "Cedar Lodge 3 bedroom",
+    tagline: "The family favourite",
     blurb:
-      "A step up in space and finish. Three generous bedrooms, a larger wraparound deck, upgraded kitchen appliances and blackout blinds for late risers.",
+      "The same warm Cedar spec with a third bedroom and room for six, for the parties that travel bigger and the breaks that stretch to a week.",
     sleeps: 6,
     bedrooms: 3,
-    features: ["Wraparound deck", "Upgraded kitchen", "Blackout blinds", "Free Wi-Fi"],
+    features: [
+      "Wood-burning stove",
+      "Full kitchen",
+      "Deck with built-in braai",
+      "Free Wi-Fi",
+    ],
     accent: "#3f5012",
     image: "/photos/lodge-fst.jpg",
     detail: {
       intro: [
-        "The Forest takes everything the Woodland does well and gives it more room to breathe. The three bedrooms are noticeably larger, the wraparound deck follows the sun through the day, and the finish steps up everywhere you touch.",
-        "It suits bigger parties and longer breaks: six sleeps comfortably, the upgraded kitchen makes proper cooking a pleasure rather than a chore, and blackout blinds in every bedroom mean nobody is up before they mean to be.",
+        "The Cedar 3 bedroom is the same lodge the whole village is built from, with a third bedroom and space for six. Same stove, same kitchen, same deck and braai; more room to spread out when the grandparents or the cousins come too.",
+        "It suits the bigger party and the longer break. Six sleep comfortably, the hot water copes with a full house at six in the morning, and the deck seats everyone for dinner while the last light comes off the mountain.",
       ],
-      included: [
-        "Upgraded kitchen with full-size oven and dishwasher",
-        "Towels, linen and made-up beds on arrival",
-        "Wraparound timber deck with outdoor dining for eight",
-        "Blackout blinds in every bedroom",
-        "Free Wi-Fi throughout the lodge",
-        "Parking beside your lodge",
-        "Direct access to the car-free forest trails",
-        "Highchair and cot available on request",
-      ],
+      included: CEDAR_INCLUDED_CORE,
       gallery: [
-        { src: "/photos/lodge-fst.jpg", alt: "Forest Lodge and its wraparound deck" },
-        { src: "/photos/hero-forest.jpg", alt: "The forest around the lodges" },
-        { src: "/photos/activity-pool.jpg", alt: "The village lagoon pool" },
-        { src: "/photos/band-lake.jpg", alt: "Lake Naivasha at golden hour" },
+        { src: "/photos/lodge-fst.jpg", alt: "A Cedar Lodge 3 bedroom and its deck" },
+        { src: "/photos/hero-forest.jpg", alt: "The forest around the lanes" },
+        { src: "/photos/activity-pool.jpg", alt: "Warm water, included every day" },
+        { src: "/photos/activity-cycle.jpg", alt: "Cycling the village trails" },
       ],
       rooms: [
-        { name: "Living and dining", description: "A generous open-plan space with doors onto two sides of the deck." },
-        { name: "Kitchen", description: "Full-size oven, dishwasher and enough workspace for two cooks at once." },
-        { name: "Bedroom 1", description: "Double bed with fitted wardrobes and its own deck door." },
-        { name: "Bedrooms 2 and 3", description: "A double and a twin, both full-size rooms, all with blackout blinds." },
+        { name: "Living and dining", description: "Open plan around the stove, with sliding doors onto the deck and a table that seats six." },
+        { name: "Kitchen", description: "Oven, hob, fridge-freezer and enough workspace for two cooks at once." },
+        { name: "Bedroom 1", description: "A double with a wardrobe and a forest outlook." },
+        { name: "Bedrooms 2 and 3", description: "A double and a twin, easily swapped around for your party." },
         { name: "Bathrooms", description: "A family bathroom with bath and shower, plus a second WC." },
-        { name: "Deck", description: "Wraparound deck that follows the sun, with dining for eight and the braai stand." },
+        { name: "Deck", description: "Private timber deck with the built-in braai and dining for six." },
       ],
       goodToKnow: [
         "Check-in from 2pm, check-out by 11am",
         "Breaks start on a Friday or a Monday",
         "One price per lodge, however many of you come (sleeps 6)",
-        "The lodge is yours alone for the whole break",
+        "At 2,100 metres the evenings are cold all year. Bring a jumper; the stove does the rest",
       ],
     },
   },
   LKV: {
     code: "LKV",
-    name: "Lakeview Lodge",
-    tagline: "Wake up to the water",
+    name: "Signature Lodge 2 bedroom",
+    tagline: "The cold-weather grade",
     blurb:
-      "Four bedrooms on the elevated ridge with unobstructed views across the lake, floor-to-ceiling glazing, a furnished terrace and a dedicated games room.",
-    sleeps: 8,
-    bedrooms: 4,
-    features: ["Lake views", "Floor-to-ceiling glazing", "Games room", "Furnished terrace"],
-    accent: "#2c5670",
+      "Built for cold mornings: a private hot tub facing the mountain, a roofed wraparound deck, heated bathroom floors and two bathrooms for four guests.",
+    sleeps: 4,
+    bedrooms: 2,
+    features: [
+      "Private hot tub facing the mountain",
+      "Roofed wraparound deck",
+      "Underfloor-heated bathrooms",
+      "En-suite plus second bathroom",
+    ],
+    accent: "#8b7346",
     image: "/photos/lodge-lkv.jpg",
     detail: {
       intro: [
-        "The Lakeview earns its name every single morning. The lodges sit on the elevated ridge with nothing between the floor-to-ceiling glazing and the water, so the lake is the first thing you see with your coffee and the last thing you see at night.",
-        "Four proper bedrooms sleep eight, the furnished terrace runs the width of the lodge, and the games room settles the question of what happens after dinner. This is the lodge for the whole family, grandparents included.",
+        "Signature is the cold-weather grade, and the 2 bedroom is its purest form. The private hot tub sits on the deck facing the mountain; the deck itself wraps the lodge and is roofed at one end, so the tub and the braai still work in the rains.",
+        "Inside, the bathrooms have underfloor heating, the main bedroom has its own en-suite with a second bathroom besides, and the kitchen steps up to a dishwasher, a full oven and a coffee machine. Robes, slippers and heavier linen finish it. This is the lodge for cold mornings done properly.",
       ],
-      included: [
-        "Floor-to-ceiling glazing with unobstructed lake views",
-        "Games room with table football and board games",
-        "Furnished terrace the width of the lodge",
-        "Full kitchen with dishwasher and coffee machine",
-        "Towels, linen and made-up beds on arrival",
-        "Free Wi-Fi throughout the lodge",
-        "Parking beside your lodge",
-        "Highchair and cot available on request",
-      ],
+      included: SIGNATURE_INCLUDED_CORE,
       gallery: [
-        { src: "/photos/lodge-lkv.jpg", alt: "Lakeview Lodge on the ridge" },
-        { src: "/photos/band-lake.jpg", alt: "The view across Lake Naivasha" },
-        { src: "/photos/activity-boats.jpg", alt: "Boats on the lake below the ridge" },
-        { src: "/photos/activity-spa.jpg", alt: "The spa, a short walk away" },
+        { src: "/photos/lodge-lkv.jpg", alt: "A Signature Lodge at the edge of its tree screen" },
+        { src: "/photos/activity-spa.jpg", alt: "The Forest Spa, ten minutes uphill" },
+        { src: "/photos/hero-forest.jpg", alt: "The forest around the lanes" },
+        { src: "/photos/activity-pool.jpg", alt: "Warm water, included every day" },
       ],
       rooms: [
-        { name: "Living and dining", description: "Glazed wall to the lake, doors onto the terrace, room for the whole party." },
-        { name: "Kitchen", description: "Dishwasher, coffee machine and a breakfast bar facing the water." },
-        { name: "Bedrooms 1 and 2", description: "Two doubles, both lake-facing, the main with fitted wardrobes." },
-        { name: "Bedrooms 3 and 4", description: "A double and a twin on the forest side, quiet and cool." },
-        { name: "Bathrooms", description: "Two full bathrooms, one with bath, one with walk-in shower." },
-        { name: "Games room", description: "Table football, board games and space for tournaments." },
-        { name: "Terrace", description: "Furnished, lake-facing, the width of the lodge." },
+        { name: "Living and dining", description: "Open plan around the stove, with doors onto the roofed end of the deck." },
+        { name: "Kitchen", description: "Dishwasher, full oven, coffee machine and workspace for two cooks." },
+        { name: "Main bedroom", description: "A double with fitted wardrobes and its own en-suite shower room." },
+        { name: "Bedroom 2", description: "A twin on the quiet side of the lodge, easily made up as a double." },
+        { name: "Second bathroom", description: "Bath and overhead shower, with underfloor heating like the en-suite." },
+        { name: "Deck and hot tub", description: "Wraparound and roofed at one end; the tub faces the mountain and works in any weather." },
       ],
       goodToKnow: [
         "Check-in from 2pm, check-out by 11am",
         "Breaks start on a Friday or a Monday",
-        "One price per lodge, however many of you come (sleeps 8)",
-        "Ridge-top position: a short but steepish walk up from the village heart",
+        "One price per lodge, however many of you come (sleeps 4)",
+        "Every Signature lodge has the same seven things; where it sits is yours to choose at the Location step",
       ],
     },
   },
   EXC: {
     code: "EXC",
-    name: "Exclusive Lodge",
-    tagline: "Luxury as standard",
+    name: "Signature Lodge 3 bedroom",
+    tagline: "The celebration lodge",
     blurb:
-      "Our flagship lodge. Four bedrooms, a private outdoor hot tub, cedar sauna, and a games and cinema room, set apart from the village for complete privacy.",
-    sleeps: 8,
-    bedrooms: 4,
-    features: ["Private hot tub", "Cedar sauna", "Cinema room", "Set apart for privacy"],
-    accent: "#8b7346",
+      "Everything Signature means, at family size: the hot tub, the roofed deck, the en-suite and second bathroom, with three bedrooms sleeping six.",
+    sleeps: 6,
+    bedrooms: 3,
+    features: [
+      "Private hot tub facing the mountain",
+      "Roofed wraparound deck",
+      "Underfloor-heated bathrooms",
+      "En-suite plus second bathroom",
+    ],
+    accent: "#6d5934",
     image: "/photos/lodge-exc.jpg",
     detail: {
       intro: [
-        "The Exclusive is the lodge for the break that has to be special: the big birthday, the reunion, the honeymoon with the whole family invited anyway. It sits apart from the village behind its own screen of trees, so the hot tub, the sauna and the deck are entirely yours.",
-        "Four bedrooms sleep eight without anyone compromising, the cinema room turns rainy afternoons into an event, and the finish throughout is the best we build.",
+        "The Signature 3 bedroom is the celebration lodge: the big birthday, the reunion, the whole family filling one lane. It carries exactly what every Signature carries, at family size: a bigger deck, a bigger tub, and the third bedroom and second bathroom a full lodge needs.",
+        "It sits on a bigger plot behind a wider screen of trees, so the hot tub and the deck are entirely yours. Six sleep without anyone compromising, and between them the stove and the tub settle every cold evening.",
       ],
-      included: [
-        "Private outdoor hot tub on the deck",
-        "Cedar sauna for four",
-        "Cinema and games room with projector",
-        "Premium kitchen with wine fridge and coffee machine",
-        "Towels, robes, linen and made-up beds on arrival",
-        "Free Wi-Fi throughout the lodge",
-        "Parking beside your lodge, set apart for privacy",
-        "Welcome hamper on arrival",
-      ],
+      included: SIGNATURE_INCLUDED_CORE,
       gallery: [
-        { src: "/photos/lodge-exc.jpg", alt: "Exclusive Lodge behind its screen of trees" },
-        { src: "/photos/activity-spa.jpg", alt: "Spa treatments, bookable from your lodge" },
-        { src: "/photos/hero-forest.jpg", alt: "The private forest setting" },
-        { src: "/photos/band-lake.jpg", alt: "Lake Naivasha at golden hour" },
+        { src: "/photos/lodge-exc.jpg", alt: "A Signature Lodge 3 bedroom behind its tree screen" },
+        { src: "/photos/activity-spa.jpg", alt: "The Forest Spa, ten minutes uphill" },
+        { src: "/photos/hero-forest.jpg", alt: "The forest around the lanes" },
+        { src: "/photos/activity-cycle.jpg", alt: "Cycling the village trails" },
       ],
       rooms: [
-        { name: "Living and dining", description: "Double-height living space with a fireplace and doors onto the private deck." },
-        { name: "Kitchen", description: "Premium appliances, wine fridge, coffee machine and a proper pantry." },
-        { name: "Bedrooms 1 and 2", description: "Two doubles with en-suites, the main with its own deck door." },
-        { name: "Bedrooms 3 and 4", description: "A double and a twin sharing the family bathroom." },
-        { name: "Cinema and games room", description: "Projector, big sofa, games console and board games." },
-        { name: "Sauna", description: "Cedar sauna for four, next to the deck shower." },
-        { name: "Deck and hot tub", description: "Private deck with the hot tub, outdoor dining and the braai stand." },
+        { name: "Living and dining", description: "Open plan around the stove, with doors onto the roofed end of the deck and a table for six." },
+        { name: "Kitchen", description: "Dishwasher, full oven, coffee machine and a proper pantry cupboard." },
+        { name: "Main bedroom", description: "A double with fitted wardrobes and its own en-suite shower room." },
+        { name: "Bedrooms 2 and 3", description: "A double and a twin, both full-size rooms on the quiet side of the lodge." },
+        { name: "Second bathroom", description: "Bath and overhead shower, with underfloor heating like the en-suite." },
+        { name: "Deck and hot tub", description: "The biggest deck and tub in the village, roofed at one end, facing the mountain." },
       ],
       goodToKnow: [
         "Check-in from 2pm, check-out by 11am",
         "Breaks start on a Friday or a Monday",
-        "One price per lodge, however many of you come (sleeps 8)",
-        "Set apart from the village: five minutes by bike to the village heart",
+        "One price per lodge, however many of you come (sleeps 6)",
+        "Every Signature lodge has the same seven things; where it sits is yours to choose at the Location step",
       ],
     },
   },
 };
 
-/** Cheapest first - the Center Parcs price ladder. */
+/** Doc order: the Cedar pair then the Signature pair (grade, then size).
+ *  Not strictly cheapest-first any more: Signature 2 bedroom sits between
+ *  the two Cedars on price, which is the ladder working as designed. */
 export const TIER_ORDER = ["WDL", "FST", "LKV", "EXC"] as const;

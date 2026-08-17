@@ -1,3 +1,4 @@
+import { VILLAGE_LOCALE_LINE } from "@/content/village";
 import "server-only";
 import { prisma } from "../db";
 import { sendEmail } from "./resend";
@@ -76,7 +77,7 @@ export async function sendReferralReward(recordId: string): Promise<void> {
         ? `We'll include the details in your payout statement.`
         : `See your code and credit any time at ${accountUrl}`,
       ``,
-      `Unity Parks · Lake Naivasha, Kenya`,
+      `Unity Parks · ${VILLAGE_LOCALE_LINE}`,
       `Demo environment: no real payments were taken.`,
     ].join("\n");
 
@@ -106,7 +107,7 @@ export async function sendReferralReward(recordId: string): Promise<void> {
       </p>
     </div>
     <div style="background:#333333;color:#bbbbbb;padding:14px 28px;font-size:12px;">
-      Unity Parks · Lake Naivasha, Kenya · Demo environment, no real payments were taken.
+      Unity Parks · ${VILLAGE_LOCALE_LINE} · Demo environment, no real payments were taken.
     </div>
   </div>
 </div>`;

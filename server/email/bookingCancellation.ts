@@ -1,3 +1,4 @@
+import { VILLAGE_LOCALE_LINE, VILLAGE_NAME } from "@/content/village";
 import "server-only";
 import { prisma } from "../db";
 import { sendEmail } from "./resend";
@@ -67,7 +68,7 @@ export async function sendBookingCancellation(recordId: string): Promise<void> {
     const text = [
       greeting,
       ``,
-      `Your break at Unity Parks Naivasha is cancelled.`,
+      `Your break at ${VILLAGE_NAME} is cancelled.`,
       ``,
       `Booking reference: ${reference}`,
       `Was: ${longDate(session.arrival)} to ${longDate(session.departure)}`,
@@ -75,7 +76,7 @@ export async function sendBookingCancellation(recordId: string): Promise<void> {
       ``,
       `We'd love to welcome you another time. The forest isn't going anywhere.`,
       ``,
-      `Unity Parks · Lake Naivasha, Kenya`,
+      `Unity Parks · ${VILLAGE_LOCALE_LINE}`,
       `Demo environment: no real payments were taken.`,
     ].join("\n");
 
@@ -88,7 +89,7 @@ export async function sendBookingCancellation(recordId: string): Promise<void> {
     <div style="padding:28px;">
       <h1 style="margin:0 0 8px;color:#1d1d1d;font-size:24px;">Your break is cancelled</h1>
       <p style="margin:0 0 20px;color:#4c4e4b;font-size:15px;line-height:1.5;">
-        ${greeting} your break at Unity Parks Naivasha is cancelled.
+        ${greeting} your break at ${VILLAGE_NAME} is cancelled.
       </p>
       <table style="border-collapse:collapse;margin-bottom:20px;">
         <tr><td style="padding:6px 16px 6px 0;color:#4c4e4b;font-size:14px;">Reference</td>
@@ -104,7 +105,7 @@ export async function sendBookingCancellation(recordId: string): Promise<void> {
       </p>
     </div>
     <div style="background:#333333;color:#bbbbbb;padding:14px 28px;font-size:12px;">
-      Unity Parks · Lake Naivasha, Kenya · Demo environment, no real payments were taken.
+      Unity Parks · ${VILLAGE_LOCALE_LINE} · Demo environment, no real payments were taken.
     </div>
   </div>
 </div>`;

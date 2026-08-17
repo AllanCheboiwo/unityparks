@@ -9,10 +9,10 @@ import { handleRoute, jsonError } from "@/server/api-helpers";
 import { isValidCodeFormat, normalizeReferralCode } from "@/lib/referral";
 
 const PartyBody = z.object({
-  adults: z.number().int().min(1).max(8),
-  children: z.number().int().min(0).max(7).default(0),
-  toddlers: z.number().int().min(0).max(7).default(0),
-  infants: z.number().int().min(0).max(7).default(0),
+  adults: z.number().int().min(1).max(6),
+  children: z.number().int().min(0).max(5).default(0),
+  toddlers: z.number().int().min(0).max(5).default(0),
+  infants: z.number().int().min(0).max(2).default(0),
 });
 
 const SearchBody = PartyBody.extend({
@@ -55,11 +55,11 @@ export async function POST(req: NextRequest) {
     // Infants ride in cots and don't take a bed (see occupancyAges).
     for (const [i, p] of parties.entries()) {
       const size = p.adults + occupancyAges(p.childrenAges).length;
-      if (size > 8) {
+      if (size > 6) {
         return NextResponse.json(
           {
             refused: true,
-            reason: `Our largest lodge sleeps 8. Lodge ${i + 1} has ${size} guests aged 2 and over. Split the party differently or call our team.`,
+            reason: `Our largest lodge sleeps 6. Lodge ${i + 1} has ${size} guests aged 2 and over. Parties of more than six take two lodges, so split the party differently or call our team.`,
           },
           { status: 422 },
         );
