@@ -1,6 +1,9 @@
 # Payload CMS migration plan
 
-Status: proposed. Branch: `payload-cms`. Written 30 Jul 2026.
+Status: proposed. Branch: `payload-cms`. Written 30 Jul 2026. Where this
+document names the old setting or the old lodge tiers (Naivasha, Woodland
+through Exclusive), docs/village-and-content-direction.md supersedes it;
+the CMS mechanics here are unchanged.
 
 Goal: non-tech editors can update the site's marketing content (copy, photos, FAQs) through an admin UI, without touching code, while Apaleo and Prisma keep owning everything transactional. Tool: Payload CMS, self-hosted inside this Next.js app, content in the same Postgres.
 

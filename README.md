@@ -1,10 +1,10 @@
 # Unity Parks
 
-A Center Parcs-style booking demo for a fictional Kenyan holiday village on
-Lake Naivasha. Real inventory, pricing, bookings and folios live in an
-Apaleo sandbox (property UPNV); payments run through the Pesapal sandbox;
-everything else (accounts, sessions, referrals, extras orders, reminders)
-lives in our own Postgres.
+A Center Parcs-style booking demo for a fictional Kenyan holiday village at
+Naro Moru, on the western slopes of Mount Kenya. Real inventory, pricing,
+bookings and folios live in an Apaleo sandbox (property UPNV); payments run
+through the Pesapal sandbox; everything else (accounts, sessions, referrals,
+extras orders, reminders) lives in our own Postgres.
 
 ## Stack
 

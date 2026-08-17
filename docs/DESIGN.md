@@ -72,7 +72,9 @@ say the policy the same way:
 
 Legacy aliases still exist so old classes keep working during the restyle:
 forest = olive, forest-light = lighter olive, moss = leaf, lake = teal,
-sand = mist, gold = ochre. Prefer the new names in new code.
+sand = mist, gold = ochre. Prefer the new names in new code. ("lake" is a
+Naivasha-era alias name, kept because renaming a working token buys nothing;
+it simply means teal.)
 
 ## Buttons (utility classes in globals.css)
 
@@ -88,7 +90,7 @@ sand = mist, gold = ochre. Prefer the new names in new code.
 1. Header (white): logo left. Nav row under the logo line on desktop:
    bold 16px olive-soft links with 28-32px gaps. Right side: outlined
    "Sign in / Register" bronze button (or first name + sign out when signed
-   in), small locale line "Lake Naivasha, Kenya".
+   in), small locale line "Naro Moru, Mount Kenya".
 2. Teal info banner directly under the header: full-width #2d5f73, white 16px
    text, info icon left, bold underlined link inside the sentence.
 3. Split hero: left column huge light display h1 with one italic word. Right
@@ -152,11 +154,14 @@ sand = mist, gold = ochre. Prefer the new names in new code.
 
 ## Imagery
 
-No photography yet. Use the flat scenic SVG illustrations in public/
-(consistent style: layered forest silhouettes in olive and leaf greens, warm
-sky, lake band in navy-teal, simple timber lodge shapes with dark roofs).
-Aspect ratios: hero band 21:9, lodge card 4:3, activity card 3:2, seasonal
-card 16:9. Never hotlink or copy Center Parcs media.
+Photography is a governed Pexels placeholder set (public/photos/CREDITS.md
+carries every credit) until our own Mount Kenya shoot; the Naivasha-era
+files are being replaced per docs/mount-kenya-sweep.md stage C3. Where
+illustration is used (the village map), the style is layered forest
+silhouettes in olive and leaf greens, warm sky, the peaks behind, simple
+timber lodge shapes with dark roofs. Aspect ratios: hero band 21:9, lodge
+card 4:3, activity card 3:2, seasonal card 16:9. Never hotlink or copy
+Center Parcs media.
 
 ## Page inventory
 
