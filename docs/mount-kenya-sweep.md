@@ -5,6 +5,13 @@ docs/village-and-content-direction.md. Section 15 of that document says what
 has to change; this one says in what order, exactly where, and what has been
 done. Tick items as they land.*
 
+*State as of 17 Aug, evening: stages 0, B, C (code side) and D are done on
+branch `mount-kenya`, stage A is written and validated with a read-only dry
+run, and stage E's local gates, tests, build and funnel walkthrough have
+passed against the pre-migration sandbox (which exercised the flat-list
+fallback). What remains: the migration write run, merge and deploy, the
+seed re-run on Railway, and the media replacements.*
+
 *Rule for the whole sweep: rename and rewrite, never re-provision. Codes stay
 (UPNV, WDL, FST, LKV, EXC, the service codes). Anything that means deleting
 and recreating Apaleo objects is out of scope.*
@@ -26,9 +33,11 @@ and recreating Apaleo objects is out of scope.*
 
 Mechanics:
 
-- [ ] Branch off main: `mount-kenya`.
-- [ ] Commit docs/village-and-content-direction.md and this file first; both
-      are untracked today.
+- [x] Branch `mount-kenya`, cut from `outstanding-features` rather than
+      local main, which was stale; outstanding-features already contained
+      the merged origin/main plus the newest work.
+- [x] Commit docs/village-and-content-direction.md and this file first; both
+      were untracked.
 - No Prisma schema changes anywhere in the sweep (comment edits only), so no
   db push is needed.
 - Usual flow: everything local first; Allan runs the Apaleo migration and the
@@ -49,10 +58,10 @@ The provisioning script lives in the sibling project, not this repo:
 and is the source of truth for fresh environments. Update the constants so
 the migration reads from them and a fresh provision lands on the new model:
 
-- [ ] `PROPERTY_NAME`, property description and address (values in A2).
-- [ ] `UNIT_GROUPS`: names, descriptions, `maxPersons`, prices per the table.
-- [ ] `SERVICES`: EARLY and SPA copy (A4).
-- [ ] Housekeeping while in there: the header comment still says lake/forest
+- [x] `PROPERTY_NAME`, property description and address (values in A2).
+- [x] `UNIT_GROUPS`: names, descriptions, `maxPersons`, prices per the table.
+- [x] `SERVICES`: EARLY and SPA copy (A4).
+- [x] Housekeeping while in there: the header comment still says lake/forest
       and claims a 6-month window (RESTRICTION_MONTHS is 3), the pricing
       rationale block still reasons from Center Parcs tiers, and the banner
       and summary box still print Naivasha and the old prices.
@@ -70,7 +79,7 @@ identical at both sizes, and the 3 bedroom gets more of the same.
 
 ### A2. One-off migration script
 
-- [ ] New `migrate-mount-kenya.ts` next to provision.ts, reusing its api
+- [x] New `migrate-mount-kenya.ts` next to provision.ts, reusing its api
       helper and constants. One run, roughly 33 calls:
   - [ ] Property PATCH: name, description, address. Keep the code UPNV (from
         here on it is just an opaque code), keep countryCode DE, timezone
@@ -133,8 +142,8 @@ bookings. Leave them; they were true when written.
 
 ### A4. Service copy fixes (found in the sweep, missing from section 15)
 
-- [ ] SPA: the description names "the Unity Spa"; it is The Forest Spa now.
-- [ ] EARLY: "from 10 am rather than the standard 2 pm" predates the 11:00
+- [x] SPA: the description names "the Unity Spa"; it is The Forest Spa now.
+- [x] EARLY: "from 10 am rather than the standard 2 pm" predates the 11:00
       checkout on a turnover day. Proposed: "from noon". (Open decision 3.)
 - CYCLE and LOCATION copy survive as they are.
 
@@ -152,59 +161,59 @@ bookings. Leave them; they were true when written.
 One name, one place first. The village name is repeated across components,
 emails, the SVG and the CMS seed today:
 
-- [ ] New `content/village.ts`: `VILLAGE_NAME` and the locale line ("Naro
+- [x] New `content/village.ts`: `VILLAGE_NAME` and the locale line ("Naro
       Moru, Mount Kenya"). Stage D later adds zones and lanes to the same
       file, so every village fact lives in one module. Import it in:
-  - [ ] components/BookingBar.tsx:28 (drop the module-local const)
-  - [ ] components/BookingSummary.tsx:85 (hardcoded literal today)
-  - [ ] app/(site)/login/LoginClient.tsx:46
-  - [ ] app/(site)/checkout/location/LocationClient.tsx:222 (map alt)
-  - [ ] app/(site)/layout.tsx:24-26 (title, description) and :78 (locale
+  - [x] components/BookingBar.tsx:28 (drop the module-local const)
+  - [x] components/BookingSummary.tsx:85 (hardcoded literal today)
+  - [x] app/(site)/login/LoginClient.tsx:46
+  - [x] app/(site)/checkout/location/LocationClient.tsx:222 (map alt)
+  - [x] app/(site)/layout.tsx:24-26 (title, description) and :78 (locale
         line in the header)
-  - [ ] the seven email footers (below)
+  - [x] the seven email footers (below)
 
 Copy sites, top of funnel to bottom:
 
-- [ ] app/(site)/layout.tsx: title "Forest & Lake Breaks" and the metadata
+- [x] app/(site)/layout.tsx: title "Forest & Lake Breaks" and the metadata
       description ("lakeside forest village near Naivasha"). The new lines
       come from section 3 of the direction doc.
-- [ ] app/(site)/lodges/[code]/page.tsx:171: eyebrow "Lake Naivasha village".
-- [ ] app/(site)/checkout/location/LocationClient.tsx:186: "favourite spot by
+- [x] app/(site)/lodges/[code]/page.tsx:171: eyebrow "Lake Naivasha village".
+- [x] app/(site)/checkout/location/LocationClient.tsx:186: "favourite spot by
       the lake".
-- [ ] app/(site)/account/page.tsx:68: "waiting by the lake" empty state.
-- [ ] Emails, all seven templates in server/email/: the shared footer line
+- [x] app/(site)/account/page.tsx:68: "waiting by the lake" empty state.
+- [x] Emails, all seven templates in server/email/: the shared footer line
       "Unity Parks · Lake Naivasha, Kenya" (13 occurrences across html and
       text variants), plus body copy in bookingConfirmation.ts:87-88 and
       :126-127 and bookingCancellation.ts:70 and :91. Subjects are already
       place-free; section 15 overstates that part.
-- [ ] Comments only: server/apaleo/units.ts:17 and :43,
+- [x] Comments only: server/apaleo/units.ts:17 and :43,
       prisma/schema.prisma:189 (all cite "Lakeview Lodge 3"). No db push.
 
 Party size and bedrooms, the LKV/EXC shrink:
 
-- [ ] lib/occupancy.ts: MAX_PARTY 8 to 6, MAX_BEDROOMS 4 to 3.
-- [ ] app/api/search/route.ts: zod caps adults max(8) to 6 and children
+- [x] lib/occupancy.ts: MAX_PARTY 8 to 6, MAX_BEDROOMS 4 to 3.
+- [x] app/api/search/route.ts: zod caps adults max(8) to 6 and children
       max(7) to 5; the size-over-8 guard becomes size-over-6 and its copy
       ("Our largest lodge sleeps 8") should now say what the doc says:
       parties of more than six take two lodges in the same lane.
-- [ ] app/api/month-availability/route.ts: the same zod caps.
-- [ ] app/(site)/lodges/LodgesClient.tsx: the tooSmall logic is data-driven
+- [x] app/api/month-availability/route.ts: the same zod caps.
+- [x] app/(site)/lodges/LodgesClient.tsx: the tooSmall logic is data-driven
       and survives; re-read the copy at :584.
 - Multi-lodge booking already exists, so parties of 7 plus keep a real path.
   Verify the nudge in Stage E.
 
 content/lodges.ts, the full rewrite (section 5 is the spec):
 
-- [ ] All four entries keep their codes and image filenames. Names, taglines,
+- [x] All four entries keep their codes and image filenames. Names, taglines,
       sleeps (4/6/4/6), bedrooms (2/3/2/3), features, intro, included, rooms
       and goodToKnow rewritten. Cedar carries the base spec; Signature
       carries the seven things; the 3 bedroom is more of the same, never
       different things.
-- [ ] LKV is the deep one: a dozen lake-coupled lines ("Wake up to the
+- [x] LKV is the deep one: a dozen lake-coupled lines ("Wake up to the
       water", glazed wall to the lake, lake-facing terrace). Its accent
       #2c5670 is lake blue and needs a warmer tone from the DESIGN.md
       palette. (Open decision 5.)
-- [ ] Gallery alts on WDL/FST/EXC: "Lake Naivasha at golden hour" at :66,
+- [x] Gallery alts on WDL/FST/EXC: "Lake Naivasha at golden hour" at :66,
       :114, :211.
 
 ---
@@ -213,19 +222,19 @@ content/lodges.ts, the full rewrite (section 5 is the spec):
 
 ### C1. scripts/seed-cms.ts (fresh environments)
 
-- [ ] Media alts and credits: :27-29 (hero video "by the lake"), :33, :73,
+- [x] Media alts and credits: :27-29 (hero video "by the lake"), :33, :73,
       :77-78.
-- [ ] Activities: "on-the-water" (:109) is the one lake activity. Replace
+- [x] Activities: "on-the-water" (:109) is the one lake activity. Replace
       with a section 6 activity that tells the new water story; proposed
       trout fishing on the Burguret.
-- [ ] Seasons: sunshine-season copy at :139 ("Lake mornings") and its photo
+- [x] Seasons: sunshine-season copy at :139 ("Lake mornings") and its photo
       at :141; re-read all four against section 9. Months and multipliers
       stay.
-- [ ] FAQs: :201 (dogs FAQ places the village on the shore with hippos;
+- [x] FAQs: :201 (dogs FAQ places the village on the shore with hippos;
       rewrite wildlife per section 12) and :211-213 (getting there: A2, two
       and a half to three hours, tarmac throughout, Nanyuki airstrip 30 km.
       The number-plate promise stays; it is implemented and stays true).
-- [ ] home-page global: hero :322-329, village group :334-339, and the
+- [x] home-page global: hero :322-329, village group :334-339, and the
       footnote :348, where "Woodland Lodge" becomes "Cedar Lodge 2 bedroom".
 - Season card from-prices (109,500 / 84,000 / 96,000 / 90,000) are unchanged
   because the WDL floor is unchanged. Do not touch them.
@@ -254,16 +263,16 @@ names linger in code.
 
 ### C4. Docs
 
-- [ ] docs/DESIGN.md: locale line :91, imagery rule :157, and a note on the
+- [x] docs/DESIGN.md: locale line :91, imagery rule :157, and a note on the
       legacy --lake colour alias (:73-75); the CSS token itself is cosmetic,
       keep or rename.
-- [ ] docs/content-strategy.md: section 2 becomes the Mount Kenya year (the
+- [x] docs/content-strategy.md: section 2 becomes the Mount Kenya year (the
       four-season framework survives; the climate table is rewritten for
       2,100 m), grounding rules :140-158 swap hippos and the escarpment for
       the section 12 list, the getting-there FAQ spec :81-83, the village
       page and news post specs :102-105, and the definition of done :167.
-- [ ] README.md:3-5.
-- [ ] docs/payload-cms-plan.md and the older engine and walkthrough docs get
+- [x] README.md:3-5.
+- [x] docs/payload-cms-plan.md and the older engine and walkthrough docs get
       a one-line "superseded by village-and-content-direction.md where they
       disagree" note, not a rewrite of history.
 
@@ -274,33 +283,38 @@ names linger in code.
 The one structural feature in the sweep. No zone data exists anywhere today;
 the map's area labels are plain SVG text.
 
-- [ ] Extend `content/village.ts`: the four zones of section 4.6, the lane
+- [x] Extend `content/village.ts`: the four zones of section 4.6, the lane
       list with each lane's zone, and a laneOf(unitName) helper. Lane names
       are ours (set in A3), so parsing the lane prefix off the Apaleo unit
       name is reliable and needs no schema or API change.
-- [ ] LocationClient: zone choice ahead of the exact-lodge choice. Two zones
+- [x] LocationClient: zone choice ahead of the exact-lodge choice. Two zones
       are live at demo scale (The Glades, Sunrise Ridge); show all four with
       the other two marked as later phases, or just the live two. Fee
       semantics unchanged: zone choice is free navigation, the 2,500
       LOCATION fee still attaches only when an exact lodge is picked. (Open
       decision 7.)
-- [ ] Group the unit grid by lane within the chosen zone.
-- [ ] public/village-map.svg redraw: drop the lake, draw the four zones, the
+- [x] Group the unit grid by lane within the chosen zone.
+- [x] public/village-map.svg redraw: drop the lake, draw the four zones, the
       square, the Forest Spa, the Burguret and the forest edge, and give
       each zone an id so the selected zone can highlight. Keep the
       "Illustrative map, final art to come" pill, and fix the malformed
       cx="900 " attribute while in there.
-- [ ] Alts: the homepage map alt is CMS-driven (C1); the checkout alt comes
+- [x] Alts: the homepage map alt is CMS-driven (C1); the checkout alt comes
       from content/village.ts (Stage B).
 
 ---
 
 ## Stage E. Verification gates
 
-- [ ] `rg -ni "naivasha|hippo|escarpment|rift valley" app components content
-      server scripts public README.md` returns nothing.
-- [ ] `rg -ni "lake" app components content server scripts public` returns
-      nothing guest-facing (the CSS alias, if kept, is the one allowed hit).
+- [x] `rg -ni "naivasha|hippo|escarpment|rift valley" app components content
+      server scripts public README.md` returns nothing guest-facing. Passed
+      17 Aug; the only hits are deliberate: seed-cms.ts comments explaining
+      the Naivasha-era upsert keys, and the oldQuestion literal the FAQ
+      rename needs to update in place.
+- [x] `rg -ni "lake" app components content server scripts public` returns
+      nothing guest-facing. Passed 17 Aug; remaining hits are the kept CSS
+      alias, the fallback unit test, and CREDITS.md rows that go with the
+      C3 media swap.
 - [ ] Booking end to end at parties of 2, 4 and 6; a party of 7 gets the
       two-lodge suggestion and completes a two-lodge booking.
 - [ ] LKV/EXC offers reflect the 38,000/56,000 floors; a WDL three-night
@@ -309,7 +323,7 @@ the map's area labels are plain SVG text.
 - [ ] Location step end to end: zone, lane, lodge; the fee posts as before;
       the race-loss path (chosen unit gone) still removes the service.
 - [ ] One test send of each of the seven emails renders the new footer.
-- [ ] npm test passes (extras fixtures use UPNV service ids and survive).
+- [x] npm test passes (extras fixtures use UPNV service ids and survive).
 - [ ] An account with a legacy booking still renders its "Lakeview Lodge 3"
       snapshot harmlessly.
 
