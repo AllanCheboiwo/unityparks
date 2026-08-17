@@ -55,10 +55,12 @@ the whole budget. Run it at least 20 minutes after any dry run, and treat a
 
 ### A1. Update provision.ts first
 
-The provisioning script lives in the sibling project, not this repo:
-`../Unity Parks Demo/provision.ts`. It still describes Naivasha end to end
-and is the source of truth for fresh environments. Update the constants so
-the migration reads from them and a fresh provision lands on the new model:
+The provisioning script is the source of truth for fresh environments. It
+lived in the untracked sibling project when this sweep started; on 17 Aug
+it moved into this repo as scripts/apaleo/provision.ts (`npm run
+apaleo:provision`), alongside the migration (`npm run apaleo:migrate`).
+Update the constants so the migration reads from them and a fresh
+provision lands on the new model:
 
 - [x] `PROPERTY_NAME`, property description and address (values in A2).
 - [x] `UNIT_GROUPS`: names, descriptions, `maxPersons`, prices per the table.

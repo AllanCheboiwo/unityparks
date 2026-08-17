@@ -10,7 +10,9 @@
     "lint": "eslint",
     "postinstall": "prisma generate",
     "seed:cms": "tsx --env-file=.env scripts/seed-cms.ts",
-    "seed:referral": "tsx --env-file=.env scripts/seed-referral-config.ts"
+    "seed:referral": "tsx --env-file=.env scripts/seed-referral-config.ts",
+    "apaleo:provision": "tsx --env-file=.env scripts/apaleo/provision.ts",
+    "apaleo:migrate": "tsx --env-file=.env scripts/apaleo/migrate-mount-kenya.ts"
   },
   "dependencies": {
     "@payloadcms/db-postgres": "3.86.0",
