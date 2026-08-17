@@ -1,7 +1,15 @@
 import "server-only";
 import { getPayload } from "payload";
 import config from "@payload-config";
-import type { Activity, Faq, HomePage, Media, Season } from "@/cms/payload-types";
+import type {
+  Activity,
+  Campaign,
+  Faq,
+  HomePage,
+  Media,
+  Season,
+  SiteSetting,
+} from "@/cms/payload-types";
 
 /**
  * The only door to CMS content. Server components call these functions and
@@ -36,6 +44,32 @@ export async function getHomeContent(): Promise<HomeContent> {
     seasons: seasons.docs,
     faqs: faqs.docs,
   };
+}
+
+/**
+ * The site-wide banner (the campaign slot), or null when the global has not
+ * been seeded yet. The layout keeps a built-in fallback line, so a fresh
+ * database renders a working header before its first seed.
+ */
+export async function getSiteBanner(): Promise<SiteSetting["banner"] | null> {
+  const payload = await getPayload({ config });
+  try {
+    const settings = await payload.findGlobal({ slug: "site-settings" });
+    return settings?.banner?.text ? settings.banner : null;
+  } catch {
+    return null;
+  }
+}
+
+/** One evergreen campaign page by slug (/breaks/<slug>), or null. */
+export async function getCampaign(slug: string): Promise<Campaign | null> {
+  const payload = await getPayload({ config });
+  const result = await payload.find({
+    collection: "campaigns",
+    where: { slug: { equals: slug } },
+    limit: 1,
+  });
+  return result.docs[0] ?? null;
 }
 
 /**

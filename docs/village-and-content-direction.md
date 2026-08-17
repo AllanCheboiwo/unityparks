@@ -470,9 +470,10 @@ them.
   school holiday. Mist, stoves, hot tubs, the Water Garden steaming. The one
   the coast cannot answer.
 
-Write both as evergreen pages with a changing window, not as dated campaigns,
-because our 100-day booking horizon means a page can only ever sell the next
-season and a dated campaign goes stale on the site.
+Write both as evergreen pages with a changing window, not as dated campaigns.
+The booking horizon is thirteen months (extended from 100 days on 17 August
+2026), so every campaign in the year ahead is bookable, but the evergreen
+rule stands: a dated page goes stale on the site, a window line does not.
 
 ### 10.5 What we do not sell
 

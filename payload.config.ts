@@ -10,7 +10,9 @@ import { Media } from "./cms/collections/Media";
 import { Activities } from "./cms/collections/Activities";
 import { Seasons } from "./cms/collections/Seasons";
 import { Faqs } from "./cms/collections/Faqs";
+import { Campaigns } from "./cms/collections/Campaigns";
 import { HomePage } from "./cms/globals/HomePage";
+import { SiteSettings } from "./cms/globals/SiteSettings";
 
 const filename = fileURLToPath(import.meta.url);
 const dirname = path.dirname(filename);
@@ -20,8 +22,8 @@ export default buildConfig({
   admin: {
     user: "admins",
   },
-  collections: [Admins, Media, Activities, Seasons, Faqs],
-  globals: [HomePage],
+  collections: [Admins, Media, Activities, Seasons, Faqs, Campaigns],
+  globals: [HomePage, SiteSettings],
   db: postgresAdapter({
     pool: {
       connectionString: process.env.DATABASE_URL,

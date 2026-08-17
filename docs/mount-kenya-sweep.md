@@ -48,8 +48,10 @@ Mechanics:
 ## Stage A. Apaleo sandbox migration
 
 Inventory PATCHes are not subject to the 8-per-20-minute rate-write budget.
-Only the final rate rewrite touches it: 2 GETs + 2 PUTs, half the budget.
-PATCHes are idempotent, so the migration script is safe to re-run.
+Only the final rate rewrite touches it, and since the horizon extension
+(17 Aug, 100 days to 400) it rewrites all four calendars: 4 GETs + 4 PUTs,
+the whole budget. Run it at least 20 minutes after any dry run, and treat a
+429 as "wait 20 minutes, re-run"; every step is idempotent.
 
 ### A1. Update provision.ts first
 
@@ -99,10 +101,12 @@ identical at both sizes, and the 3 bedroom gets more of the same.
   - [ ] Rate plan PATCH x4: names follow the tier ("Cedar Lodge 2 bedroom
         Flexible" and so on); descriptions keep the deposit wording.
   - [ ] Service PATCH x2: EARLY and SPA (A4).
-  - [ ] Rate rewrite for LKV_FLEX and EXC_FLEX only, reusing the
-        setRatePlanPrices logic. Seasonal multipliers and the Friday/Monday
-        turnover restrictions are unchanged. WDL and FST are not touched,
-        which is what keeps the published season from-prices true.
+  - [ ] Rate rewrite on all four plans out to the 400-day horizon, reusing
+        the setRatePlanPrices logic. Seasonal multipliers and the
+        Friday/Monday turnover restrictions are unchanged. LKV and EXC land
+        on their new floors; WDL and FST are rewritten at their existing
+        floors purely to lengthen the calendar, which is what keeps the
+        published season from-prices true.
 - [ ] Pre-flight, read-only: list future reservations on LKV and EXC with
       more adults than the new maxPersons. Existing reservations stay valid
       in Apaleo; this is only so odd historical rows are known, not found.
@@ -152,6 +156,13 @@ bookings. Leave them; they were true when written.
 - [ ] Offers endpoint returns the new names and 38,000/56,000-based seasonal
       prices for LKV/EXC; a WDL three-night long-rains break still totals
       84,000.
+- [ ] December spot-check: a WDL Friday start on 4 or 11 December totals
+      109,500 (sunshine 1.3) and on 18 or 25 December totals 126,000
+      (festive 1.5). Found 17 Aug when the horizon opened: beyond its
+      seasonal window the sandbox serves legacy FLAT 84,000-based rates from
+      before seasonal pricing existed, so festive weeks are underpriced
+      until this migration runs. That makes the run a hard prerequisite of
+      the merge, not a nicety.
 - [ ] Unit availability lists lane names (numeric name sort is already on).
 
 ---

@@ -5,7 +5,8 @@ import { bandsToAges } from "@/server/booking/party";
 import { validateStay } from "@/server/booking/rules";
 import { handleRoute, jsonError } from "@/server/api-helpers";
 
-const HORIZON_DAYS = 100;
+// Keep in step with BOOKING_HORIZON_DAYS in components/BookingBar.tsx.
+const HORIZON_DAYS = 400;
 
 const Query = z.object({
   month: z.string().regex(/^\d{4}-\d{2}$/),

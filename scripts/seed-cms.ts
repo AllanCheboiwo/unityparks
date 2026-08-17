@@ -227,6 +227,108 @@ const FAQS: Array<{
   },
 ];
 
+// Evergreen campaign pages (/breaks/<slug>), per the direction doc's two
+// named moments of the year. The window line is what an editor changes; the
+// page itself never dates. From-prices are real seasonal floors for a
+// three-night WDL break: cool season 3 x round500(28,000 x 1.15) = 96,000,
+// festive 3 x round500(28,000 x 1.5) = 126,000.
+const CAMPAIGNS = [
+  {
+    slug: "august-by-the-fire",
+    name: "August by the fire",
+    window: "June to September, at its best in the August holidays",
+    strapline: "The break the coast cannot copy",
+    intro:
+      "The cool season is the mountain at its most honest: mist to the knees at dawn, fires lit by five, and the Water Garden steaming under its glass roof while the forest drips outside. Bring a jumper and the right people; the stove and the tub do the rest.",
+    hero: "season-cool.jpg",
+    fromPrice: "from KES 96,000*",
+    fromNote:
+      "*Lowest price for a three-night Cedar Lodge 2 bedroom break in the cool season, subject to availability.",
+    ctaLabel: "Find your cool-season break",
+    highlights: [
+      {
+        title: "The Water Garden, steaming",
+        copy: "Warm water under glass, looking at the mountain. Included in every break, and never better than on a misty morning.",
+        photo: "activity-pool.jpg",
+      },
+      {
+        title: "Fires lit by five",
+        copy: "Every lodge has its own wood-burning stove, Cedar and Signature alike. Firewood and braai packs are stocked at the village shop.",
+        photo: "hero-forest.jpg",
+      },
+      {
+        title: "The Forest Spa",
+        copy: "On a cold mountain a spa sells heat: hot pools, steam and quiet, ten minutes uphill through the trees.",
+        photo: "activity-spa.jpg",
+      },
+    ],
+    faqs: [
+      {
+        question: "How cold does it get?",
+        answer:
+          "Properly cold, and that is the point. At 2,100 metres, cool-season nights drop low enough for fires and hot water to feel earned. Days stay mild; pack a jumper and you are dressed for all of it.",
+      },
+      {
+        question: "Do breaks work the same in the cool season?",
+        answer:
+          "Exactly the same. Breaks start on a Friday or a Monday, the Water Garden is included every day, and the whole village is a ten-minute walk end to end.",
+      },
+    ],
+  },
+  {
+    slug: "the-festive-break",
+    name: "The festive break",
+    window: "Mid-December to early January",
+    strapline: "Cold nights, warm water, the peaks at breakfast",
+    intro:
+      "The festive weeks are the village at full hum: the sunshine season's hot clear days, cold starlit nights, and a Friday or Monday start that covers Christmas or New Year. These are the first breaks to sell out every year; book early and let December plan itself.",
+    hero: "season-festive.jpg",
+    fromPrice: "from KES 126,000*",
+    fromNote:
+      "*Lowest price for a three-night Cedar Lodge 2 bedroom break in the festive weeks, subject to availability.",
+    ctaLabel: "Find your festive break",
+    highlights: [
+      {
+        title: "The Water Garden",
+        copy: "Warm water under glass on the hottest day and the coldest night alike. Included in every break.",
+        photo: "activity-pool.jpg",
+      },
+      {
+        title: "The peaks at breakfast",
+        copy: "December brings the year's clearest mornings, and the mountain shows itself at dawn. An early breakfast is an event.",
+        photo: "hero-forest.jpg",
+      },
+      {
+        title: "An hour to yourselves",
+        copy: "The Forest Spa takes the grown-ups; the stove keeps the lodge warm for your return.",
+        photo: "activity-spa.jpg",
+      },
+    ],
+    faqs: [
+      {
+        question: "When should we book?",
+        answer:
+          "Early. The festive weeks are the busiest of the year, and Friday starts covering Christmas Day go first.",
+      },
+      {
+        question: "Which dates count as festive?",
+        answer:
+          "Mid-December to early January. Festive pricing applies inside that window, and the season cards show the sunshine-season price either side of it.",
+      },
+    ],
+  },
+];
+
+// The teal banner is the campaign slot: rotate it for every break or
+// campaign, pointing at /breaks/<slug> or /#search when nothing is running.
+const SITE_SETTINGS = {
+  banner: {
+    text: "August by the fire: the cool season is here, and the Water Garden is steaming.",
+    linkLabel: "Explore the break",
+    linkHref: "/breaks/august-by-the-fire",
+  },
+};
+
 const DISCOVER_CARDS = [
   {
     title: "Group bookings",
@@ -331,6 +433,28 @@ async function main() {
     }
   }
   console.log(`faqs: ${FAQS.length} in place`);
+
+  for (const campaign of CAMPAIGNS) {
+    const data = {
+      ...campaign,
+      hero: mediaIds[campaign.hero],
+      highlights: campaign.highlights.map((h) => ({ ...h, photo: mediaIds[h.photo] })),
+    };
+    const existing = await payload.find({
+      collection: "campaigns",
+      where: { slug: { equals: campaign.slug } },
+      limit: 1,
+    });
+    if (existing.docs[0]) {
+      await payload.update({ collection: "campaigns", id: existing.docs[0].id, data });
+    } else {
+      await payload.create({ collection: "campaigns", data });
+    }
+  }
+  console.log(`campaigns: ${CAMPAIGNS.length} in place`);
+
+  await payload.updateGlobal({ slug: "site-settings", data: SITE_SETTINGS });
+  console.log("site-settings global in place");
 
   await payload.updateGlobal({
     slug: "home-page",

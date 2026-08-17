@@ -24,7 +24,10 @@ import { VILLAGE_NAME } from "@/content/village";
  * from each lodge's party (see lib/occupancy).
  */
 
-const BOOKING_HORIZON_DAYS = 100;
+// Just over thirteen months, so every campaign in the year ahead is bookable
+// (festive included). Must stay within the window of priced nights the
+// provisioning project writes into Apaleo (PRICE_WINDOW_DAYS there).
+const BOOKING_HORIZON_DAYS = 400;
 const MAX_LODGES = 3;
 
 const NIGHT_OPTIONS = [3, 4, 7] as const;

@@ -72,6 +72,7 @@ export interface Config {
     activities: Activity;
     seasons: Season;
     faqs: Faq;
+    campaigns: Campaign;
     'payload-kv': PayloadKv;
     'payload-locked-documents': PayloadLockedDocument;
     'payload-preferences': PayloadPreference;
@@ -84,6 +85,7 @@ export interface Config {
     activities: ActivitiesSelect<false> | ActivitiesSelect<true>;
     seasons: SeasonsSelect<false> | SeasonsSelect<true>;
     faqs: FaqsSelect<false> | FaqsSelect<true>;
+    campaigns: CampaignsSelect<false> | CampaignsSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
     'payload-preferences': PayloadPreferencesSelect<false> | PayloadPreferencesSelect<true>;
@@ -95,9 +97,11 @@ export interface Config {
   fallbackLocale: null;
   globals: {
     'home-page': HomePage;
+    'site-settings': SiteSetting;
   };
   globalsSelect: {
     'home-page': HomePageSelect<false> | HomePageSelect<true>;
+    'site-settings': SiteSettingsSelect<false> | SiteSettingsSelect<true>;
   };
   locale: null;
   widgets: {
@@ -235,6 +239,56 @@ export interface Faq {
   createdAt: string;
 }
 /**
+ * Evergreen campaign pages at /breaks/<slug>.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "campaigns".
+ */
+export interface Campaign {
+  id: number;
+  /**
+   * URL and seed key: the page lives at /breaks/<slug>. Do not change once set.
+   */
+  slug: string;
+  name: string;
+  /**
+   * The changing window line, e.g. June to September, at its best in the August holidays.
+   */
+  window: string;
+  /**
+   * One italic line under the name in the hero.
+   */
+  strapline: string;
+  intro: string;
+  hero: number | Media;
+  /**
+   * Shown exactly as typed, e.g. from KES 96,000*
+   */
+  fromPrice: string;
+  /**
+   * The footnote that keeps the from-price honest.
+   */
+  fromNote: string;
+  ctaLabel: string;
+  highlights?:
+    | {
+        title: string;
+        copy: string;
+        photo: number | Media;
+        id?: string | null;
+      }[]
+    | null;
+  faqs?:
+    | {
+        question: string;
+        answer: string;
+        id?: string | null;
+      }[]
+    | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv".
  */
@@ -277,6 +331,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'faqs';
         value: number | Faq;
+      } | null)
+    | ({
+        relationTo: 'campaigns';
+        value: number | Campaign;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -404,6 +462,38 @@ export interface FaqsSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "campaigns_select".
+ */
+export interface CampaignsSelect<T extends boolean = true> {
+  slug?: T;
+  name?: T;
+  window?: T;
+  strapline?: T;
+  intro?: T;
+  hero?: T;
+  fromPrice?: T;
+  fromNote?: T;
+  ctaLabel?: T;
+  highlights?:
+    | T
+    | {
+        title?: T;
+        copy?: T;
+        photo?: T;
+        id?: T;
+      };
+  faqs?:
+    | T
+    | {
+        question?: T;
+        answer?: T;
+        id?: T;
+      };
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv_select".
  */
 export interface PayloadKvSelect<T extends boolean = true> {
@@ -510,6 +600,26 @@ export interface HomePage {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "site-settings".
+ */
+export interface SiteSetting {
+  id: number;
+  banner: {
+    /**
+     * One sentence, shown site-wide on the teal stripe under the header.
+     */
+    text: string;
+    linkLabel: string;
+    /**
+     * Internal path, e.g. /breaks/august-by-the-fire or /#search.
+     */
+    linkHref: string;
+  };
+  updatedAt?: string | null;
+  createdAt?: string | null;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "home-page_select".
  */
 export interface HomePageSelect<T extends boolean = true> {
@@ -562,6 +672,22 @@ export interface HomePageSelect<T extends boolean = true> {
     | {
         caption?: T;
         explainer?: T;
+      };
+  updatedAt?: T;
+  createdAt?: T;
+  globalType?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "site-settings_select".
+ */
+export interface SiteSettingsSelect<T extends boolean = true> {
+  banner?:
+    | T
+    | {
+        text?: T;
+        linkLabel?: T;
+        linkHref?: T;
       };
   updatedAt?: T;
   createdAt?: T;
