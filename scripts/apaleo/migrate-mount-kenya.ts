@@ -239,6 +239,20 @@ async function patch(path: string, ops: PatchOp[], label: string) {
   log("✅", `${label} updated (${ops.map((o) => o.path).join(", ")}).`);
 }
 
+/** Full-object replace for the endpoints that turned out not to support
+ *  JSON Patch (unit groups 405 on PATCH; properties accept it fine). */
+async function putJson(path: string, body: unknown, label: string) {
+  if (DRY_RUN) {
+    log("🩹", `[dry-run] would PUT ${label}`);
+    return;
+  }
+  const { status, data } = await api("PUT", path, body);
+  if (!ok(status)) {
+    throw new Error(`PUT ${label} failed (${status}): ${JSON.stringify(data)}`);
+  }
+  log("✅", `${label} updated.`);
+}
+
 // ---------------------------------------------------------------------------
 // Steps
 // ---------------------------------------------------------------------------
@@ -311,14 +325,22 @@ async function migrateProperty() {
 async function migrateUnitGroups() {
   for (const g of GROUPS) {
     const id = `${PROPERTY_ID}-${g.code}`;
-    const ops: PatchOp[] = [
-      { op: "replace", path: "/name/en", value: g.name },
-      { op: "replace", path: "/name/de", value: g.name },
-      { op: "add", path: "/description/en", value: g.description },
-      { op: "add", path: "/description/de", value: g.description },
-      { op: "replace", path: "/maxPersons", value: g.maxPersons },
-    ];
-    await patch(`/inventory/v1/unit-groups/${id}`, ops, `unit group ${g.code} -> "${g.name}"`);
+    // Unit groups reject JSON Patch (405), so read-modify-PUT the
+    // replaceable fields instead.
+    const { status, data } = await api("GET", `/inventory/v1/unit-groups/${id}`);
+    if (!ok(status)) throw new Error(`GET unit group ${g.code} failed (${status}).`);
+    const current = data as { rank?: number };
+    const body: Record<string, unknown> = {
+      name: { en: g.name, de: g.name },
+      description: { en: g.description, de: g.description },
+      maxPersons: g.maxPersons,
+    };
+    if (current.rank != null) body.rank = current.rank;
+    await putJson(
+      `/inventory/v1/unit-groups/${id}`,
+      body,
+      `unit group ${g.code} -> "${g.name}" (sleeps ${g.maxPersons})`,
+    );
   }
 }
 
@@ -362,9 +384,56 @@ async function migrateUnits() {
         log("✅", `  ${g.code}: "${unit.name}" already done.`);
         continue;
       }
-      await patch(`/inventory/v1/units/${unit.id}`, ops, `unit "${unit.name}" -> "${newName}"`);
+      await updateUnit(unit.id, ops, g, newName, `unit "${unit.name}" -> "${newName}"`);
     }
   }
+}
+
+/** Units should accept JSON Patch; if they 405 like unit groups did, fall
+ *  back to read-modify-PUT of the replaceable fields. */
+async function updateUnit(
+  unitId: string,
+  ops: PatchOp[],
+  g: GroupTarget,
+  newName: string,
+  label: string,
+) {
+  if (DRY_RUN) {
+    log("🩹", `[dry-run] would update ${label}: ${ops.map((o) => o.path).join(", ")}`);
+    return;
+  }
+  const { status, data } = await api(
+    "PATCH",
+    `/inventory/v1/units/${unitId}`,
+    ops,
+    "application/json-patch+json",
+  );
+  if (ok(status)) {
+    log("✅", `${label} updated (${ops.map((o) => o.path).join(", ")}).`);
+    return;
+  }
+  if (status !== 405) {
+    throw new Error(`PATCH ${label} failed (${status}): ${JSON.stringify(data)}`);
+  }
+  const { status: gs, data: gd } = await api("GET", `/inventory/v1/units/${unitId}`);
+  if (!ok(gs)) throw new Error(`GET unit ${unitId} failed (${gs}).`);
+  const cur = gd as {
+    unitGroup?: { id?: string };
+    unitGroupId?: string;
+    status?: { condition?: string };
+    condition?: string;
+  };
+  await putJson(
+    `/inventory/v1/units/${unitId}`,
+    {
+      name: newName,
+      description: { en: newName, de: newName },
+      unitGroupId: cur.unitGroup?.id ?? cur.unitGroupId ?? `${PROPERTY_ID}-${g.code}`,
+      maxPersons: g.maxPersons,
+      condition: cur.status?.condition ?? cur.condition ?? "Clean",
+    },
+    label,
+  );
 }
 
 async function migrateRatePlans(): Promise<Map<string, string>> {
@@ -384,24 +453,31 @@ async function migrateRatePlans(): Promise<Map<string, string>> {
       continue;
     }
     planIds.set(g.code, plan.id);
-    await patch(
-      `/rateplan/v1/rate-plans/${plan.id}`,
-      [
-        { op: "replace", path: "/name/en", value: `${g.name} Flexible` },
-        { op: "replace", path: "/name/de", value: `${g.name} Flexibel` },
-        {
-          op: "add",
-          path: "/description/en",
-          value: `Standard flexible rate for the ${g.name}. 30% deposit at booking when more than 8 weeks out, balance due 8 weeks before arrival.`,
-        },
-        {
-          op: "add",
-          path: "/description/de",
-          value: `Flexibler Standardtarif für die ${g.name}. 30% Anzahlung bei Buchung mehr als 8 Wochen im Voraus, Restzahlung 8 Wochen vor Anreise.`,
-        },
-      ],
-      `rate plan ${g.code}_FLEX -> "${g.name} Flexible"`,
-    );
+    // Rename is cosmetic (the frontend shows content/lodges.ts names), so a
+    // missing PATCH endpoint here warns rather than aborts: the reprice that
+    // follows is the part that matters.
+    try {
+      await patch(
+        `/rateplan/v1/rate-plans/${plan.id}`,
+        [
+          { op: "replace", path: "/name/en", value: `${g.name} Flexible` },
+          { op: "replace", path: "/name/de", value: `${g.name} Flexibel` },
+          {
+            op: "add",
+            path: "/description/en",
+            value: `Standard flexible rate for the ${g.name}. 30% deposit at booking when more than 8 weeks out, balance due 8 weeks before arrival.`,
+          },
+          {
+            op: "add",
+            path: "/description/de",
+            value: `Flexibler Standardtarif für die ${g.name}. 30% Anzahlung bei Buchung mehr als 8 Wochen im Voraus, Restzahlung 8 Wochen vor Anreise.`,
+          },
+        ],
+        `rate plan ${g.code}_FLEX -> "${g.name} Flexible"`,
+      );
+    } catch (err) {
+      log("⚠️ ", `  rename of ${g.code}_FLEX skipped (${(err as Error).message.slice(0, 80)}…). Cosmetic only; continuing.`);
+    }
   }
   return planIds;
 }
@@ -409,12 +485,49 @@ async function migrateRatePlans(): Promise<Map<string, string>> {
 async function migrateServices() {
   for (const svc of SERVICE_PATCHES) {
     const id = `${PROPERTY_ID}-${svc.code}`;
-    await patch(
+    if (DRY_RUN) {
+      log("🩹", `[dry-run] would update service ${svc.code} (${svc.note}).`);
+      continue;
+    }
+    const { status, data } = await api(
+      "PATCH",
       `/rateplan/v1/services/${id}`,
       [
         { op: "replace", path: "/description/en", value: svc.description },
         { op: "replace", path: "/description/de", value: svc.description },
       ],
+      "application/json-patch+json",
+    );
+    if (ok(status)) {
+      log("✅", `service ${svc.code} updated (${svc.note}).`);
+      continue;
+    }
+    if (status !== 405) {
+      throw new Error(`PATCH service ${svc.code} failed (${status}): ${JSON.stringify(data)}`);
+    }
+    // Same 405 story as unit groups: read-modify-PUT. The description is
+    // guest-visible on the extras page, so this one is worth the fallback.
+    const { status: gs, data: gd } = await api("GET", `/rateplan/v1/services/${id}`);
+    if (!ok(gs)) throw new Error(`GET service ${svc.code} failed (${gs}).`);
+    const cur = gd as {
+      name: unknown;
+      defaultGrossPrice: unknown;
+      pricingUnit: unknown;
+      postNextDay: unknown;
+      availability: unknown;
+      channelCodes?: unknown;
+    };
+    await putJson(
+      `/rateplan/v1/services/${id}`,
+      {
+        name: cur.name,
+        description: { en: svc.description, de: svc.description },
+        defaultGrossPrice: cur.defaultGrossPrice,
+        pricingUnit: cur.pricingUnit,
+        postNextDay: cur.postNextDay,
+        availability: cur.availability,
+        channelCodes: cur.channelCodes,
+      },
       `service ${svc.code} (${svc.note})`,
     );
   }
