@@ -46,6 +46,28 @@ export async function getHomeContent(): Promise<HomeContent> {
   };
 }
 
+/** The season cards, for pages beyond the homepage (breaks, village). */
+export async function getSeasons(): Promise<Season[]> {
+  const payload = await getPayload({ config });
+  const result = await payload.find({
+    collection: "seasons",
+    sort: "displayOrder",
+    pagination: false,
+  });
+  return result.docs;
+}
+
+/** The activity cards, for the things-to-do landing. */
+export async function getActivities(): Promise<Activity[]> {
+  const payload = await getPayload({ config });
+  const result = await payload.find({
+    collection: "activities",
+    sort: "displayOrder",
+    pagination: false,
+  });
+  return result.docs;
+}
+
 /**
  * The site-wide banner (the campaign slot), or null when the global has not
  * been seeded yet. The layout keeps a built-in fallback line, so a fresh

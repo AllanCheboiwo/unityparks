@@ -235,7 +235,7 @@ export default async function HomePage() {
                 <p className="mt-3 text-base font-bold text-ink">
                   {season.fromPrice}
                 </p>
-                <Link href="/#search" className="btn-outline mt-4 inline-block">
+                <Link href="/breaks" className="btn-outline mt-4 inline-block">
                   Explore breaks
                 </Link>
               </div>
