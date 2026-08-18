@@ -6,19 +6,20 @@
  */
 
 /**
- * A lodge sleeps eight, Center Parcs style. Adults, children and toddlers all
- * count toward this cap; infants under 2 do not (they sleep in a cot), which is
- * why the size below excludes them.
+ * Our largest lodge sleeps six (the 3 bedroom, in either grade). Adults,
+ * children and toddlers all count toward this cap; infants under 2 do not
+ * (they sleep in a cot), which is why the size below excludes them. Parties
+ * of more than six take two lodges.
  */
-export const MAX_PARTY = 8;
+export const MAX_PARTY = 6;
 
-/** A lodge tops out at two infants in a cot, on top of the eight it sleeps. */
+/** A lodge tops out at two infants in a cot, on top of the six it sleeps. */
 export const MAX_INFANTS = 2;
 
-/** Our largest lodge has four bedrooms. */
-export const MAX_BEDROOMS = 4;
+/** Our largest lodge has three bedrooms. */
+export const MAX_BEDROOMS = 3;
 
-/** The guests that count toward the eight-person cap (everyone but infants). */
+/** The guests that count toward the six-person cap (everyone but infants). */
 export function countedGuests(adults: number, children: number, toddlers: number): number {
   return adults + children + toddlers;
 }

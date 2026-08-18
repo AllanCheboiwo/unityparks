@@ -2,8 +2,10 @@ import type { Metadata } from "next";
 import { Fira_Sans, Open_Sans } from "next/font/google";
 import Link from "next/link";
 import { getCurrentUser } from "@/server/auth/session";
+import { getSiteBanner } from "@/server/content";
 import { SignOutButton } from "@/components/SignOutButton";
 import { NewsletterForm } from "@/components/NewsletterForm";
+import { VILLAGE_LOCALE_LINE } from "@/content/village";
 import "./globals.css";
 
 // Fira Sans is the display face per docs/DESIGN.md: humanist, slightly warm,
@@ -21,9 +23,9 @@ const body = Open_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Unity Parks | Forest & Lake Breaks",
+  title: "Unity Parks | Forest Breaks on Mount Kenya",
   description:
-    "Self-contained lodges in a lakeside forest village near Naivasha. Breaks start on a Friday or Monday.",
+    "Self-contained lodges in a car-free forest village on the slopes of Mount Kenya. Breaks start on a Friday or Monday.",
 };
 
 function BrandMark() {
@@ -55,6 +57,9 @@ export default async function RootLayout({
   // the pages are client-fetch shells anyway, and it keeps the header honest
   // on every navigation.
   const user = await getCurrentUser();
+  // The teal stripe is the campaign slot, editor-owned in the CMS. Null on
+  // an unseeded database, in which case the fallback line below renders.
+  const banner = await getSiteBanner();
   return (
     <html lang="en" className={`${display.variable} ${body.variable} h-full antialiased`}>
       <body className="min-h-screen flex flex-col">
@@ -75,7 +80,7 @@ export default async function RootLayout({
                 </Link>
               )}
               <span className="text-sm text-foreground/70 hidden sm:block">
-                Lake Naivasha, Kenya
+                {VILLAGE_LOCALE_LINE}
               </span>
             </div>
           </div>
@@ -100,10 +105,24 @@ export default async function RootLayout({
               <path d="M12 8h.01M12 11v5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
             </svg>
             <p>
-              Breaks available to book up to 100 days ahead.{" "}
-              <Link href="/#search" className="font-bold underline underline-offset-2">
-                Secure your ideal dates and lodge today.
-              </Link>
+              {banner ? (
+                <>
+                  {banner.text}{" "}
+                  <Link
+                    href={banner.linkHref}
+                    className="font-bold underline underline-offset-2"
+                  >
+                    {banner.linkLabel}
+                  </Link>
+                </>
+              ) : (
+                <>
+                  Breaks start on a Friday or a Monday.{" "}
+                  <Link href="/#search" className="font-bold underline underline-offset-2">
+                    Secure your ideal dates and lodge today.
+                  </Link>
+                </>
+              )}
             </p>
           </div>
         </div>

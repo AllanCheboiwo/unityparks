@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { apiFetch } from "@/lib/api";
+import { VILLAGE_NAME } from "@/content/village";
 
 export function LoginClient() {
   const router = useRouter();
@@ -43,7 +44,7 @@ export function LoginClient() {
           Welcome <em>back</em>
         </h1>
         <p className="mt-2 text-sm text-foreground">
-          Sign in to see and manage your breaks at Unity Parks Naivasha.
+          Sign in to see and manage your breaks at {VILLAGE_NAME}.
         </p>
 
         <form onSubmit={submit} className="mt-6 grid gap-5">

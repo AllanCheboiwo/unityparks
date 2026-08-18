@@ -1,10 +1,10 @@
 # Unity Parks
 
-A Center Parcs-style booking demo for a fictional Kenyan holiday village on
-Lake Naivasha. Real inventory, pricing, bookings and folios live in an
-Apaleo sandbox (property UPNV); payments run through the Pesapal sandbox;
-everything else (accounts, sessions, referrals, extras orders, reminders)
-lives in our own Postgres.
+A Center Parcs-style booking demo for a fictional Kenyan holiday village at
+Naro Moru, on the western slopes of Mount Kenya. Real inventory, pricing,
+bookings and folios live in an Apaleo sandbox (property UPNV); payments run
+through the Pesapal sandbox; everything else (accounts, sessions, referrals,
+extras orders, reminders) lives in our own Postgres.
 
 ## Stack
 
@@ -54,6 +54,10 @@ Tests: `npx vitest run` (pure-logic suites over `lib/` and `server/`).
   `pesapal/`, `booking/` (checkout, cancellation, extras, reminders),
   `referral/`, `email/`, `auth/`.
 - `content/` marketing words and pictures; Apaleo owns names and prices.
+- `scripts/apaleo/` the sandbox provisioning and migration scripts
+  (`npm run apaleo:provision`, `npm run apaleo:migrate`), moved in from the
+  old untracked sibling project. Rate writes are budgeted at 8 calls per
+  20 minutes; the script headers say what each run spends.
 - `docs/` the real documentation. Start with `FEATURES-REPORT.md` (what is
   built and what is not), `DESIGN.md` (the visual system), and the three
   money engines: `deposit-and-cancellation-plan.md`,

@@ -11,6 +11,7 @@ import {
   requiredBedrooms,
 } from "@/lib/occupancy";
 import { TurnoverCalendar, validArrivalDows } from "@/components/TurnoverCalendar";
+import { VILLAGE_NAME } from "@/content/village";
 
 /**
  * The booking bar: four fields (village, dates, lodges,
@@ -23,9 +24,11 @@ import { TurnoverCalendar, validArrivalDows } from "@/components/TurnoverCalenda
  * from each lodge's party (see lib/occupancy).
  */
 
-const BOOKING_HORIZON_DAYS = 100;
+// Just over thirteen months, so every campaign in the year ahead is bookable
+// (festive included). Must stay within the window of priced nights the
+// provisioning project writes into Apaleo (PRICE_WINDOW_DAYS there).
+const BOOKING_HORIZON_DAYS = 400;
 const MAX_LODGES = 3;
-const VILLAGE_NAME = "Unity Parks Naivasha";
 
 const NIGHT_OPTIONS = [3, 4, 7] as const;
 
@@ -284,9 +287,9 @@ function LodgeParty({
   // demanding a fifth that no lodge has.
   const requiredBed = Math.min(requiredBedrooms(party.adults, party.children), MAX_BEDROOMS);
 
-  // The eight-person cap counts adults, children and toddlers. `slack` is how
+  // The party cap counts adults, children and toddlers. `slack` is how
   // many more of those the lodge can still take, so each stepper's max is its
-  // own value plus the slack; at eight, every one of them stops.
+  // own value plus the slack; at the cap, every one of them stops.
   const slack = MAX_PARTY - countedGuests(party.adults, party.children, party.toddlers);
 
   // Bedrooms follow the party both ways. If the guest has manually raised
@@ -485,7 +488,7 @@ export function BookingBar({ initial }: { initial?: BookingBarInitial }) {
         parties[oversized].toddlers,
       );
       setError(
-        `Our largest lodge sleeps ${MAX_PARTY} plus up to ${MAX_INFANTS} infants. ${label} has ${counted} guests aged 2 and over.`,
+        `Our largest lodge sleeps ${MAX_PARTY} plus up to ${MAX_INFANTS} infants. ${label} has ${counted} guests aged 2 and over. Parties of more than six take two lodges.`,
       );
       return;
     }

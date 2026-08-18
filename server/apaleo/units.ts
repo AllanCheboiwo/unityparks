@@ -14,7 +14,7 @@ export const LOCATION_SERVICE_CODE = "LOCATION";
 /** One pickable lodge on the location step. */
 export type UnitOption = {
   id: string; // Apaleo unit id, e.g. UPNV-EBP
-  name: string; // e.g. "Lakeview Lodge 3"
+  name: string; // e.g. "Fig Lane 3"
 };
 
 // The property runs 14:00 check-in / 11:00 check-out in a +02:00 timezone

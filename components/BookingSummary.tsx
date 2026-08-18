@@ -3,6 +3,7 @@
 import { Fragment, useState } from "react";
 import { formatDate, formatKes } from "@/lib/format";
 import { LODGES } from "@/content/lodges";
+import { VILLAGE_NAME } from "@/content/village";
 import type { ExtraSnapshotDto, SessionSummary } from "@/lib/types";
 
 /** A lodge's location line as the rail shows it: picked unit plus fee. */
@@ -82,7 +83,7 @@ export function BookingSummary({
           <div className="px-4 py-3 grid gap-1.5 border-b border-line">
             <div className={row}>
               <span className={label}>Village</span>
-              <span className={value}>Unity Parks Naivasha</span>
+              <span className={value}>{VILLAGE_NAME}</span>
             </div>
             <div className={row}>
               <span className={label}>Check In</span>

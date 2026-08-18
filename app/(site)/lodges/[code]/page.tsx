@@ -168,7 +168,7 @@ export default async function LodgeDetailPage({
         <div className="absolute inset-x-0 bottom-0">
           <div className="mx-auto max-w-6xl px-5 pb-8">
             <p className="text-sm font-semibold uppercase tracking-widest text-white/80">
-              Lake Naivasha village
+              Mount Kenya village
             </p>
             <h1 className="font-display text-4xl font-bold text-white sm:text-5xl">
               {lodge.name}

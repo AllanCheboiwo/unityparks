@@ -1,3 +1,4 @@
+import { VILLAGE_LOCALE_LINE, VILLAGE_NAME } from "@/content/village";
 import "server-only";
 import { prisma } from "../db";
 import { sendEmail } from "./resend";
@@ -84,8 +85,8 @@ export async function sendBookingConfirmation(recordId: string): Promise<void> {
       `${greeting}`,
       ``,
       fullyPaid
-        ? `Your break at Unity Parks Naivasha is booked and paid. We can't wait to see you.`
-        : `Your break at Unity Parks Naivasha is booked. Your deposit is in; the balance is due ${dueDate ? `by ${dueDate}` : "before arrival"}.`,
+        ? `Your break at ${VILLAGE_NAME} is booked and paid. We can't wait to see you.`
+        : `Your break at ${VILLAGE_NAME} is booked. Your deposit is in; the balance is due ${dueDate ? `by ${dueDate}` : "before arrival"}.`,
       ``,
       `Booking reference: ${reference}`,
       `Check-in: ${longDate(session.arrival)}`,
@@ -104,7 +105,7 @@ export async function sendBookingConfirmation(recordId: string): Promise<void> {
       ``,
       `That is ${memories} new ${memories === 1 ? "memory" : "memories"} on the way. Thank you for helping us reach a billion.`,
       ``,
-      `Unity Parks · Lake Naivasha, Kenya`,
+      `Unity Parks · ${VILLAGE_LOCALE_LINE}`,
       `Demo environment: no real payments were taken.`,
     ].join("\n");
 
@@ -123,8 +124,8 @@ export async function sendBookingConfirmation(recordId: string): Promise<void> {
       <p style="margin:0 0 20px;color:#4c4e4b;font-size:15px;line-height:1.5;">
         ${
           fullyPaid
-            ? `${greeting} your break at Unity Parks Naivasha is booked and paid. We can't wait to see you.`
-            : `${greeting} your break at Unity Parks Naivasha is booked. Your deposit is in; the balance is due ${dueDate ? `by ${dueDate}` : "before arrival"}.`
+            ? `${greeting} your break at ${VILLAGE_NAME} is booked and paid. We can't wait to see you.`
+            : `${greeting} your break at ${VILLAGE_NAME} is booked. Your deposit is in; the balance is due ${dueDate ? `by ${dueDate}` : "before arrival"}.`
         }
       </p>
       <div style="background:#f5f3ee;border-radius:6px;padding:14px 18px;margin-bottom:20px;">
@@ -160,7 +161,7 @@ export async function sendBookingConfirmation(recordId: string): Promise<void> {
       </p>
     </div>
     <div style="background:#333333;color:#bbbbbb;padding:14px 28px;font-size:12px;">
-      Unity Parks · Lake Naivasha, Kenya · Demo environment, no real payments were taken.
+      Unity Parks · ${VILLAGE_LOCALE_LINE} · Demo environment, no real payments were taken.
     </div>
   </div>
 </div>`;

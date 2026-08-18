@@ -1,24 +1,29 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { apiFetch, isExpired } from "@/lib/api";
 import { formatKes } from "@/lib/format";
 import { LODGES } from "@/content/lodges";
+import { LANES, ZONES, laneOf, type ZoneId } from "@/content/village";
 import type { LocationOffersDto, SessionSummary } from "@/lib/types";
 import { Stepper } from "@/components/Stepper";
 import { BookingSummary } from "@/components/BookingSummary";
 import { ExpiredNotice } from "@/components/ExpiredNotice";
+import { VillageMap } from "@/components/VillageMap";
 import { CheckoutBreadcrumb } from "../Breadcrumb";
 import { AlertIcon, TickIcon } from "../icons";
 
 /**
- * The location step, naive version: pick the exact lodge
- * you'll stay in for a flat fee (from live Apaleo unit availability), or "no
- * preference" free of charge. The choice is saved per lodge on the session;
- * the actual unit assignment happens at checkout, where a lost race falls
- * back to a comparable lodge with the fee removed.
+ * The location step: choose a corner of the village (a zone), then the
+ * exact lodge in it for a flat fee (from live Apaleo unit availability), or
+ * "no preference" free of charge. The zone is parsed off each unit's lane
+ * name ("Fig Lane 3"), so on data that predates the Mount Kenya migration
+ * the step quietly falls back to the flat all-lodges list it always had.
+ * Zone choice is navigation, never charged and never saved; the unit is the
+ * choice. It is saved per lodge on the session; the actual unit assignment
+ * happens at checkout, where a lost race falls back to a comparable lodge
+ * with the fee removed.
  */
 
 /** One slot's in-progress choice. unitId stays null until picked. */
@@ -33,6 +38,8 @@ export function LocationClient() {
   // Slots whose previously saved unit no longer exists in live availability;
   // holds the lost unit's name for the notice.
   const [staleBySlot, setStaleBySlot] = useState<Record<number, string>>({});
+  // The zone filter per slot: pure navigation, never charged, never saved.
+  const [zoneBySlot, setZoneBySlot] = useState<Record<number, ZoneId | null>>({});
   const [activeSlot, setActiveSlot] = useState(0);
   const [expired, setExpired] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -78,9 +85,21 @@ export function LocationClient() {
           }
         }
       });
+      // Restored unit choices pre-select their zone so the grid opens where
+      // the guest left off.
+      const zones: Record<number, ZoneId | null> = {};
+      for (const l of summary.lodges) {
+        const c = choices[l.slot];
+        const unit =
+          c?.kind === "unit" && c.unitId
+            ? offers[l.slot]?.units.find((u) => u.id === c.unitId)
+            : undefined;
+        zones[l.slot] = unit ? (laneOf(unit.name)?.zone ?? null) : null;
+      }
       setOffersBySlot(offers);
       setChoiceBySlot(choices);
       setStaleBySlot(stale);
+      setZoneBySlot(zones);
     })();
   }, [sessionId]);
 
@@ -116,6 +135,32 @@ export function LocationClient() {
   const activeUnits = (activeOffers?.units ?? []).filter(
     (u) => !takenByOtherSlots(activeSlot).has(u.id),
   );
+
+  // Zones exist only where lane names do, that is, after the Apaleo
+  // migration has renamed the units. Anything unrecognisable keeps the flat
+  // list, so pre-migration data degrades to exactly the old behaviour.
+  const zonesActive = activeUnits.some((u) => laneOf(u.name) !== null);
+  const availableZoneIds = new Set<ZoneId>(
+    activeUnits
+      .map((u) => laneOf(u.name)?.zone)
+      .filter((z): z is ZoneId => Boolean(z)),
+  );
+  const activeZone = zoneBySlot[activeSlot] ?? null;
+  const shownUnits =
+    zonesActive && activeZone
+      ? activeUnits.filter((u) => laneOf(u.name)?.zone === activeZone)
+      : activeUnits;
+  const lanesToShow = LANES.filter(
+    (lane) =>
+      (!activeZone || lane.zone === activeZone) &&
+      shownUnits.some((u) => u.name.startsWith(`${lane.name} `)),
+  );
+  // Mid-migration oddity: units whose names match no lane while others do.
+  const unplacedUnits = shownUnits.filter((u) => !laneOf(u.name));
+
+  function setZone(slot: number, zone: ZoneId | null) {
+    setZoneBySlot((prev) => ({ ...prev, [slot]: zone }));
+  }
 
   function setChoice(slot: number, choice: Choice) {
     setChoiceBySlot((prev) => ({ ...prev, [slot]: choice }));
@@ -172,6 +217,31 @@ export function LocationClient() {
 
   const canPickUnit = Boolean(activeOffers?.fee) && activeUnits.length > 0;
 
+  function renderUnitButton(u: { id: string; name: string }) {
+    const selected = activeChoice?.kind === "unit" && activeChoice.unitId === u.id;
+    return (
+      <button
+        key={u.id}
+        type="button"
+        onClick={() => setChoice(activeSlot, { kind: "unit", unitId: u.id })}
+        aria-pressed={selected}
+        className={`flex items-center justify-between gap-3 rounded-lg px-4 py-3.5 text-left transition ${
+          selected
+            ? "border border-navy ring-1 ring-navy bg-navy/5"
+            : "border border-line bg-white hover:border-navy/40"
+        }`}
+      >
+        <span className="flex items-center gap-2 min-w-0">
+          {selected && <TickIcon className="w-4 h-4 shrink-0 text-navy" />}
+          <span className="font-semibold text-navy truncate">{u.name}</span>
+        </span>
+        <span className="font-bold text-ink shrink-0">
+          {formatKes(activeOffers!.fee!.amount)}
+        </span>
+      </button>
+    );
+  }
+
   return (
     <div className="mx-auto max-w-5xl px-5 py-8">
       <CheckoutBreadcrumb />
@@ -183,9 +253,10 @@ export function LocationClient() {
       <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-8 lg:items-start">
         <div>
           <p className="text-sm text-foreground/70 max-w-xl">
-            Fancy a favourite spot by the lake or a quiet corner of the forest?
-            Take a look at the village map and pick the exact lodge for your
-            dates, or leave it with us and we&apos;ll choose a lovely one for you.
+            Fancy waking up on Sunrise Ridge, or being three minutes from the
+            Water Garden in The Glades? Pick your corner of the village and
+            the exact lodge for your dates, or leave it with us and
+            we&apos;ll choose a lovely one for you.
             {multi && " Each lodge in your break chooses separately."}
           </p>
 
@@ -215,17 +286,62 @@ export function LocationClient() {
             </div>
           )}
 
-          {/* The village map */}
+          {/* The village map: zones are clickable once lane names exist */}
           <div className="mt-6 rounded-lg bg-white border border-line overflow-hidden">
-            <Image
-              src="/village-map.svg"
-              alt="Map of the Unity Parks Naivasha village showing the lodge areas"
-              width={1200}
-              height={640}
-              className="w-full h-auto"
-              priority
+            <VillageMap
+              selectedZone={zonesActive ? activeZone : null}
+              availableZones={zonesActive ? availableZoneIds : undefined}
+              onSelectZone={
+                zonesActive && canPickUnit
+                  ? (zone) => setZone(activeSlot, activeZone === zone ? null : zone)
+                  : undefined
+              }
             />
           </div>
+
+          {/* Zone choice, ahead of the exact lodge. Free: the fee belongs
+              to picking an exact lodge, never to picking a corner. */}
+          {zonesActive && canPickUnit && (
+            <>
+              <h2 className="mt-6 text-xl font-bold text-ink">
+                Choose your corner of the village
+              </h2>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                {ZONES.map((zone) => {
+                  const hasUnits = availableZoneIds.has(zone.id);
+                  const selected = activeZone === zone.id;
+                  const note = hasUnits
+                    ? zone.suits
+                    : zone.live
+                      ? "No free lodges on these dates"
+                      : "Opens with a later phase of the village";
+                  return (
+                    <button
+                      key={zone.id}
+                      type="button"
+                      disabled={!hasUnits}
+                      onClick={() => setZone(activeSlot, selected ? null : zone.id)}
+                      aria-pressed={selected}
+                      className={`flex flex-col rounded-lg px-4 py-3 text-left transition border ${
+                        selected
+                          ? "border-navy ring-1 ring-navy bg-navy/5"
+                          : hasUnits
+                            ? "border-line bg-white hover:border-navy/40"
+                            : "border-line bg-mist/60 opacity-60 cursor-not-allowed"
+                      }`}
+                    >
+                      <span className="flex items-center gap-2">
+                        {selected && <TickIcon className="w-4 h-4 shrink-0 text-navy" />}
+                        <span className="font-semibold text-navy">{zone.name}</span>
+                      </span>
+                      <span className="mt-1 text-sm text-foreground/70">{zone.character}</span>
+                      <span className="mt-1 text-xs font-semibold text-foreground/50">{note}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
 
           {error && (
             <div className="mt-4 flex items-start gap-2 rounded-md border border-[#b3261e]/30 bg-[#b3261e]/5 px-4 py-3 text-sm text-[#b3261e]">
@@ -258,33 +374,49 @@ export function LocationClient() {
                 : "Lodge selection isn't available right now."}
           </p>
 
-          {canPickUnit && (
+          {canPickUnit && !zonesActive && (
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              {activeUnits.map((u) => {
-                const selected =
-                  activeChoice?.kind === "unit" && activeChoice.unitId === u.id;
-                return (
-                  <button
-                    key={u.id}
-                    type="button"
-                    onClick={() => setChoice(activeSlot, { kind: "unit", unitId: u.id })}
-                    aria-pressed={selected}
-                    className={`flex items-center justify-between gap-3 rounded-lg px-4 py-3.5 text-left transition ${
-                      selected
-                        ? "border border-navy ring-1 ring-navy bg-navy/5"
-                        : "border border-line bg-white hover:border-navy/40"
-                    }`}
-                  >
-                    <span className="flex items-center gap-2 min-w-0">
-                      {selected && <TickIcon className="w-4 h-4 shrink-0 text-navy" />}
-                      <span className="font-semibold text-navy truncate">{u.name}</span>
-                    </span>
-                    <span className="font-bold text-ink shrink-0">
-                      {formatKes(activeOffers!.fee!.amount)}
-                    </span>
-                  </button>
-                );
-              })}
+              {activeUnits.map((u) => renderUnitButton(u))}
+            </div>
+          )}
+
+          {canPickUnit && zonesActive && (
+            <div className="mt-4 grid gap-5">
+              {lanesToShow.map((lane) => (
+                <div key={lane.name}>
+                  <h3 className="text-sm font-bold text-ink">
+                    {lane.name}
+                    {!activeZone && (
+                      <span className="ml-2 font-semibold text-foreground/50">
+                        {ZONES.find((z) => z.id === lane.zone)?.name}
+                      </span>
+                    )}
+                  </h3>
+                  <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                    {shownUnits
+                      .filter((u) => u.name.startsWith(`${lane.name} `))
+                      .map((u) => renderUnitButton(u))}
+                  </div>
+                </div>
+              ))}
+              {unplacedUnits.length > 0 && (
+                <div>
+                  {lanesToShow.length > 0 && (
+                    <h3 className="text-sm font-bold text-ink">More lodges</h3>
+                  )}
+                  <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                    {unplacedUnits.map((u) => renderUnitButton(u))}
+                  </div>
+                </div>
+              )}
+              {lanesToShow.length === 0 && unplacedUnits.length === 0 && (
+                <p className="text-sm text-foreground/60">
+                  No free {activeTierName ?? "lodges"} in{" "}
+                  {ZONES.find((z) => z.id === activeZone)?.name ?? "that corner"} for
+                  these dates. Pick another corner of the village, or leave it
+                  with us.
+                </p>
+              )}
             </div>
           )}
 

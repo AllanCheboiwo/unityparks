@@ -186,7 +186,7 @@ model SessionLodge {
   // locally invented number; the service itself is attached at checkout.
   locationChoice    String?
   locationUnitId    String? // Apaleo unit id, e.g. UPNV-EBP
-  locationUnitName  String? // display name, e.g. "Lakeview Lodge 3"
+  locationUnitName  String? // display name, e.g. "Fig Lane 3" (old rows keep their pre-rename snapshots)
   locationServiceId String? // fee service to attach at checkout (UPNV-LOCATION)
   locationFee       Float?
 

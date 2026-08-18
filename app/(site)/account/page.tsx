@@ -65,7 +65,7 @@ export default async function AccountPage() {
       {records.length === 0 && (
         <div className="mt-8 rounded-lg border border-line contour-bg p-8 text-center">
           <p className="text-foreground">
-            No breaks yet. Your first happy memories are waiting by the lake.
+            No breaks yet. Your first happy memories are waiting in the forest.
           </p>
           <Link href="/" className="btn-primary mt-4">
             Plan your first break

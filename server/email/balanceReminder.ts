@@ -1,3 +1,4 @@
+import { VILLAGE_LOCALE_LINE } from "@/content/village";
 import "server-only";
 import { prisma } from "../db";
 import { sendEmail } from "./resend";
@@ -92,7 +93,7 @@ export async function sendBalanceReminder(
       action,
       `Manage your booking: ${manageUrl} (you'll need your reference and the lead guest's email)`,
       ``,
-      `Unity Parks · Lake Naivasha, Kenya`,
+      `Unity Parks · ${VILLAGE_LOCALE_LINE}`,
       `Demo environment: no real payments were taken.`,
     ].join("\n");
 
@@ -125,7 +126,7 @@ export async function sendBalanceReminder(
       </a>
     </div>
     <div style="background:#333333;color:#bbbbbb;padding:14px 28px;font-size:12px;">
-      Unity Parks · Lake Naivasha, Kenya · Demo environment, no real payments were taken.
+      Unity Parks · ${VILLAGE_LOCALE_LINE} · Demo environment, no real payments were taken.
     </div>
   </div>
 </div>`;
