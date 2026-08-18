@@ -263,13 +263,19 @@ C1 just keeps fresh environments honest.
 
 Replace, then fix the CREDITS.md rows to match:
 
-- [ ] /videos/hero-family-lake.mp4 (homepage hero)
-- [ ] /photos/band-lake.jpg (LodgesClient band, three lodge galleries, the
-      sunshine season card)
-- [ ] /photos/lodge-lkv.jpg (its credit row says cabin by a lake)
-- [ ] Review hero-forest.jpg and season-cool.jpg: lake-sourced credits, but
-      the frames may pass as montane forest.
-- [ ] Delete or repurpose the orphan band-forest-lake.mp4.
+- [ ] /videos/hero-family-lake.mp4 (homepage hero). Still the lake-walk
+      video; a replacement needs sourcing, and the LIVE copy lives in R2, so
+      swap it via the Payload admin (upload a new file on the media doc).
+      The same admin route updates the other CMS-served stills, whose R2
+      binaries a repo swap cannot reach
+- [x] /photos/band-lake.jpg replaced 18 Aug: a golden mountain valley
+      (Pexels 10195041). Filename kept, CREDITS notes it is Naivasha-era
+- [x] /photos/lodge-lkv.jpg replaced 18 Aug: dark-timber cabins in fern
+      forest (Pexels 20624333), very Signature
+- [x] Reviewed 18 Aug: hero-forest.jpg was half lake, replaced with misty
+      pines (Pexels 10762369); season-cool.jpg passes as montane forest and
+      stays.
+- [x] Orphan band-forest-lake.mp4 deleted 18 Aug, credits row with it.
 
 Prefer new filenames that say what they are (band-mountain.jpg), so no lake
 names linger in code.

@@ -44,9 +44,10 @@ function BrandMark() {
 }
 
 const NAV = [
-  { href: "/#discover", label: "Discover Unity Parks" },
+  { href: "/village", label: "Discover Unity Parks" },
   { href: "/#lodges", label: "Lodges" },
-  { href: "/#things-to-do", label: "Things to do" },
+  { href: "/things-to-do", label: "Things to do" },
+  { href: "/breaks", label: "Breaks" },
   { href: "/account", label: "My booking" },
 ] as const;
 
@@ -144,9 +145,10 @@ export default async function RootLayout({
             <div>
               <p className="font-display text-xl font-bold mb-3">Unity Parks</p>
               <ul className="space-y-2.5 text-sm">
-                <li><Link className="hover:text-moss" href="/#discover">Our village</Link></li>
+                <li><Link className="hover:text-moss" href="/village">Our village</Link></li>
                 <li><Link className="hover:text-moss" href="/#lodges">Lodges</Link></li>
-                <li><Link className="hover:text-moss" href="/#things-to-do">Things to do</Link></li>
+                <li><Link className="hover:text-moss" href="/things-to-do">Things to do</Link></li>
+                <li><Link className="hover:text-moss" href="/breaks">Breaks</Link></li>
                 <li><Link className="hover:text-moss" href="/#faq">Questions and answers</Link></li>
               </ul>
             </div>

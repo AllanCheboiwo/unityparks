@@ -34,8 +34,8 @@ const MEDIA = [
   },
   {
     file: "hero-forest.jpg",
-    alt: "A timber lodge deep in the forest",
-    creditUrl: "https://www.pexels.com/photo/cabin-near-lake-in-finland-27869122/",
+    alt: "Mist through the forest at first light",
+    creditUrl: "https://www.pexels.com/photo/green-pine-trees-on-mountain-area-10762369/",
   },
   {
     file: "activity-pool.jpg",
@@ -74,8 +74,8 @@ const MEDIA = [
   },
   {
     file: "band-lake.jpg",
-    alt: "Golden evening light over still water",
-    creditUrl: "https://www.pexels.com/photo/9245120/",
+    alt: "Golden evening light over the forest",
+    creditUrl: "https://www.pexels.com/photo/scenic-view-of-pine-trees-in-the-forest-10195041/",
   },
   {
     file: "discover-groups.jpg",
