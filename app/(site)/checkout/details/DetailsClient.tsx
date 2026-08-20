@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { apiFetch, isExpired } from "@/lib/api";
 import { adultAtArrival, isUsablePhone } from "@/lib/guestRules";
@@ -9,7 +10,7 @@ import { Stepper } from "@/components/Stepper";
 import { BookingSummary } from "@/components/BookingSummary";
 import { ExpiredNotice } from "@/components/ExpiredNotice";
 import { CheckoutBreadcrumb } from "../Breadcrumb";
-import { AlertIcon, TickIcon } from "../icons";
+import { AlertIcon, EyeIcon, EyeOffIcon, TickIcon } from "../icons";
 
 type KnownUser = {
   firstName: string;
@@ -20,12 +21,6 @@ type KnownUser = {
   // login API) for accounts created before they existed.
   title?: string | null;
   dateOfBirth?: string | null;
-  addressLine1?: string | null;
-  addressLine2?: string | null;
-  townCity?: string | null;
-  county?: string | null;
-  postcode?: string | null;
-  country?: string | null;
   marketingEmail?: boolean;
   marketingSms?: boolean;
 };
@@ -158,7 +153,18 @@ const errorClass =
   "flex items-start gap-2 rounded-md border border-[#b3261e]/30 bg-[#b3261e]/5 px-4 py-3 text-sm text-[#b3261e]";
 
 /** Index of the last step, the one holding the terms box and Continue. */
-const LAST_STEP = 2;
+const LAST_STEP = 1;
+
+/** The asterisk after a required field's label, explained once above the
+ * form. Decoration only: the inputs carry their own required semantics. */
+function RequiredMark() {
+  return (
+    <span aria-hidden className="text-foreground/50">
+      {" "}
+      *
+    </span>
+  );
+}
 
 /** The message under a field that failed its step's check. */
 function FieldError({ message }: { message?: string }) {
@@ -182,7 +188,7 @@ type SectionState = "plain" | "open" | "done" | "upcoming";
  * fields at all, which is the point: a disabled input is skipped by autofill
  * and by screen readers, so an unreached step is better left unrendered than
  * rendered dead. Whichever step is open has all of its fields live, so a
- * browser filling a whole address in one go still works.
+ * browser autofilling a whole step in one go still works.
  */
 function Section({
   index,
@@ -266,8 +272,8 @@ function Section({
  * side-effect of booking. The gate card lives OUTSIDE the main form element
  * so pressing Enter on a password can never submit the booking as a guest.
  *
- * A guest whose email turns out to be new fills the form in three numbered
- * steps, one open at a time (Center Parcs parity, and a 15-field form is
+ * A guest whose email turns out to be new fills the form in two numbered
+ * steps, one open at a time (Center Parcs parity, and a long form is
  * punishing on a phone otherwise). Everyone else - signed in, prefilled from
  * an account, or an email check that failed - gets the whole form open,
  * because reviewing details is a different job from entering them and it is
@@ -290,12 +296,6 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
     phoneCountry: initialPhone.country,
     phoneNumber: initialPhone.number,
     dateOfBirth: initialUser?.dateOfBirth ?? "",
-    addressLine1: initialUser?.addressLine1 ?? "",
-    addressLine2: initialUser?.addressLine2 ?? "",
-    townCity: initialUser?.townCity ?? "",
-    county: initialUser?.county ?? "",
-    postcode: initialUser?.postcode ?? "",
-    country: initialUser?.country || "Kenya",
   });
   const [marketingEmail, setMarketingEmail] = useState(initialUser?.marketingEmail ?? false);
   const [marketingSms, setMarketingSms] = useState(initialUser?.marketingSms ?? false);
@@ -308,6 +308,7 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
 
   // Inline sign-in, shown when the gate finds an existing account.
   const [signinPassword, setSigninPassword] = useState("");
+  const [showSigninPassword, setShowSigninPassword] = useState(false);
   const [signinBusy, setSigninBusy] = useState(false);
   const [signinError, setSigninError] = useState<string | null>(null);
   const [declinedSignIn, setDeclinedSignIn] = useState(false);
@@ -315,6 +316,7 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
   // "Create my Unity Parks account", pre-checked by default.
   const [createAccount, setCreateAccount] = useState(true);
   const [newPassword, setNewPassword] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
 
   const [summary, setSummary] = useState<SessionSummary | null>(null);
   const [expired, setExpired] = useState(false);
@@ -394,10 +396,6 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
   ]
     .filter(Boolean)
     .join(" · ");
-  const addressSummary = [form.addressLine1, form.townCity, form.country]
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .join(", ");
 
   async function checkEmail() {
     const email = form.email.trim();
@@ -455,12 +453,6 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
       phoneCountry: f.phoneNumber ? f.phoneCountry : savedPhone.country,
       phoneNumber: f.phoneNumber || savedPhone.number,
       dateOfBirth: f.dateOfBirth || (u.dateOfBirth ?? ""),
-      addressLine1: f.addressLine1 || (u.addressLine1 ?? ""),
-      addressLine2: f.addressLine2 || (u.addressLine2 ?? ""),
-      townCity: f.townCity || (u.townCity ?? ""),
-      county: f.county || (u.county ?? ""),
-      postcode: f.postcode || (u.postcode ?? ""),
-      country: u.country || f.country,
     }));
     // Consent is account state, so the account's answer wins.
     setMarketingEmail(u.marketingEmail ?? false);
@@ -472,8 +464,7 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
   /**
    * What each step must satisfy before the next one opens. These mirror the
    * server's own rules (Zod plus adultAtArrival), so a step can never pass
-   * here and be refused at submit. Optional fields are absent on purpose:
-   * address line 2, county and postcode are patchy in Kenya.
+   * here and be refused at submit.
    */
   function checkStep(index: number): Record<string, string> {
     const e: Record<string, string> = {};
@@ -493,11 +484,6 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
       }
     }
     if (index === 1) {
-      if (!form.country.trim()) e.country = "Please enter your country.";
-      if (!form.addressLine1.trim()) e.addressLine1 = "Please enter the first line of your address.";
-      if (!form.townCity.trim()) e.townCity = "Please enter your town or city.";
-    }
-    if (index === 2) {
       if (showCreateAccount && createAccount && newPassword.length < 8) {
         e.newPassword = "Please choose a password of at least 8 characters.";
       }
@@ -554,9 +540,6 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
           ...fields,
           phone: joinPhone(phoneCountry, phoneNumber),
           title: form.title || undefined,
-          addressLine2: form.addressLine2.trim() || undefined,
-          county: form.county.trim() || undefined,
-          postcode: form.postcode.trim() || undefined,
           marketingEmail,
           marketingSms,
           termsAccepted,
@@ -666,18 +649,28 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
                       </p>
                       <label className="block mt-4">
                         <span className={labelClass}>Password</span>
-                        <input
-                          type="password"
-                          value={signinPassword}
-                          onChange={(e) => setSigninPassword(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              e.preventDefault();
-                              inlineSignIn();
-                            }
-                          }}
-                          className={inputClass}
-                        />
+                        <div className="relative">
+                          <input
+                            type={showSigninPassword ? "text" : "password"}
+                            value={signinPassword}
+                            onChange={(e) => setSigninPassword(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                inlineSignIn();
+                              }
+                            }}
+                            className={`${inputClass} pr-11`}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowSigninPassword((v) => !v)}
+                            aria-label={showSigninPassword ? "Hide password" : "Show password"}
+                            className="absolute right-0 top-1.5 bottom-0 flex items-center px-3 text-foreground/50 hover:text-foreground"
+                          >
+                            {showSigninPassword ? <EyeOffIcon /> : <EyeIcon />}
+                          </button>
+                        </div>
                       </label>
                       {signinError && (
                         <div className={`mt-3 ${errorClass}`}>
@@ -717,12 +710,13 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
               accessibility semantics: checkStep covers every one of them, and
               letting the browser fire first would mean two different error
               styles on the same form - a native bubble on the last step and
-              our own inline messages on the two before it. */}
+              our own inline messages on the one before it. */}
           <form onSubmit={submit} noValidate className="mt-6 grid gap-5">
             <fieldset
               disabled={!formUnlocked}
               className={`grid gap-5 border-0 p-0 m-0 ${formUnlocked ? "" : "opacity-40"}`}
             >
+              <p className="text-xs text-foreground/60">Fields marked * are required.</p>
               <Section
                 index={0}
                 title="About you"
@@ -732,7 +726,10 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
                 onEdit={() => setOpenStep(0)}
               >
                 <label className="max-w-[10rem] block">
-                  <span className={labelClass}>Title</span>
+                  <span className={labelClass}>
+                    Title
+                    <RequiredMark />
+                  </span>
                   <select
                     value={form.title}
                     onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
@@ -749,7 +746,10 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
 
                 <div className="grid grid-cols-2 gap-4">
                   <label>
-                    <span className={labelClass}>First name</span>
+                    <span className={labelClass}>
+                      First name
+                      <RequiredMark />
+                    </span>
                     <input
                       required
                       value={form.firstName}
@@ -759,7 +759,10 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
                     <FieldError message={fieldErrors.firstName} />
                   </label>
                   <label>
-                    <span className={labelClass}>Last name</span>
+                    <span className={labelClass}>
+                      Last name
+                      <RequiredMark />
+                    </span>
                     <input
                       required
                       value={form.lastName}
@@ -771,7 +774,10 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
                 </div>
 
                 <label className="block">
-                  <span className={labelClass}>Date of birth</span>
+                  <span className={labelClass}>
+                    Date of birth
+                    <RequiredMark />
+                  </span>
                   <input
                     type="date"
                     required
@@ -802,7 +808,10 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
                 )}
 
                 <div>
-                  <span className={labelClass}>Mobile phone</span>
+                  <span className={labelClass}>
+                    Mobile phone
+                    <RequiredMark />
+                  </span>
                   <div className="flex gap-3">
                     <label className="w-36 shrink-0">
                       <span className="sr-only">Country code</span>
@@ -843,7 +852,7 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
                       onClick={() => leaveStep(0)}
                       className="btn-primary"
                     >
-                      {stepsDone > 0 ? "Save" : "Continue to your address"}
+                      {stepsDone > 0 ? "Save" : "Continue to the last bit"}
                     </button>
                   </div>
                 )}
@@ -851,98 +860,16 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
 
               <Section
                 index={1}
-                title="Your address"
-                subtitle="We ask for your address so we can send a welcome pack with all of your break details."
+                title={knownUser ? "Almost done" : "Finishing up"}
                 state={stepState(1)}
-                summary={addressSummary}
                 onEdit={() => setOpenStep(1)}
               >
-                <label className="block max-w-[14rem]">
-                  <span className={labelClass}>Country</span>
-                  <input
-                    required
-                    value={form.country}
-                    onChange={update("country")}
-                    className={inputClass}
-                  />
-                  <FieldError message={fieldErrors.country} />
-                </label>
-                <label className="block">
-                  <span className={labelClass}>Address line 1</span>
-                  <input
-                    required
-                    value={form.addressLine1}
-                    onChange={update("addressLine1")}
-                    className={inputClass}
-                  />
-                  <FieldError message={fieldErrors.addressLine1} />
-                </label>
-                <label className="block">
-                  <span className={labelClass}>
-                    Address line 2 <span className="font-normal">(optional)</span>
-                  </span>
-                  <input
-                    value={form.addressLine2}
-                    onChange={update("addressLine2")}
-                    className={inputClass}
-                  />
-                </label>
-                <div className="grid grid-cols-2 gap-4">
-                  <label>
-                    <span className={labelClass}>Town/City</span>
-                    <input
-                      required
-                      value={form.townCity}
-                      onChange={update("townCity")}
-                      className={inputClass}
-                    />
-                    <FieldError message={fieldErrors.townCity} />
-                  </label>
-                  <label>
-                    <span className={labelClass}>
-                      County / State / Region{" "}
-                      <span className="font-normal">(optional)</span>
-                    </span>
-                    <input
-                      value={form.county}
-                      onChange={update("county")}
-                      className={inputClass}
-                    />
-                  </label>
-                </div>
-                <label className="block max-w-[14rem]">
-                  <span className={labelClass}>
-                    Postcode <span className="font-normal">(optional)</span>
-                  </span>
-                  <input
-                    value={form.postcode}
-                    onChange={update("postcode")}
-                    className={inputClass}
-                  />
-                </label>
-
-                {phased && (
-                  <div>
-                    <button
-                      type="button"
-                      onClick={() => leaveStep(1)}
-                      className="btn-primary"
-                    >
-                      {stepsDone > 1 ? "Save" : "Continue to the last bit"}
-                    </button>
-                  </div>
-                )}
-              </Section>
-
-              <Section
-                index={2}
-                title="Finishing up"
-                state={stepState(2)}
-                onEdit={() => setOpenStep(2)}
-              >
                 {showCreateAccount && (
-                  <div>
-                    <label className="flex items-start gap-3">
+                  <div className="rounded-lg border border-line bg-white p-5">
+                    <p className="font-display text-lg font-bold text-ink">
+                      Create your account
+                    </p>
+                    <label className="mt-3 flex items-start gap-3">
                       <input
                         type="checkbox"
                         checked={createAccount}
@@ -961,15 +888,28 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
                     </label>
                     {createAccount && (
                       <label className="block mt-4">
-                        <span className={labelClass}>Choose a password</span>
-                        <input
-                          type="password"
-                          required
-                          minLength={8}
-                          value={newPassword}
-                          onChange={(e) => setNewPassword(e.target.value)}
-                          className={inputClass}
-                        />
+                        <span className={labelClass}>
+                          Choose a password
+                          <RequiredMark />
+                        </span>
+                        <div className="relative">
+                          <input
+                            type={showNewPassword ? "text" : "password"}
+                            required
+                            minLength={8}
+                            value={newPassword}
+                            onChange={(e) => setNewPassword(e.target.value)}
+                            className={`${inputClass} pr-11`}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowNewPassword((v) => !v)}
+                            aria-label={showNewPassword ? "Hide password" : "Show password"}
+                            className="absolute right-0 top-1.5 bottom-0 flex items-center px-3 text-foreground/50 hover:text-foreground"
+                          >
+                            {showNewPassword ? <EyeOffIcon /> : <EyeIcon />}
+                          </button>
+                        </div>
                         <span className="mt-1 block text-xs text-foreground/50">
                           At least 8 characters.
                         </span>
@@ -979,11 +919,13 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
                   </div>
                 )}
 
-                <div className="text-sm text-foreground/70">
-                  <p className="font-semibold text-ink">Keeping in touch</p>
+                <div className="rounded-lg border border-line bg-white p-5 text-sm text-foreground/70">
+                  <p className="font-display text-lg font-bold text-ink">
+                    Keeping in touch
+                  </p>
                   <p className="mt-2">
-                    To hear about the latest Unity Parks news, including repeat
-                    guest offers, tick below.
+                    Tick below to hear the latest Unity Parks news, and to
+                    receive your exclusive repeat guest offer after your break.
                   </p>
                   <div className="mt-3 flex gap-6">
                     <label className="flex items-center gap-2">
@@ -1017,8 +959,15 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
                       className="mt-0.5 h-4 w-4 accent-[#536917]"
                     />
                     <span>
-                      I have read and accept the booking terms and conditions and
-                      the safety information for my break.
+                      I have read and accept the{" "}
+                      <Link href="/terms" target="_blank" className="underline">
+                        booking terms and conditions
+                      </Link>{" "}
+                      and the{" "}
+                      <Link href="/terms#safety" target="_blank" className="underline">
+                        safety information
+                      </Link>{" "}
+                      for my break.
                     </span>
                   </label>
                   <FieldError message={fieldErrors.termsAccepted} />

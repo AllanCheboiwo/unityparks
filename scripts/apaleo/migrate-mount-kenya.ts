@@ -34,14 +34,17 @@
  * Inventory and rate-plan PATCHes are not throttled like rate writes.
  *
  * Usage:
- *   npm run apaleo:migrate -- --dry-run    ← print, write nothing
- *   npm run apaleo:migrate                 ← do it
+ *   npm run apaleo:migrate -- --dry-run       ← print, write nothing
+ *   npm run apaleo:migrate                    ← do it
+ *   npm run apaleo:migrate -- --services-only ← just step 5 (no rate writes,
+ *                                               so no rate-write budget spent)
  */
 
 // No imports remain, so this keeps the file a module with its own scope.
 export {};
 
 const DRY_RUN = process.argv.includes("--dry-run");
+const SERVICES_ONLY = process.argv.includes("--services-only");
 
 // ---------------------------------------------------------------------------
 // Target values. Duplicated from provision.ts on purpose: importing that
@@ -125,7 +128,16 @@ const UNIT_NAMES: Record<string, readonly string[]> = {
   EXC: ["Fig Lane 4", "Olive Lane 4", "Turaco Lane 2", "Hyrax Lane 1", "Hyrax Lane 4"],
 };
 
-const SERVICE_PATCHES: Array<{ code: string; description: string; note: string }> = [
+const SERVICE_PATCHES: Array<{
+  code: string;
+  description: string;
+  note: string;
+  /** Only set when the field actually changes; absent fields keep their
+   *  current sandbox value. */
+  name?: string;
+  price?: number;
+  mode?: "Arrival" | "Daily";
+}> = [
   {
     code: "EARLY",
     description:
@@ -137,6 +149,15 @@ const SERVICE_PATCHES: Array<{ code: string; description: string; note: string }
     description:
       "Full access to The Forest Spa per person per day: hot pools, sauna, steam room and relaxation lounge, ten minutes uphill from the square. Towels provided.",
     note: "the Unity Spa is now The Forest Spa",
+  },
+  {
+    code: "FIREWOOD",
+    name: "Firewood Pack",
+    description:
+      "Seasoned hardwood logs, kindling and firelighters for the lodge fire pit. One pack, set up ready for your first evening.",
+    price: 1_000,
+    mode: "Arrival",
+    note: "firewood only now; the braai moved to the new BBQ Pack (provision --services-only creates it)",
   },
 ];
 
@@ -489,13 +510,28 @@ async function migrateServices() {
       log("🩹", `[dry-run] would update service ${svc.code} (${svc.note}).`);
       continue;
     }
+    const ops: PatchOp[] = [
+      { op: "replace", path: "/description/en", value: svc.description },
+      { op: "replace", path: "/description/de", value: svc.description },
+    ];
+    if (svc.name) {
+      ops.push({ op: "replace", path: "/name/en", value: svc.name });
+      ops.push({ op: "replace", path: "/name/de", value: svc.name });
+    }
+    if (svc.price != null) {
+      ops.push({
+        op: "replace",
+        path: "/defaultGrossPrice",
+        value: { amount: svc.price, currency: CURRENCY },
+      });
+    }
+    if (svc.mode) {
+      ops.push({ op: "replace", path: "/availability/mode", value: svc.mode });
+    }
     const { status, data } = await api(
       "PATCH",
       `/rateplan/v1/services/${id}`,
-      [
-        { op: "replace", path: "/description/en", value: svc.description },
-        { op: "replace", path: "/description/de", value: svc.description },
-      ],
+      ops,
       "application/json-patch+json",
     );
     if (ok(status)) {
@@ -520,12 +556,17 @@ async function migrateServices() {
     await putJson(
       `/rateplan/v1/services/${id}`,
       {
-        name: cur.name,
+        name: svc.name ? { en: svc.name, de: svc.name } : cur.name,
         description: { en: svc.description, de: svc.description },
-        defaultGrossPrice: cur.defaultGrossPrice,
+        defaultGrossPrice:
+          svc.price != null
+            ? { amount: svc.price, currency: CURRENCY }
+            : cur.defaultGrossPrice,
         pricingUnit: cur.pricingUnit,
         postNextDay: cur.postNextDay,
-        availability: cur.availability,
+        availability: svc.mode
+          ? { ...(cur.availability as object), mode: svc.mode }
+          : cur.availability,
         channelCodes: cur.channelCodes,
       },
       `service ${svc.code} (${svc.note})`,
@@ -593,6 +634,13 @@ async function rewriteRates(rpId: string, floorPrice: number, label: string) {
 
 async function main() {
   console.log(`\n🏔️  Unity Parks – migrate UPNV to Mount Kenya${DRY_RUN ? " (DRY RUN)" : ""}\n`);
+
+  if (SERVICES_ONLY) {
+    log("🎁", "Service copy only…");
+    await migrateServices();
+    console.log(`\n✨  ${DRY_RUN ? "Dry run complete: nothing was written." : "Services updated."}\n`);
+    return;
+  }
 
   await preflightOversizedReservations();
   console.log();

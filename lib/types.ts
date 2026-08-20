@@ -31,6 +31,17 @@ export type ExtraSnapshotDto = {
   grossAmount: number;
 };
 
+/** CMS marketing content for one extras card. Apaleo owns the name, price
+ *  and short description; this carries the photo, the unit noun and the
+ *  "More information" copy. Served keyed by Apaleo service code. */
+export type ExtrasContentDto = {
+  /** null falls back to a plain icon tile. */
+  image: { url: string; alt: string } | null;
+  /** Singular unit noun for quantity items, e.g. "bike". Absent = one-off. */
+  noun?: string;
+  more: { heading: string; body: string }[];
+};
+
 /** One pickable physical lodge on the location step. */
 export type UnitOptionDto = {
   id: string;
@@ -45,9 +56,10 @@ export type LocationOffersDto = {
   fee: { serviceId: string; amount: number; currency: string } | null;
 };
 
-/** A lodge slot's saved location choice. */
+/** A lodge slot's saved location choice. "together" holds no unit: checkout
+ *  seats the break's lodges side by side and pays the fee per lodge. */
 export type LocationChoiceDto = {
-  choice: "unit" | "none";
+  choice: "unit" | "none" | "together";
   unitId: string | null;
   unitName: string | null;
   fee: number | null;
@@ -177,6 +189,8 @@ export type BookingConfirmation = {
     guests: GuestRowDto[];
     /** The physical lodge Apaleo assigned at checkout, when it could. */
     assignedUnitName: string | null;
+    /** What the location step asked for on this slot; null when skipped. */
+    locationChoice: "unit" | "none" | "together" | null;
     /** The unit the guest asked for on the location step, if any. */
     requestedUnitName: string | null;
     /** The location-choice fee actually charged; null when none was. */

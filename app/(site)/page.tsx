@@ -1,7 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
 import { BookingBar } from "@/components/BookingBar";
-import { MemoriesCounter } from "@/components/MemoriesCounter";
 import { StickySearch } from "./StickySearch";
 import {
   CEDAR_CARD_SUMMARY,
@@ -11,7 +10,6 @@ import {
 } from "@/content/lodges";
 import { ZONES } from "@/content/village";
 import { getHomeContent, mediaRef } from "@/server/content";
-import { countMemories, MEMORIES_GOAL } from "@/server/memories";
 
 // CMS edits must show on the next request; declared rather than relying on
 // the layout's cookie read to keep this page dynamic.
@@ -68,10 +66,7 @@ function SectionHead({
 }
 
 export default async function HomePage() {
-  const [{ home, activities, seasons, faqs }, memories] = await Promise.all([
-    getHomeContent(),
-    countMemories(),
-  ]);
+  const { home, activities, seasons, faqs } = await getHomeContent();
   const heroVideo = mediaRef(home.hero.video);
   const heroPoster = mediaRef(home.hero.poster);
   // Big Water Garden tile first, then the two stacked tiles beside it.
@@ -435,33 +430,7 @@ export default async function HomePage() {
         <p className="mt-5 text-[13px] text-[#8a877f]">{home.sections.seasonsFootnote}</p>
       </section>
 
-      {/* 7. Memories counter band. */}
-      <section className="mt-[72px] sm:mt-[120px] bg-olive">
-        <div
-          className={`${container} py-16 sm:py-[84px] grid gap-9 min-[900px]:grid-cols-[auto_1fr] min-[900px]:gap-16 items-center`}
-        >
-          <div>
-            <MemoriesCounter
-              value={memories}
-              className="font-display text-[60px] sm:text-[88px] font-semibold leading-none tracking-[-0.03em] text-white tabular-nums"
-            />
-            <p className="mt-4 text-[13px] font-bold uppercase tracking-[0.14em] text-[#c9dbb2]">
-              {home.memories.caption}
-            </p>
-          </div>
-          <div className="min-[900px]:border-l min-[900px]:border-white/30 min-[900px]:pl-16">
-            <h2 className="font-display text-[28px] sm:text-[34px] font-bold leading-[1.2] text-white max-w-[22ch]">
-              Counting our way to a billion
-            </h2>
-            <p className="mt-4 text-[15px] leading-[1.7] text-white/80 max-w-[54ch]">
-              {home.memories.explainer}{" "}
-              {(MEMORIES_GOAL - memories).toLocaleString("en-GB")} still to go.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* 8. FAQ: sticky intro left, native details accordion right. */}
+      {/* 7. FAQ: sticky intro left, native details accordion right. */}
       <section id="faq" className={`${container} pt-[72px] sm:pt-[120px]`}>
         <div className="grid gap-10 min-[900px]:grid-cols-[1fr_1.5fr] min-[900px]:gap-20 items-start">
           <div className="min-[900px]:sticky min-[900px]:top-10">
@@ -501,7 +470,7 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* 9. Closing CTA card. */}
+      {/* 8. Closing CTA card. */}
       <section className={`${container} mt-[72px] sm:mt-[120px]`}>
         <div className="relative rounded-xl overflow-hidden min-h-[340px] flex items-center">
           <Image

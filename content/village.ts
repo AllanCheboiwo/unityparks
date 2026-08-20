@@ -28,21 +28,22 @@ export const ZONES: Zone[] = [
     id: "riverside",
     name: "Riverside",
     character:
-      "Low along the Burguret: the flattest lanes, pushchair-easy, the sound of water, closest to the square.",
+      "About five minutes' walk from the Water Garden, low along the Burguret: the flattest lanes, pushchair-easy, the sound of water, closest to the square.",
     suits: "Families with small children",
     live: false,
   },
   {
     id: "the-glades",
     name: "The Glades",
-    character: "Central, among the trees, three minutes from the Water Garden.",
+    character: "About three minutes' walk from the Water Garden, central, among the trees.",
     suits: "Short breaks and convenience",
     live: true,
   },
   {
     id: "cedar-rise",
     name: "Cedar Rise",
-    character: "Mid slope, facing east: the first real mountain views over the canopy.",
+    character:
+      "About eight minutes' walk from the Water Garden on the mid slope, facing east: the first real mountain views over the canopy.",
     suits: "The upgrade sweet spot",
     live: false,
   },
@@ -50,7 +51,7 @@ export const ZONES: Zone[] = [
     id: "sunrise-ridge",
     name: "Sunrise Ridge",
     character:
-      "Top of the village, on the forest edge: the biggest plots, the widest tree screens, tubs facing the peaks.",
+      "About twelve minutes' walk from the Water Garden at the top of the village, on the forest edge: the biggest plots, the widest tree screens, tubs facing the peaks.",
     suits: "Celebrations, escapes and long stays",
     live: true,
   },

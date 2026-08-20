@@ -16,7 +16,10 @@ export async function GET(
 ) {
   const { code } = await params;
   const normalized = normalizeReferralCode(decodeURIComponent(code));
-  const res = NextResponse.redirect(new URL("/", req.url));
+  // Behind Railway's proxy req.url carries the container-local host
+  // (localhost:8080), so guest-facing redirects are built from APP_BASE_URL.
+  const base = process.env.APP_BASE_URL ?? req.url;
+  const res = NextResponse.redirect(new URL("/", base));
   // Garbage codes get no cookie but still land somewhere sensible. No DB
   // check here: validation happens at the details step and again at
   // checkout, where refusal has a face.

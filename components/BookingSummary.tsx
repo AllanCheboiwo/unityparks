@@ -6,8 +6,12 @@ import { LODGES } from "@/content/lodges";
 import { VILLAGE_NAME } from "@/content/village";
 import type { ExtraSnapshotDto, SessionSummary } from "@/lib/types";
 
-/** A lodge's location line as the rail shows it: picked unit plus fee. */
-export type LocationLine = { unitName: string; fee: number } | null;
+/** A lodge's location line as the rail shows it: the picked unit plus fee,
+ *  or the placed-together fee (no unit until checkout seats the group). */
+export type LocationLine =
+  | { kind: "unit"; unitName: string; fee: number }
+  | { kind: "together"; fee: number }
+  | null;
 
 /**
  * The persistent right-rail summary shown through the whole checkout, Center
@@ -46,9 +50,13 @@ export function BookingSummary({
     if (locationOverrideBySlot !== undefined) {
       return locationOverrideBySlot[l.slot] ?? null;
     }
-    return l.location?.choice === "unit" && l.location.unitName && l.location.fee != null
-      ? { unitName: l.location.unitName, fee: l.location.fee }
-      : null;
+    if (l.location?.choice === "unit" && l.location.unitName && l.location.fee != null) {
+      return { kind: "unit", unitName: l.location.unitName, fee: l.location.fee };
+    }
+    if (l.location?.choice === "together" && l.location.fee != null) {
+      return { kind: "together", fee: l.location.fee };
+    }
+    return null;
   };
 
   const grossTotal = lodges.reduce((sum, l) => {
@@ -115,7 +123,11 @@ export function BookingSummary({
                   </div>
                   {location && (
                     <div className={row}>
-                      <span className={label}>Lodge choice: {location.unitName}</span>
+                      <span className={label}>
+                        {location.kind === "unit"
+                          ? `Lodge choice: ${location.unitName}`
+                          : "Lodges placed together"}
+                      </span>
                       <span className={value}>{formatKes(location.fee)}</span>
                     </div>
                   )}

@@ -53,6 +53,11 @@ const MEDIA = [
     creditUrl: "https://www.pexels.com/photo/6667430/",
   },
   {
+    file: "lodge-fst.jpg",
+    alt: "A Cedar Lodge 3 bedroom and its deck",
+    creditUrl: "https://www.pexels.com/photo/35264654/",
+  },
+  {
     file: "season-green.jpg",
     alt: "The forest turning green in the short rains",
     creditUrl: "https://www.pexels.com/photo/25491108/",
@@ -83,8 +88,10 @@ const MEDIA = [
     creditUrl: "https://www.pexels.com/photo/34408249/",
   },
   {
+    // Doubles as the GROCERY extras stand-in until a groceries shot exists,
+    // so the alt describes the pixels, not either slot.
     file: "discover-gift.jpg",
-    alt: "Gift a break",
+    alt: "A wrapped gift",
     creditUrl: "https://www.pexels.com/photo/6332412/",
   },
   {
@@ -327,6 +334,116 @@ const CAMPAIGNS = [
   },
 ];
 
+// Marketing content for the extras cards, keyed by Apaleo service code
+// (the upsert key). Apaleo owns the name, price and short offer description;
+// this owns the photo, the unit noun and the "More information" copy. BBQ
+// ships without a photo on purpose: the card falls back to an icon tile
+// until a braai shot exists.
+const EXTRAS: Array<{
+  serviceCode: string;
+  photo: string | null;
+  noun?: string;
+  more: { heading: string; body: string }[];
+  displayOrder: number;
+}> = [
+  {
+    serviceCode: "EARLY",
+    photo: "lodge-fst.jpg",
+    more: [
+      {
+        heading: "Start your break sooner",
+        body: "Get into your lodge from noon instead of the standard 2 pm check-in, so the whole of the first day is yours.",
+      },
+      {
+        heading: "Good to know",
+        body: "One early check-in covers your whole lodge, however many of you are staying. Availability is limited, so add it now to be sure of it.",
+      },
+    ],
+    displayOrder: 1,
+  },
+  {
+    serviceCode: "GROCERY",
+    photo: "discover-gift.jpg",
+    more: [
+      {
+        heading: "Ready and waiting",
+        body: "A curated pack of fresh essentials: bread, eggs, milk, fruit, coffee and the basics, stocked in your lodge before you arrive.",
+      },
+      {
+        heading: "Good to know",
+        body: "One pack is delivered to your lodge for your arrival. Some items may contain allergens; ask us if you have any questions.",
+      },
+    ],
+    displayOrder: 2,
+  },
+  {
+    serviceCode: "FIREWOOD",
+    photo: "season-festive.jpg",
+    more: [
+      {
+        heading: "For evenings by the fire",
+        body: "Seasoned hardwood logs, kindling and firelighters for the lodge fire pit. Best of all in the cool season, June to September, when the nights ask for a fire.",
+      },
+      {
+        heading: "Good to know",
+        body: "One pack is set up at your lodge ready for your first evening. Everything you need to light up is included.",
+      },
+    ],
+    displayOrder: 3,
+  },
+  {
+    serviceCode: "BBQ",
+    photo: null,
+    more: [
+      {
+        heading: "For an evening braai",
+        body: "Charcoal, firelighters and a full meat selection, ready for the built-in braai on your deck. Cook while the light goes and eat under the trees.",
+      },
+      {
+        heading: "Good to know",
+        body: "One pack is delivered to your lodge for your arrival. Some items may contain allergens; ask us if you have any questions.",
+      },
+    ],
+    displayOrder: 4,
+  },
+  {
+    serviceCode: "CYCLE",
+    photo: "activity-cycle.jpg",
+    noun: "bike",
+    more: [
+      {
+        heading: "Adult cycles",
+        body: "Quality mountain bikes with seven gears, front and rear lights, a cushioned saddle and a stand. A helmet and lock are included free with every hire.",
+      },
+      {
+        heading: "Getting the right fit",
+        body: "Our Cycle Centre team sizes every rider on arrival, so you leave on a bike that fits. Trailers, tag-alongs and child seats are available at the centre too.",
+      },
+      {
+        heading: "Good to know",
+        body: "Cycle hire runs from your arrival day through to departure. Over 15 km of car-free forest trails start right outside your lodge, and they ride best in the dry months from December to February.",
+      },
+    ],
+    displayOrder: 5,
+  },
+  {
+    serviceCode: "SPA",
+    photo: "activity-spa.jpg",
+    noun: "pass",
+    more: [
+      {
+        heading: "Your day at the spa",
+        body: "A full day pass to The Forest Spa: sauna, steam room, hydrotherapy pool and a quiet relaxation lounge. Towels and robes are provided. Sweetest on a misty cool-season morning, June to September.",
+      },
+      {
+        heading: "Good to know",
+        body: "One pass covers one guest for the day. Guests must be 16 or over to use the thermal spa. Book a treatment on arrival to make a morning of it.",
+      },
+    ],
+    displayOrder: 6,
+  },
+];
+
 // The teal banner is the campaign slot: rotate it for every break or
 // campaign, pointing at /breaks/<slug> or /#search when nothing is running.
 const SITE_SETTINGS = {
@@ -461,6 +578,21 @@ async function main() {
   }
   console.log(`campaigns: ${CAMPAIGNS.length} in place`);
 
+  for (const extra of EXTRAS) {
+    const data = { ...extra, photo: extra.photo ? mediaIds[extra.photo] : null };
+    const existing = await payload.find({
+      collection: "extras",
+      where: { serviceCode: { equals: extra.serviceCode } },
+      limit: 1,
+    });
+    if (existing.docs[0]) {
+      await payload.update({ collection: "extras", id: existing.docs[0].id, data });
+    } else {
+      await payload.create({ collection: "extras", data });
+    }
+  }
+  console.log(`extras: ${EXTRAS.length} in place`);
+
   await payload.updateGlobal({ slug: "site-settings", data: SITE_SETTINGS });
   console.log("site-settings global in place");
 
@@ -507,11 +639,6 @@ async function main() {
         copy: card.copy,
         photo: mediaIds[card.photo],
       })),
-      memories: {
-        caption: "Memories made so far",
-        explainer:
-          "One memory is one guest, one stay on the mountain. Every break in the village adds to the count.",
-      },
     },
   });
   console.log("home-page global in place");

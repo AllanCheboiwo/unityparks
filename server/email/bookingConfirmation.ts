@@ -67,9 +67,6 @@ export async function sendBookingConfirmation(recordId: string): Promise<void> {
       return `${tier}${unit ? ` (${unit})` : ""} · ${party} ${party === 1 ? "guest" : "guests"}`;
     });
 
-    // One memory per guest per stay, regardless of how many nights it runs.
-    const memories = lodges.reduce((sum, l) => sum + l.adults + parseChildrenAges(l).length, 0);
-
     const greeting = session.guestFirstName ? `Hello ${session.guestFirstName},` : "Hello,";
     const reference = record.apaleoBookingId;
     const total = formatMoney(record.totalGrossAmount, record.currency);
@@ -102,8 +99,6 @@ export async function sendBookingConfirmation(recordId: string): Promise<void> {
       ``,
       `Manage your break (change dates, add guest names) at ${manageUrl}`,
       `using your booking reference and this email address.`,
-      ``,
-      `That is ${memories} new ${memories === 1 ? "memory" : "memories"} on the way. Thank you for helping us reach a billion.`,
       ``,
       `Unity Parks · ${VILLAGE_LOCALE_LINE}`,
       `Demo environment: no real payments were taken.`,
@@ -150,14 +145,10 @@ export async function sendBookingConfirmation(recordId: string): Promise<void> {
         Need to change dates or add guest names? Manage your break with your
         booking reference and this email address.
       </p>
-      <p style="margin:0 0 24px;">
+      <p style="margin:0;">
         <a href="${manageUrl}" style="background:#af6408;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:10px 22px;border-radius:6px;display:inline-block;">
           Manage my booking
         </a>
-      </p>
-      <p style="margin:0;color:#647e1b;font-size:14px;font-weight:600;">
-        That is ${memories} new ${memories === 1 ? "memory" : "memories"} on the way.
-        Thank you for helping us reach a billion.
       </p>
     </div>
     <div style="background:#333333;color:#bbbbbb;padding:14px 28px;font-size:12px;">

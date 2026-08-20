@@ -69,8 +69,15 @@ export function ConfirmationClient({ bookingId }: { bookingId: string }) {
   );
   const settled = booking.folioBalance === 0;
   const multi = booking.lodges.length > 1;
-  // The memories moment: every guest, one memory per stay in the making.
-  const memories = booking.lodges.reduce((sum, l) => sum + l.bands.length, 0);
+  // The placed-together outcome is one story for the whole group: either the
+  // lodges are neighbours and the fee stood, or the fee left every slot.
+  const togetherLodges = booking.lodges.filter((l) => l.locationChoice === "together");
+  const togetherDropped = togetherLodges.some((l) => l.locationFeeDropped);
+  const togetherNames = togetherLodges
+    .map((l) => l.assignedUnitName)
+    .filter((n): n is string => Boolean(n));
+  const togetherKept =
+    !togetherDropped && togetherNames.length === togetherLodges.length && togetherNames.length > 1;
 
   return (
     <div className="mx-auto max-w-xl px-5 py-10">
@@ -134,15 +141,6 @@ export function ConfirmationClient({ bookingId }: { bookingId: string }) {
             </Link>
           </div>
         )}
-
-        <div className="mt-6 rounded-lg border border-line contour-bg px-6 py-5">
-          <p className="font-display text-lg font-bold text-olive">
-            That is {memories} new {memories === 1 ? "memory" : "memories"} on the way.
-          </p>
-          <p className="mt-1 text-sm text-foreground">
-            Thank you for helping us reach a billion.
-          </p>
-        </div>
       </div>
 
       <div className="mt-8 divide-y divide-line rounded-lg border border-line bg-white">
@@ -185,7 +183,7 @@ export function ConfirmationClient({ bookingId }: { bookingId: string }) {
                     <span>{formatKes(l.locationFee)}</span>
                   </div>
                 )}
-                {l.locationFeeDropped && (
+                {l.locationFeeDropped && l.locationChoice !== "together" && (
                   <p className="mt-2 rounded-md border border-bronze bg-mist px-3 py-2 text-xs text-ink">
                     {l.requestedUnitName ?? "Your chosen lodge"} was booked by
                     another guest moments before you finished checking out.
@@ -207,6 +205,23 @@ export function ConfirmationClient({ bookingId }: { bookingId: string }) {
               </div>
             );
           })}
+          {togetherKept && (
+            <p className="mt-3 text-sm text-foreground">
+              Your lodges are neighbours:{" "}
+              <span className="font-semibold text-navy">
+                {togetherNames.slice(0, -1).join(", ")} and{" "}
+                {togetherNames[togetherNames.length - 1]}
+              </span>
+              .
+            </p>
+          )}
+          {togetherDropped && (
+            <p className="mt-3 rounded-md border border-bronze bg-mist px-3 py-2 text-xs text-ink">
+              We couldn&apos;t place your lodges side by side this time, so the
+              placing-together fee was not charged. We&apos;ve still chosen
+              lovely lodges for you.
+            </p>
+          )}
           {/* Without these rows the itemised lodge lines sum to MORE than
               the total below: the discount lives on the folio, not in the
               per-lodge snapshots. */}

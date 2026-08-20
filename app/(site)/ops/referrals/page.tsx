@@ -35,6 +35,9 @@ export default async function ReferralOpsPage() {
       <div className="flex items-center justify-between">
         <h1 className="font-display text-3xl font-bold text-ink">Referral operations</h1>
         <div className="flex gap-2">
+          <Link href="/ops/memories" className="btn-outline text-sm">
+            Memories
+          </Link>
           <Link href="/ops/reminders" className="btn-outline text-sm">
             Reminders
           </Link>

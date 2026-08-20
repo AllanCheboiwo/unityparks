@@ -5,8 +5,12 @@ import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { apiFetch, isExpired } from "@/lib/api";
 import { formatKes } from "@/lib/format";
-import type { ExtraOfferDto, ExtraSnapshotDto, SessionSummary } from "@/lib/types";
-import { EXTRAS } from "@/content/extras";
+import type {
+  ExtraOfferDto,
+  ExtraSnapshotDto,
+  ExtrasContentDto,
+  SessionSummary,
+} from "@/lib/types";
 import { Stepper } from "@/components/Stepper";
 import { BookingSummary } from "@/components/BookingSummary";
 import { ExpiredNotice } from "@/components/ExpiredNotice";
@@ -34,7 +38,7 @@ function unitPrice(extra: ExtraOfferDto): number {
 }
 
 /** A loosely keyword-matched icon per extra, the fallback when a card has no
- *  photo. All current services carry a photo, so this rarely shows. */
+ *  photo in the CMS. */
 function ExtraIcon({ name }: { name: string }) {
   const n = name.toLowerCase();
   const shared = {
@@ -78,7 +82,11 @@ function ExtraIcon({ name }: { name: string }) {
   );
 }
 
-export function ExtrasClient() {
+export function ExtrasClient({
+  extrasContent,
+}: {
+  extrasContent: Record<string, ExtrasContentDto>;
+}) {
   const router = useRouter();
   const sessionId = useSearchParams().get("session");
   const [session, setSession] = useState<SessionSummary | null>(null);
@@ -264,7 +272,7 @@ export function ExtrasClient() {
 
           <div className="mt-6 grid gap-5">
             {activeOffers.map((extra) => {
-              const content = EXTRAS[extra.code];
+              const content = extrasContent[extra.code];
               const quantity = isQuantity(extra);
               const qty = activeQtys[extra.serviceId] ?? 0;
               const added = qty > 0;
@@ -284,8 +292,8 @@ export function ExtrasClient() {
                     <div className="relative aspect-[16/10] sm:aspect-auto sm:w-52 shrink-0">
                       {content?.image ? (
                         <Image
-                          src={content.image}
-                          alt={extra.name}
+                          src={content.image.url}
+                          alt={content.image.alt}
                           fill
                           sizes="(max-width: 640px) 100vw, 208px"
                           className="object-cover"

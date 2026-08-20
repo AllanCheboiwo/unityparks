@@ -73,6 +73,7 @@ export interface Config {
     seasons: Season;
     faqs: Faq;
     campaigns: Campaign;
+    extras: Extra;
     'payload-kv': PayloadKv;
     'payload-locked-documents': PayloadLockedDocument;
     'payload-preferences': PayloadPreference;
@@ -86,6 +87,7 @@ export interface Config {
     seasons: SeasonsSelect<false> | SeasonsSelect<true>;
     faqs: FaqsSelect<false> | FaqsSelect<true>;
     campaigns: CampaignsSelect<false> | CampaignsSelect<true>;
+    extras: ExtrasSelect<false> | ExtrasSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
     'payload-preferences': PayloadPreferencesSelect<false> | PayloadPreferencesSelect<true>;
@@ -290,6 +292,35 @@ export interface Campaign {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "extras".
+ */
+export interface Extra {
+  id: number;
+  /**
+   * Apaleo service code this content belongs to, e.g. CYCLE. Do not change once set.
+   */
+  serviceCode: string;
+  /**
+   * Card photo. Leave empty to fall back to a plain icon tile.
+   */
+  photo?: (number | null) | Media;
+  /**
+   * Singular unit noun for quantity items, e.g. bike. Leave empty for one-off packs.
+   */
+  noun?: string | null;
+  more?:
+    | {
+        heading: string;
+        body: string;
+        id?: string | null;
+      }[]
+    | null;
+  displayOrder: number;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv".
  */
 export interface PayloadKv {
@@ -335,6 +366,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'campaigns';
         value: number | Campaign;
+      } | null)
+    | ({
+        relationTo: 'extras';
+        value: number | Extra;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -494,6 +529,25 @@ export interface CampaignsSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "extras_select".
+ */
+export interface ExtrasSelect<T extends boolean = true> {
+  serviceCode?: T;
+  photo?: T;
+  noun?: T;
+  more?:
+    | T
+    | {
+        heading?: T;
+        body?: T;
+        id?: T;
+      };
+  displayOrder?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv_select".
  */
 export interface PayloadKvSelect<T extends boolean = true> {
@@ -588,13 +642,6 @@ export interface HomePage {
         id?: string | null;
       }[]
     | null;
-  memories: {
-    caption: string;
-    /**
-     * The countdown sentence (Just N to go) is appended in code.
-     */
-    explainer: string;
-  };
   updatedAt?: string | null;
   createdAt?: string | null;
 }
@@ -666,12 +713,6 @@ export interface HomePageSelect<T extends boolean = true> {
         copy?: T;
         photo?: T;
         id?: T;
-      };
-  memories?:
-    | T
-    | {
-        caption?: T;
-        explainer?: T;
       };
   updatedAt?: T;
   createdAt?: T;

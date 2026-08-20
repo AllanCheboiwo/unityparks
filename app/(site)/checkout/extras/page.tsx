@@ -1,10 +1,12 @@
 import { Suspense } from "react";
+import { getExtrasContent } from "@/server/content";
 import { ExtrasClient } from "./ExtrasClient";
 
-export default function ExtrasPage() {
+export default async function ExtrasPage() {
+  const extrasContent = await getExtrasContent();
   return (
     <Suspense>
-      <ExtrasClient />
+      <ExtrasClient extrasContent={extrasContent} />
     </Suspense>
   );
 }

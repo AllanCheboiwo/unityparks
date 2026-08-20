@@ -4,10 +4,10 @@ import { useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { isQuantityExtra } from "@/lib/extras";
 import { formatKes } from "@/lib/format";
-import { EXTRAS } from "@/content/extras";
 import type {
   AddExtrasResultDto,
   BookingConfirmation,
+  ExtrasContentDto,
   ManageExtraOfferDto,
   ManageExtrasDto,
 } from "@/lib/types";
@@ -24,11 +24,13 @@ export function AddExtrasCard({
   bookingId,
   proofQuery,
   booking,
+  extrasContent,
   onChanged,
 }: {
   bookingId: string;
   proofQuery: string;
   booking: BookingConfirmation;
+  extrasContent: Record<string, ExtrasContentDto>;
   onChanged: () => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
@@ -203,7 +205,7 @@ export function AddExtrasCard({
                 {lodge.extras.map((extra) => {
                   const key = pickKey(lodge.slot, extra.serviceId);
                   const picked = picks[key] ?? 0;
-                  const noun = EXTRAS[extra.code]?.noun ?? "item";
+                  const noun = extrasContent[extra.code]?.noun ?? "item";
                   const quantity = isQuantityExtra(extra);
                   const soldOutOfAdds = extra.maxAdd === 0;
                   return (

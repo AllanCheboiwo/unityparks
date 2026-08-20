@@ -12,6 +12,7 @@ export function RegisterClient() {
     lastName: "",
     email: "",
     phone: "",
+    dateOfBirth: "",
     password: "",
   });
   const [error, setError] = useState<string | null>(null);
@@ -93,6 +94,20 @@ export function RegisterClient() {
               className={inputClass}
               placeholder="+254 7xx xxx xxx"
             />
+          </label>
+
+          <label>
+            <span className="text-sm font-semibold text-foreground">Date of birth</span>
+            <input
+              type="date"
+              required
+              value={form.dateOfBirth}
+              onChange={update("dateOfBirth")}
+              className={inputClass}
+            />
+            <span className="mt-1 block text-xs text-foreground/60">
+              You must be 18 or over to hold a Unity Parks account.
+            </span>
           </label>
 
           <label>

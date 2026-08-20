@@ -87,21 +87,5 @@ export const HomePage: GlobalConfig = {
         { name: "photo", type: "upload", relationTo: "media", required: true },
       ],
     },
-    {
-      name: "memories",
-      type: "group",
-      fields: [
-        { name: "caption", type: "text", required: true },
-        {
-          name: "explainer",
-          type: "text",
-          required: true,
-          admin: {
-            description:
-              "The countdown sentence (Just N to go) is appended in code.",
-          },
-        },
-      ],
-    },
   ],
 };

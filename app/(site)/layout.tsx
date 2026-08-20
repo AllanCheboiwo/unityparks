@@ -75,7 +75,7 @@ export default async function RootLayout({
         <main className="flex-1">{children}</main>
 
         {/* Dark footer: newsletter strip, brand and link columns, then the
-            bottom bar with the memories line. */}
+            bottom bar. */}
         <footer className="mt-16 bg-footer text-white">
           <div className="mx-auto max-w-[1240px] px-5 sm:px-10">
             <div className="py-9 border-b border-white/15 flex flex-col sm:flex-row sm:items-center gap-5 justify-between">
@@ -122,7 +122,7 @@ export default async function RootLayout({
               <div>
                 <p className="font-display text-base font-semibold mb-4">Legal</p>
                 <ul className="space-y-2.5 text-sm">
-                  <li><span className="text-white/60">Terms and conditions</span></li>
+                  <li><Link className="text-white/60 hover:text-moss" href="/terms">Terms and conditions</Link></li>
                   <li><span className="text-white/60">Privacy policy</span></li>
                   <li><span className="text-white/60">Cookies</span></li>
                 </ul>
@@ -136,7 +136,6 @@ export default async function RootLayout({
                 © {new Date().getFullYear()} Unity Parks Ltd · demo environment,
                 no real payments.
               </span>
-              <span>Counting our way to a billion memories.</span>
             </div>
           </div>
         </footer>

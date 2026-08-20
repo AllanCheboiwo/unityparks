@@ -95,6 +95,7 @@ export async function GET(
         bands: partyBands(l),
         guests: guestRows.filter((r) => r.slot === l.slot),
         assignedUnitName: reservation?.assignedUnitName ?? null,
+        locationChoice: l.locationChoice,
         requestedUnitName: l.locationUnitName,
         // Only a fee that actually survived to the folio is shown as paid.
         locationFee: feeDropped ? null : l.locationFee,

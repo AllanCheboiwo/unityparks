@@ -8,7 +8,7 @@
  *
  *   2 grades x 2 sizes = 4 lodge types  ×  5 units each  =  20 lodges
  *   1 flexible KES rate plan per type
- *   6 extras (services) on the enhancements page
+ *   7 extras (services) on the enhancements page
  *   Friday + Monday turnover restrictions, 13-month rolling window
  *
  * Usage (from the frontend repo root; credentials are the CLIENT_ID and
@@ -150,13 +150,25 @@ const SERVICES = [
     serviceType: "FoodAndBeverages" as const,
   },
   {
+    // Fire and braai sell separately: the firewood pack is logs only, the
+    // BBQ pack below carries the charcoal and the meat.
     code: "FIREWOOD",
-    name: "Firewood & BBQ Pack",
+    name: "Firewood Pack",
     description:
-      "Seasoned hardwood logs, charcoal, firelighters, and a full meat selection for an evening braai on the deck.",
-    price: 2_200,
+      "Seasoned hardwood logs, kindling and firelighters for the lodge fire pit. One pack, set up ready for your first evening.",
+    price: 1_000,
     pricingUnit: "Room" as const,
-    mode: "Daily" as const,
+    mode: "Arrival" as const,
+    serviceType: "FoodAndBeverages" as const,
+  },
+  {
+    code: "BBQ",
+    name: "BBQ Pack",
+    description:
+      "Charcoal, firelighters and a full meat selection for an evening braai on the deck.",
+    price: 1_000,
+    pricingUnit: "Room" as const,
+    mode: "Arrival" as const,
     serviceType: "FoodAndBeverages" as const,
   },
   {
@@ -828,8 +840,8 @@ async function main() {
 ║  Signature Lodge 3 bedroom – KES 56,000+  (sleeps 6)     ║
 ║                                                           ║
 ║  Units      : ${String(UNIT_GROUPS.length * UNITS_PER_GROUP).padEnd(42)} ║
-║  Extras     : Early check-in, Grocery pack, Firewood/BBQ ║
-║               Cycle hire, Spa day pass, Location choice   ║
+║  Extras     : Early check-in, Grocery pack, Firewood     ║
+║               BBQ pack, Cycle hire, Spa pass, Location    ║
 ║  Calendar   : Fri + Mon only, 13 months ahead            ║
 ╠═══════════════════════════════════════════════════════════╣
 ║  Next: verify in Swagger                                  ║

@@ -7,6 +7,8 @@ import { hashPassword } from "@/server/auth/password";
 import { normalizeEmail } from "@/server/auth/normalize";
 import { createAuthSession } from "@/server/auth/session";
 import { claimByEmail } from "@/server/auth/claim";
+import { sendWelcomeEmail } from "@/server/email/welcome";
+import { adultAtArrival } from "@/lib/guestRules";
 
 const RegisterBody = z.object({
   firstName: z.string().min(1),
@@ -14,6 +16,7 @@ const RegisterBody = z.object({
   email: z.string().trim().email(),
   password: z.string().min(8),
   phone: z.string().min(7).optional(),
+  dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 });
 
 /** Creates the account, adopts any past guest bookings with this email,
@@ -22,6 +25,12 @@ export async function POST(req: NextRequest) {
   return handleRoute(async () => {
     const parsed = RegisterBody.safeParse(await req.json());
     if (!parsed.success) return jsonError(400, "Please check the registration form.");
+    // Same rule as the checkout, anchored on today: an account holder must
+    // be an adult now, whatever break they go on to book.
+    const todayIso = new Date().toISOString().slice(0, 10);
+    if (!adultAtArrival(parsed.data.dateOfBirth, todayIso)) {
+      throw new PublicError(400, "You must be 18 or over to create an account.");
+    }
     const email = normalizeEmail(parsed.data.email);
 
     let user;
@@ -33,6 +42,7 @@ export async function POST(req: NextRequest) {
           firstName: parsed.data.firstName.trim(),
           lastName: parsed.data.lastName.trim(),
           phone: parsed.data.phone ?? null,
+          dateOfBirth: parsed.data.dateOfBirth,
         },
       });
     } catch (err) {
@@ -48,6 +58,10 @@ export async function POST(req: NextRequest) {
 
     await claimByEmail(user.id, email);
     await createAuthSession(user.id);
+    // Fire-and-forget: the account exists whether or not the mail lands.
+    void sendWelcomeEmail({ to: user.email, firstName: user.firstName }).catch(
+      (err) => console.error(`[email] welcome to ${email} failed:`, err),
+    );
     return NextResponse.json({ ok: true, firstName: user.firstName, email: user.email });
   });
 }

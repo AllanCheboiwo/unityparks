@@ -7,7 +7,7 @@ import { apiFetch } from "@/lib/api";
 import { BAND_LABELS, formatDate, formatKes, nightsLabel } from "@/lib/format";
 import { isValidPartPayment, MIN_PART_PAYMENT } from "@/lib/paymentPlan";
 import { LODGES } from "@/content/lodges";
-import type { BookingConfirmation } from "@/lib/types";
+import type { BookingConfirmation, ExtrasContentDto } from "@/lib/types";
 import { TurnoverCalendar } from "@/components/TurnoverCalendar";
 import { AddExtrasCard } from "./AddExtrasCard";
 
@@ -61,7 +61,13 @@ type GuestRow = {
 const guestInputClass =
   "rounded-md border border-[#cccccc] bg-white px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-navy";
 
-export function ManageClient({ bookingId }: { bookingId: string }) {
+export function ManageClient({
+  bookingId,
+  extrasContent,
+}: {
+  bookingId: string;
+  extrasContent: Record<string, ExtrasContentDto>;
+}) {
   // Proof of access rides the URL: ?session= fresh from checkout, ?email=
   // from the find-my-booking challenge. Signed-in owners need neither.
   const searchParams = useSearchParams();
@@ -433,6 +439,7 @@ export function ManageClient({ bookingId }: { bookingId: string }) {
             bookingId={bookingId}
             proofQuery={proofQuery}
             booking={booking}
+            extrasContent={extrasContent}
             onChanged={load}
           />
         )}

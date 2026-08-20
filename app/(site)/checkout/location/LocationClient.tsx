@@ -8,7 +8,7 @@ import { LODGES } from "@/content/lodges";
 import { LANES, ZONES, laneOf, type ZoneId } from "@/content/village";
 import type { LocationOffersDto, SessionSummary } from "@/lib/types";
 import { Stepper } from "@/components/Stepper";
-import { BookingSummary } from "@/components/BookingSummary";
+import { BookingSummary, type LocationLine } from "@/components/BookingSummary";
 import { ExpiredNotice } from "@/components/ExpiredNotice";
 import { VillageMap } from "@/components/VillageMap";
 import { CheckoutBreadcrumb } from "../Breadcrumb";
@@ -24,10 +24,17 @@ import { AlertIcon, TickIcon } from "../icons";
  * choice. It is saved per lodge on the session; the actual unit assignment
  * happens at checkout, where a lost race falls back to a comparable lodge
  * with the fee removed.
+ *
+ * Multi-lodge breaks choose a placement mode first: exact picks per lodge
+ * (the flow above), the paid "place our lodges together" option, or no
+ * preference, the latter two applied to every lodge at once.
  */
 
 /** One slot's in-progress choice. unitId stays null until picked. */
 type Choice = { kind: "unit"; unitId: string | null } | { kind: "none" } | null;
+
+/** How a multi-lodge break places itself. Single-lodge breaks are always "exact". */
+type Mode = "exact" | "together" | "none";
 
 export function LocationClient() {
   const router = useRouter();
@@ -40,6 +47,7 @@ export function LocationClient() {
   const [staleBySlot, setStaleBySlot] = useState<Record<number, string>>({});
   // The zone filter per slot: pure navigation, never charged, never saved.
   const [zoneBySlot, setZoneBySlot] = useState<Record<number, ZoneId | null>>({});
+  const [mode, setMode] = useState<Mode>("exact");
   const [activeSlot, setActiveSlot] = useState(0);
   const [expired, setExpired] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -72,6 +80,9 @@ export function LocationClient() {
         const saved = lodge.location;
         if (!saved) {
           choices[lodge.slot] = null;
+        } else if (saved.choice === "together") {
+          // The mode carries "together" (restored below); no per-slot pick.
+          choices[lodge.slot] = null;
         } else if (saved.choice !== "unit") {
           choices[lodge.slot] = { kind: "none" };
         } else {
@@ -96,6 +107,15 @@ export function LocationClient() {
             : undefined;
         zones[l.slot] = unit ? (laneOf(unit.name)?.zone ?? null) : null;
       }
+      // Restore the placement mode: any exact pick wins, a break saved as
+      // all-together or all-none reopens on that card, anything else (mixed,
+      // partial, nothing saved) starts on exact with nothing chosen.
+      if (summary.lodges.length > 1) {
+        const kinds = summary.lodges.map((l) => l.location?.choice ?? null);
+        if (kinds.every((k) => k === "together")) setMode("together");
+        else if (kinds.every((k) => k === "none")) setMode("none");
+        else setMode("exact");
+      }
       setOffersBySlot(offers);
       setChoiceBySlot(choices);
       setStaleBySlot(stale);
@@ -118,6 +138,13 @@ export function LocationClient() {
   }
 
   const multi = session.lodges.length > 1;
+  // Together and no-preference speak for every lodge, so the per-lodge
+  // picker only renders in exact mode (single-lodge breaks have no modes).
+  const pickerShown = !multi || mode === "exact";
+  // The per-lodge fee is the same LOCATION service everywhere; the together
+  // card quotes the first slot that has one priced.
+  const togetherFee =
+    session.lodges.map((l) => offersBySlot[l.slot]?.fee).find((f) => f != null) ?? null;
   const activeOffers = offersBySlot[activeSlot];
   const activeChoice = choiceBySlot[activeSlot] ?? null;
   const activeTier = session.lodges.find((l) => l.slot === activeSlot)?.lodge;
@@ -166,21 +193,31 @@ export function LocationClient() {
     setChoiceBySlot((prev) => ({ ...prev, [slot]: choice }));
   }
 
-  /** Every lodge must have a decided choice before continuing. */
-  const allDecided = session.lodges.every((l) => {
-    const c = choiceBySlot[l.slot];
-    return c && (c.kind === "none" || c.unitId);
-  });
+  /** Every lodge must have a decided choice before continuing; the together
+   *  and no-preference modes decide for the whole break at once. */
+  const allDecided =
+    (multi && mode !== "exact") ||
+    session.lodges.every((l) => {
+      const c = choiceBySlot[l.slot];
+      return c && (c.kind === "none" || c.unitId);
+    });
 
   // Live fee preview for the right rail while choices are still unsaved.
-  const locationOverrideBySlot: Record<number, { unitName: string; fee: number } | null> = {};
+  const locationOverrideBySlot: Record<number, LocationLine> = {};
   for (const l of session.lodges) {
-    const c = choiceBySlot[l.slot];
     const offers = offersBySlot[l.slot];
+    if (multi && mode !== "exact") {
+      locationOverrideBySlot[l.slot] =
+        mode === "together" && offers?.fee
+          ? { kind: "together", fee: offers.fee.amount }
+          : null;
+      continue;
+    }
+    const c = choiceBySlot[l.slot];
     if (c?.kind === "unit" && c.unitId && offers?.fee) {
       const unit = offers.units.find((u) => u.id === c.unitId);
       locationOverrideBySlot[l.slot] = unit
-        ? { unitName: unit.name, fee: offers.fee.amount }
+        ? { kind: "unit", unitName: unit.name, fee: offers.fee.amount }
         : null;
     } else {
       locationOverrideBySlot[l.slot] = null;
@@ -191,16 +228,22 @@ export function LocationClient() {
     setBusy(true);
     setError(null);
     // Save each lodge's choice; the server derives name, service and fee
-    // from Apaleo, so the body only says which unit. Never downgrade a unit
-    // choice to no-preference silently: allDecided gates this function, and
-    // a race the server catches (unit just taken) surfaces as its error.
+    // from Apaleo, so the body only says which unit (or that the break goes
+    // together). Never downgrade a unit choice to no-preference silently:
+    // allDecided gates this function, and a race the server catches (unit
+    // just taken) surfaces as its error.
     for (const l of session!.lodges) {
-      const c = choiceBySlot[l.slot];
-      if (!c) continue;
-      const body =
-        c.kind === "unit" && c.unitId
-          ? { slot: l.slot, choice: "unit", unitId: c.unitId }
-          : { slot: l.slot, choice: "none" };
+      let body: { slot: number; choice: string; unitId?: string };
+      if (multi && mode !== "exact") {
+        body = { slot: l.slot, choice: mode };
+      } else {
+        const c = choiceBySlot[l.slot];
+        if (!c) continue;
+        body =
+          c.kind === "unit" && c.unitId
+            ? { slot: l.slot, choice: "unit", unitId: c.unitId }
+            : { slot: l.slot, choice: "none" };
+      }
       const result = await apiFetch(`/api/session/${sessionId}/location`, {
         method: "POST",
         body: JSON.stringify(body),
@@ -216,6 +259,39 @@ export function LocationClient() {
   }
 
   const canPickUnit = Boolean(activeOffers?.fee) && activeUnits.length > 0;
+
+  function renderModeCard(card: {
+    value: Mode;
+    title: string;
+    copy: string;
+    price?: string;
+    free?: boolean;
+  }) {
+    const selected = mode === card.value;
+    return (
+      <button
+        type="button"
+        onClick={() => setMode(card.value)}
+        aria-pressed={selected}
+        className={`flex flex-col rounded-lg px-4 py-3.5 text-left transition border ${
+          selected
+            ? "border-navy ring-1 ring-navy bg-navy/5"
+            : "border-line bg-white hover:border-navy/40"
+        }`}
+      >
+        <span className="flex items-center gap-2">
+          {selected && <TickIcon className="w-4 h-4 shrink-0 text-navy" />}
+          <span className="font-semibold text-navy">{card.title}</span>
+        </span>
+        <span className="mt-1 text-sm text-foreground/70">{card.copy}</span>
+        {card.price && (
+          <span className={`mt-auto pt-2 font-bold ${card.free ? "text-leaf" : "text-ink"}`}>
+            {card.price}
+          </span>
+        )}
+      </button>
+    );
+  }
 
   function renderUnitButton(u: { id: string; name: string }) {
     const selected = activeChoice?.kind === "unit" && activeChoice.unitId === u.id;
@@ -257,11 +333,40 @@ export function LocationClient() {
             Water Garden in The Glades? Pick your corner of the village and
             the exact lodge for your dates, or leave it with us and
             we&apos;ll choose a lovely one for you.
-            {multi && " Each lodge in your break chooses separately."}
+            {multi && " Choose below how we place the lodges in your break."}
           </p>
 
-          {/* Per-lodge switcher */}
+          {/* Placement mode: exact picks, placed together, or no preference */}
           {multi && (
+            <>
+              <h2 className="mt-6 text-xl font-bold text-ink">
+                How should we place your lodges?
+              </h2>
+              <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                {renderModeCard({
+                  value: "exact",
+                  title: "Pick your exact lodges",
+                  copy: "Choose a corner of the village and the exact lodge for each part of your break.",
+                })}
+                {renderModeCard({
+                  value: "together",
+                  title: "Place our lodges together",
+                  copy: "We'll pick neighbouring lodges for you. If we can't manage it for your dates, we remove the fee and still place you close.",
+                  price: togetherFee ? `${formatKes(togetherFee.amount)} per lodge` : undefined,
+                })}
+                {renderModeCard({
+                  value: "none",
+                  title: "No preference",
+                  copy: "We'll pick your lodges for you and tell you the numbers on your booking confirmation.",
+                  price: "Free",
+                  free: true,
+                })}
+              </div>
+            </>
+          )}
+
+          {/* Per-lodge switcher */}
+          {multi && pickerShown && (
             <div className="mt-5 flex flex-wrap gap-2">
               {session.lodges.map((l) => {
                 const isActive = l.slot === activeSlot;
@@ -287,21 +392,23 @@ export function LocationClient() {
           )}
 
           {/* The village map: zones are clickable once lane names exist */}
-          <div className="mt-6 rounded-lg bg-white border border-line overflow-hidden">
-            <VillageMap
-              selectedZone={zonesActive ? activeZone : null}
-              availableZones={zonesActive ? availableZoneIds : undefined}
-              onSelectZone={
-                zonesActive && canPickUnit
-                  ? (zone) => setZone(activeSlot, activeZone === zone ? null : zone)
-                  : undefined
-              }
-            />
-          </div>
+          {pickerShown && (
+            <div className="mt-6 rounded-lg bg-white border border-line overflow-hidden">
+              <VillageMap
+                selectedZone={zonesActive ? activeZone : null}
+                availableZones={zonesActive ? availableZoneIds : undefined}
+                onSelectZone={
+                  zonesActive && canPickUnit
+                    ? (zone) => setZone(activeSlot, activeZone === zone ? null : zone)
+                    : undefined
+                }
+              />
+            </div>
+          )}
 
           {/* Zone choice, ahead of the exact lodge. Free: the fee belongs
               to picking an exact lodge, never to picking a corner. */}
-          {zonesActive && canPickUnit && (
+          {pickerShown && zonesActive && canPickUnit && (
             <>
               <h2 className="mt-6 text-xl font-bold text-ink">
                 Choose your corner of the village
@@ -350,7 +457,7 @@ export function LocationClient() {
             </div>
           )}
 
-          {staleBySlot[activeSlot] && (
+          {pickerShown && staleBySlot[activeSlot] && (
             <div className="mt-4 rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-900">
               {staleBySlot[activeSlot]} is no longer available for your dates.
               Pick another lodge below, or choose no preference.
@@ -358,93 +465,97 @@ export function LocationClient() {
           )}
 
           {/* Pick an exact lodge */}
-          <div className="mt-6 flex items-baseline justify-between gap-3">
-            <h2 className="text-xl font-bold text-ink">Pick your exact lodge</h2>
-            {activeOffers?.fee && canPickUnit && (
-              <p className="text-sm text-foreground/60 shrink-0">
-                {formatKes(activeOffers.fee.amount)} per lodge
-              </p>
-            )}
-          </div>
-          <p className="mt-1 text-sm text-foreground/70 max-w-xl">
-            {canPickUnit
-              ? `These ${activeTierName ?? "lodge"} spots are still free for your dates, straight from live availability.`
-              : activeOffers && activeUnits.length === 0
-                ? `Every ${activeTierName ?? "lodge"} is spoken for on these dates, so we'll pick a great spot for you.`
-                : "Lodge selection isn't available right now."}
-          </p>
-
-          {canPickUnit && !zonesActive && (
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              {activeUnits.map((u) => renderUnitButton(u))}
-            </div>
-          )}
-
-          {canPickUnit && zonesActive && (
-            <div className="mt-4 grid gap-5">
-              {lanesToShow.map((lane) => (
-                <div key={lane.name}>
-                  <h3 className="text-sm font-bold text-ink">
-                    {lane.name}
-                    {!activeZone && (
-                      <span className="ml-2 font-semibold text-foreground/50">
-                        {ZONES.find((z) => z.id === lane.zone)?.name}
-                      </span>
-                    )}
-                  </h3>
-                  <div className="mt-2 grid gap-3 sm:grid-cols-2">
-                    {shownUnits
-                      .filter((u) => u.name.startsWith(`${lane.name} `))
-                      .map((u) => renderUnitButton(u))}
-                  </div>
-                </div>
-              ))}
-              {unplacedUnits.length > 0 && (
-                <div>
-                  {lanesToShow.length > 0 && (
-                    <h3 className="text-sm font-bold text-ink">More lodges</h3>
-                  )}
-                  <div className="mt-2 grid gap-3 sm:grid-cols-2">
-                    {unplacedUnits.map((u) => renderUnitButton(u))}
-                  </div>
-                </div>
-              )}
-              {lanesToShow.length === 0 && unplacedUnits.length === 0 && (
-                <p className="text-sm text-foreground/60">
-                  No free {activeTierName ?? "lodges"} in{" "}
-                  {ZONES.find((z) => z.id === activeZone)?.name ?? "that corner"} for
-                  these dates. Pick another corner of the village, or leave it
-                  with us.
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* No preference */}
-          <button
-            type="button"
-            onClick={() => setChoice(activeSlot, { kind: "none" })}
-            aria-pressed={activeChoice?.kind === "none"}
-            className={`mt-4 w-full flex items-start justify-between gap-3 rounded-lg px-4 py-3.5 text-left transition ${
-              activeChoice?.kind === "none"
-                ? "border border-navy ring-1 ring-navy bg-navy/5"
-                : "border border-line bg-white hover:border-navy/40"
-            }`}
-          >
-            <span className="min-w-0">
-              <span className="flex items-center gap-2">
-                {activeChoice?.kind === "none" && (
-                  <TickIcon className="w-4 h-4 shrink-0 text-navy" />
+          {pickerShown && (
+            <>
+              <div className="mt-6 flex items-baseline justify-between gap-3">
+                <h2 className="text-xl font-bold text-ink">Pick your exact lodge</h2>
+                {activeOffers?.fee && canPickUnit && (
+                  <p className="text-sm text-foreground/60 shrink-0">
+                    {formatKes(activeOffers.fee.amount)} per lodge
+                  </p>
                 )}
-                <span className="font-semibold text-navy">No preference</span>
-              </span>
-              <span className="mt-1 block text-sm text-foreground/70">
-                We&apos;ll pick your lodge for you and tell you the number on
-                your booking confirmation.
-              </span>
-            </span>
-            <span className="font-bold text-leaf shrink-0">Free</span>
-          </button>
+              </div>
+              <p className="mt-1 text-sm text-foreground/70 max-w-xl">
+                {canPickUnit
+                  ? `These ${activeTierName ?? "lodge"} spots are still free for your dates, straight from live availability.`
+                  : activeOffers && activeUnits.length === 0
+                    ? `Every ${activeTierName ?? "lodge"} is spoken for on these dates, so we'll pick a great spot for you.`
+                    : "Lodge selection isn't available right now."}
+              </p>
+
+              {canPickUnit && !zonesActive && (
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  {activeUnits.map((u) => renderUnitButton(u))}
+                </div>
+              )}
+
+              {canPickUnit && zonesActive && (
+                <div className="mt-4 grid gap-5">
+                  {lanesToShow.map((lane) => (
+                    <div key={lane.name}>
+                      <h3 className="text-sm font-bold text-ink">
+                        {lane.name}
+                        {!activeZone && (
+                          <span className="ml-2 font-semibold text-foreground/50">
+                            {ZONES.find((z) => z.id === lane.zone)?.name}
+                          </span>
+                        )}
+                      </h3>
+                      <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                        {shownUnits
+                          .filter((u) => u.name.startsWith(`${lane.name} `))
+                          .map((u) => renderUnitButton(u))}
+                      </div>
+                    </div>
+                  ))}
+                  {unplacedUnits.length > 0 && (
+                    <div>
+                      {lanesToShow.length > 0 && (
+                        <h3 className="text-sm font-bold text-ink">More lodges</h3>
+                      )}
+                      <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                        {unplacedUnits.map((u) => renderUnitButton(u))}
+                      </div>
+                    </div>
+                  )}
+                  {lanesToShow.length === 0 && unplacedUnits.length === 0 && (
+                    <p className="text-sm text-foreground/60">
+                      No free {activeTierName ?? "lodges"} in{" "}
+                      {ZONES.find((z) => z.id === activeZone)?.name ?? "that corner"} for
+                      these dates. Pick another corner of the village, or leave it
+                      with us.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* No preference */}
+              <button
+                type="button"
+                onClick={() => setChoice(activeSlot, { kind: "none" })}
+                aria-pressed={activeChoice?.kind === "none"}
+                className={`mt-4 w-full flex items-start justify-between gap-3 rounded-lg px-4 py-3.5 text-left transition ${
+                  activeChoice?.kind === "none"
+                    ? "border border-navy ring-1 ring-navy bg-navy/5"
+                    : "border border-line bg-white hover:border-navy/40"
+                }`}
+              >
+                <span className="min-w-0">
+                  <span className="flex items-center gap-2">
+                    {activeChoice?.kind === "none" && (
+                      <TickIcon className="w-4 h-4 shrink-0 text-navy" />
+                    )}
+                    <span className="font-semibold text-navy">No preference</span>
+                  </span>
+                  <span className="mt-1 block text-sm text-foreground/70">
+                    We&apos;ll pick your lodge for you and tell you the number on
+                    your booking confirmation.
+                  </span>
+                </span>
+                <span className="font-bold text-leaf shrink-0">Free</span>
+              </button>
+            </>
+          )}
 
           <div className="mt-6 flex justify-end">
             <button

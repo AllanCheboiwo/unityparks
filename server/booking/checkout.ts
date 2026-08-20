@@ -10,9 +10,11 @@ import { createBooking, getFolioForReservation, type FolioSummary } from "../apa
 import {
   assignSpecificUnit,
   autoAssignUnit,
+  getAvailableUnits,
   removeReservationService,
   type UnitOption,
 } from "../apaleo/units";
+import { LANES, laneOf } from "@/content/village";
 import { payFolio } from "../apaleo/payments";
 import { ApaleoError } from "../apaleo/client";
 import { getOrderStatus, submitOrder } from "../pesapal/orders";
@@ -20,7 +22,7 @@ import { paymentMatchesOrder } from "../pesapal/status";
 import { PublicError } from "../api-helpers";
 import { paymentsProvider } from "./provider";
 import { getSession, parseChildrenAges, parseExtras, parseVehiclePlates } from "./session";
-import { loadGuests } from "./guests";
+import { loadGuests, partyBands } from "./guests";
 import { sendBookingConfirmation } from "../email/bookingConfirmation";
 import { sendBalanceReceipt } from "../email/balanceReceipt";
 import { applyReferralAtCheckout, reconcileCreditFlags } from "../referral/checkout";
@@ -618,9 +620,25 @@ async function ensureRecord(sessionId: string): Promise<{
 
   // The manifest names the whole party; Apaleo shows everyone but the lead
   // (already the primaryGuest) as additional guests on that lodge's
-  // reservation. Rows without a last name stay local: Apaleo rejects them,
-  // and the manifest card allows gaps.
+  // reservation.
   const manifest = await loadGuests(session.id);
+
+  // The Guests step demands the full manifest, but the pay page is one URL
+  // away, so the money path re-checks: every band seat named, every child
+  // row dated, before a reservation exists.
+  for (const lodge of session.lodges) {
+    const complete = partyBands(lodge).every((band, position) => {
+      const row = manifest.find((g) => g.slot === lodge.slot && g.position === position);
+      if (!row?.firstName || !row.lastName) return false;
+      return band === "adult" || !!row.dateOfBirth;
+    });
+    if (!complete) {
+      throw new PublicError(
+        400,
+        "Please complete guest details for everyone in your party before paying.",
+      );
+    }
+  }
 
   const { bookingId, reservationIds } = await createBooking({
     arrival: session.arrival,
@@ -634,7 +652,8 @@ async function ensureRecord(sessionId: string): Promise<{
       // the guest's chosen quantity so Apaleo books that many.
       services: [
         ...parseExtras(lodge).map((e) => ({ serviceId: e.serviceId, count: e.count })),
-        ...(lodge.locationChoice === "unit" && lodge.locationServiceId
+        ...((lodge.locationChoice === "unit" || lodge.locationChoice === "together") &&
+        lodge.locationServiceId
           ? [{ serviceId: lodge.locationServiceId, count: 1 }]
           : []),
       ],
@@ -773,18 +792,28 @@ type AssignmentOutcome = {
 /**
  * Give every reservation its physical lodge, honouring the location step.
  *
- * Two passes, specific choices first: a no-preference auto-assign must never
- * grab a unit a sibling lodge of this same break paid to pick (Apaleo cannot
- * know about a preference that is still only in our session).
+ * Three passes, paid choices first: an auto-assign must never grab a unit a
+ * sibling lodge of this same break paid to pick (Apaleo cannot know about a
+ * preference that is still only in our session).
  *
- * A specific choice Apaleo refuses as occupied (422: another guest's checkout
- * won the unit between selection and now) gets the Center Parcs fallback: a
- * comparable lodge in the same tier is auto-assigned and the location fee
- * service is removed from the folio, right here, before the folio totals are
- * read and frozen into the payment amount. Any other error (429 that outlived
- * its retries, 5xx) is rethrown: the attempt fails before the record exists
- * and a retry replays cleanly - a transient outage must not cost the guest a
- * pick they could have kept.
+ * Pass 1, exact picks. A choice Apaleo refuses as occupied (422: another
+ * guest's checkout won the unit between selection and now) gets the Center
+ * Parcs fallback: a comparable lodge in the same tier is auto-assigned and
+ * the location fee service is removed from the folio, right here, before the
+ * folio totals are read and frozen into the payment amount. Any other error
+ * (429 that outlived its retries, 5xx) is rethrown: the attempt fails before
+ * the record exists and a retry replays cleanly - a transient outage must
+ * not cost the guest a pick they could have kept.
+ *
+ * Pass 2, "place our lodges together": one lane must seat the whole group,
+ * each slot with a distinct free unit of its own tier, and the combination
+ * with the tightest run of door numbers wins. A 422 mid-group earns one
+ * availability re-read and re-plan; if the group still cannot sit together
+ * (or no lane ever could), the fallback covers the WHOLE group, fees first:
+ * nobody pays for a placement only half the break received.
+ *
+ * Pass 3, everyone still without an outcome auto-assigns, so the
+ * confirmation can greet every lodge with a real number.
  *
  * Safe to re-run on a checkout retry: re-assigning the unit a reservation
  * already holds is a plain 200, and removing an already-removed service is
@@ -792,7 +821,10 @@ type AssignmentOutcome = {
  * lands between the fee removal and record creation AND the blocking guest
  * cancels inside that same window, a retry can win the unit with the fee
  * already gone - the guest is undercharged, never overcharged, so we accept
- * it rather than add an Apaleo read to every checkout.
+ * it rather than add an Apaleo read to every checkout. The same crash
+ * window can cost a together group its placement (the retry's availability
+ * read cannot see the units the group already holds), which drops the fee:
+ * undercharged again, never overcharged.
  */
 async function assignUnits(
   session: SessionForCheckout,
@@ -841,10 +873,91 @@ async function assignUnits(
     }
   }
 
-  // Pass 2: no-preference lodges take whatever is left, so the confirmation
+  // Pass 2: together groups. One planning-and-assigning attempt, one
+  // recompute after a mid-group 422, then the whole-group fallback.
+  const together = entries.filter((e) => e.lodge.locationChoice === "together");
+  if (together.length > 0) {
+    // Units pass 1 just assigned are spoken for even where a stale
+    // availability read still lists them.
+    const taken = new Set(
+      outcomes.flatMap((o) => (o?.assignedUnitId ? [o.assignedUnitId] : [])),
+    );
+    // Units this group won before a mid-group 422 vanish from the fresh
+    // availability read; remembering them keeps them pickable on the
+    // recompute, for their own slot only.
+    const held = new Map<number, UnitOption>();
+
+    const attemptPlacement = async (): Promise<boolean> => {
+      const availability = new Map<string, UnitOption[]>();
+      for (const code of new Set(together.map((e) => e.lodge.unitGroupCode!))) {
+        availability.set(
+          code,
+          await getAvailableUnits({
+            arrival: session.arrival,
+            departure: session.departure,
+            unitGroupCode: code,
+          }),
+        );
+      }
+      const plan = planTogetherUnits(together, availability, taken, held);
+      if (!plan) return false;
+      for (const { index, reservationId } of together) {
+        const unit = await assignSpecificUnit(reservationId, plan.get(index)!.id);
+        held.set(index, unit);
+        outcomes[index] = {
+          assignedUnitId: unit.id,
+          assignedUnitName: unit.name,
+          locationFeeDropped: false,
+        };
+      }
+      return true;
+    };
+
+    let placed = false;
+    try {
+      placed = await attemptPlacement();
+    } catch (err) {
+      if (!(err instanceof ApaleoError && err.status === 422)) throw err;
+      console.warn(
+        "Together placement lost a unit mid-group, recomputing once",
+        JSON.stringify({ slots: together.map((e) => e.lodge.slot) }),
+      );
+      try {
+        placed = await attemptPlacement();
+      } catch (retryErr) {
+        if (!(retryErr instanceof ApaleoError && retryErr.status === 422)) throw retryErr;
+        placed = false;
+      }
+    }
+
+    if (!placed) {
+      console.warn(
+        "Together placement not satisfiable, applying whole-group fallback",
+        JSON.stringify({ slots: together.map((e) => e.lodge.slot) }),
+      );
+      // Money first for the WHOLE group: half a break placed together is not
+      // what the fee sold, so every together fee leaves the folios before
+      // any lodge takes a fallback unit.
+      for (const { reservationId, lodge } of together) {
+        if (lodge.locationServiceId) {
+          await removeReservationService(reservationId, lodge.locationServiceId);
+        }
+      }
+      for (const { index, reservationId } of together) {
+        const fallback = await autoAssignSafely(reservationId);
+        outcomes[index] = {
+          assignedUnitId: fallback?.id ?? null,
+          assignedUnitName: fallback?.name ?? null,
+          locationFeeDropped: true,
+        };
+      }
+    }
+  }
+
+  // Pass 3: no-preference lodges take whatever is left, so the confirmation
   // can greet everyone with a real lodge number.
-  for (const { index, reservationId, lodge } of entries) {
-    if (lodge.locationChoice === "unit" && lodge.locationUnitId) continue;
+  for (const { index, reservationId } of entries) {
+    if (outcomes[index]) continue;
     const unit = await autoAssignSafely(reservationId);
     outcomes[index] = {
       assignedUnitId: unit?.id ?? null,
@@ -854,6 +967,75 @@ async function assignUnits(
   }
 
   return outcomes;
+}
+
+/** The trailing door number of a lane-named unit ("Fig Lane 3" gives 3). */
+function trailingNumber(name: string): number | null {
+  const match = /(\d+)$/.exec(name.trim());
+  return match ? Number(match[1]) : null;
+}
+
+/**
+ * Seat a together group down one lane: every slot needs a distinct free unit
+ * of its own tier in that lane, and among the lanes that can, the combination
+ * with the tightest run of door numbers wins. Units in `held` were already
+ * won by this booking, so they stay pickable, but only for the slot holding
+ * them (Apaleo would 422 them for any sibling). Null when no lane can seat
+ * the whole group.
+ */
+function planTogetherUnits(
+  group: Array<{ index: number; lodge: { unitGroupCode: string | null } }>,
+  availability: Map<string, UnitOption[]>,
+  taken: Set<string>,
+  held: Map<number, UnitOption>,
+): Map<number, UnitOption> | null {
+  let best: { units: UnitOption[]; spread: number } | null = null;
+  for (const lane of LANES) {
+    const candidates = group.map(({ index, lodge }) => {
+      const fresh = (availability.get(lodge.unitGroupCode!) ?? []).filter(
+        (u) => !taken.has(u.id),
+      );
+      const own = held.get(index);
+      const pool = own && !fresh.some((u) => u.id === own.id) ? [...fresh, own] : fresh;
+      return pool.filter(
+        (u) => laneOf(u.name)?.name === lane.name && trailingNumber(u.name) !== null,
+      );
+    });
+    if (candidates.some((c) => c.length === 0)) continue;
+    const laneBest = tightestDistinct(candidates);
+    if (laneBest && (!best || laneBest.spread < best.spread)) best = laneBest;
+  }
+  if (!best) return null;
+  const winner: { units: UnitOption[] } = best;
+  return new Map(group.map(({ index }, i) => [index, winner.units[i]] as const));
+}
+
+/** The distinct one-unit-per-slot pick with the smallest door-number spread.
+ *  Groups are 2-3 slots and lanes hold 4-6 lodges, so the walk stays tiny. */
+function tightestDistinct(
+  candidates: UnitOption[][],
+): { units: UnitOption[]; spread: number } | null {
+  let best: { units: UnitOption[]; spread: number } | null = null;
+  const chosen: UnitOption[] = [];
+  const used = new Set<string>();
+  const walk = (position: number) => {
+    if (position === candidates.length) {
+      const numbers = chosen.map((u) => trailingNumber(u.name)!);
+      const spread = Math.max(...numbers) - Math.min(...numbers);
+      if (!best || spread < best.spread) best = { units: [...chosen], spread };
+      return;
+    }
+    for (const unit of candidates[position]) {
+      if (used.has(unit.id)) continue;
+      used.add(unit.id);
+      chosen.push(unit);
+      walk(position + 1);
+      chosen.pop();
+      used.delete(unit.id);
+    }
+  };
+  walk(0);
+  return best;
 }
 
 /**
