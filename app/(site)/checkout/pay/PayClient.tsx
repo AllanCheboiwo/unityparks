@@ -313,7 +313,9 @@ export function PayClient({ provider }: { provider: "simulated" | "pesapal" }) {
                   <p className="text-xs text-foreground/50 mt-1">
                     {l.location?.choice === "unit" && l.location.unitName
                       ? `Your pick: ${l.location.unitName} (lodge number confirmed at booking)`
-                      : "Lodge number: no preference, assigned at booking"}
+                      : l.location?.choice === "together"
+                        ? "Placed together: neighbouring lodges, numbers confirmed at booking"
+                        : "Lodge number: no preference, assigned at booking"}
                   </p>
                   {l.extras.length > 0 && (
                     <p className="text-xs text-foreground/50 mt-1">

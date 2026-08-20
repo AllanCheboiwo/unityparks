@@ -807,10 +807,16 @@ type AssignmentOutcome = {
  *
  * Pass 2, "place our lodges together": one lane must seat the whole group,
  * each slot with a distinct free unit of its own tier, and the combination
- * with the tightest run of door numbers wins. A 422 mid-group earns one
- * availability re-read and re-plan; if the group still cannot sit together
- * (or no lane ever could), the fallback covers the WHOLE group, fees first:
- * nobody pays for a placement only half the break received.
+ * with the tightest run of door numbers wins. The fee only stands when that
+ * run is consecutive - the closest pair a thin lane can offer is still worth
+ * assigning, but it is not the neighbouring lodges the fee sold, so the fee
+ * leaves every folio first and the guest keeps the placement for free. A 422
+ * mid-group earns one availability re-read and re-plan; if no lane can seat
+ * the group at all, the fallback covers the WHOLE group, fees first: nobody
+ * pays for a placement only half the break received. Fee removal is one-way
+ * within an attempt sequence, so a recompute that lands adjacent after a
+ * non-adjacent attempt still reports the fee as dropped rather than claiming
+ * a charge the folio no longer carries.
  *
  * Pass 3, everyone still without an outcome auto-assigns, so the
  * confirmation can greet every lodge with a real number.
@@ -887,6 +893,9 @@ async function assignUnits(
     // recompute, for their own slot only.
     const held = new Map<number, UnitOption>();
 
+    // Once the group's fees leave the folios they never come back, so a
+    // later recompute cannot claim a charge the folio no longer carries.
+    let feesRemoved = false;
     const attemptPlacement = async (): Promise<boolean> => {
       const availability = new Map<string, UnitOption[]>();
       for (const code of new Set(together.map((e) => e.lodge.unitGroupCode!))) {
@@ -901,13 +910,23 @@ async function assignUnits(
       }
       const plan = planTogetherUnits(together, availability, taken, held);
       if (!plan) return false;
+      if (!plan.adjacent && !feesRemoved) {
+        // Money first, before a single unit is assigned: the guest keeps the
+        // closest lodges we can offer, but not the bill for neighbours.
+        for (const { reservationId, lodge } of together) {
+          if (lodge.locationServiceId) {
+            await removeReservationService(reservationId, lodge.locationServiceId);
+          }
+        }
+        feesRemoved = true;
+      }
       for (const { index, reservationId } of together) {
-        const unit = await assignSpecificUnit(reservationId, plan.get(index)!.id);
+        const unit = await assignSpecificUnit(reservationId, plan.units.get(index)!.id);
         held.set(index, unit);
         outcomes[index] = {
           assignedUnitId: unit.id,
           assignedUnitName: unit.name,
-          locationFeeDropped: false,
+          locationFeeDropped: feesRemoved,
         };
       }
       return true;
@@ -938,10 +957,13 @@ async function assignUnits(
       // Money first for the WHOLE group: half a break placed together is not
       // what the fee sold, so every together fee leaves the folios before
       // any lodge takes a fallback unit.
-      for (const { reservationId, lodge } of together) {
-        if (lodge.locationServiceId) {
-          await removeReservationService(reservationId, lodge.locationServiceId);
+      if (!feesRemoved) {
+        for (const { reservationId, lodge } of together) {
+          if (lodge.locationServiceId) {
+            await removeReservationService(reservationId, lodge.locationServiceId);
+          }
         }
+        feesRemoved = true;
       }
       for (const { index, reservationId } of together) {
         const fallback = await autoAssignSafely(reservationId);
@@ -988,7 +1010,7 @@ function planTogetherUnits(
   availability: Map<string, UnitOption[]>,
   taken: Set<string>,
   held: Map<number, UnitOption>,
-): Map<number, UnitOption> | null {
+): { units: Map<number, UnitOption>; adjacent: boolean } | null {
   let best: { units: UnitOption[]; spread: number } | null = null;
   for (const lane of LANES) {
     const candidates = group.map(({ index, lodge }) => {
@@ -1006,8 +1028,13 @@ function planTogetherUnits(
     if (laneBest && (!best || laneBest.spread < best.spread)) best = laneBest;
   }
   if (!best) return null;
-  const winner: { units: UnitOption[] } = best;
-  return new Map(group.map(({ index }, i) => [index, winner.units[i]] as const));
+  const winner: { units: UnitOption[]; spread: number } = best;
+  // Doors 3 and 4 are neighbours; doors 3 and 7 are merely the closest we
+  // could find. Only a consecutive run is what the fee sold.
+  return {
+    units: new Map(group.map(({ index }, i) => [index, winner.units[i]] as const)),
+    adjacent: winner.spread === group.length - 1,
+  };
 }
 
 /** The distinct one-unit-per-slot pick with the smallest door-number spread.
