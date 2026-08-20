@@ -314,7 +314,7 @@ export function PayClient({ provider }: { provider: "simulated" | "pesapal" }) {
                     {l.location?.choice === "unit" && l.location.unitName
                       ? `Your pick: ${l.location.unitName} (lodge number confirmed at booking)`
                       : l.location?.choice === "together"
-                        ? "Placed together: neighbouring lodges, numbers confirmed at booking"
+                        ? "Placed together: one lane, numbers confirmed at booking"
                         : "Lodge number: no preference, assigned at booking"}
                   </p>
                   {l.extras.length > 0 && (

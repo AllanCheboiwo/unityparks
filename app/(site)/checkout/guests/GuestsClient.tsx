@@ -27,6 +27,10 @@ type Row = {
   email: string;
 };
 
+/** The shape the guests route's Zod email check accepts. Kept deliberately
+ *  plain: it only has to catch the typos a guest can see and fix. */
+const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 /** One car on the break. dontKnow mirrors Center Parcs' "I don't know the
  *  registration" checkbox, which locks the plate box empty. */
 type Car = { plate: string; dontKnow: boolean };
@@ -127,9 +131,6 @@ export function GuestsClient() {
   }
 
   const multi = lodgeSlots.length > 1;
-  // Center Parcs gates Continue until every car is either given a plate or
-  // marked "I don't know the registration". No cars is always resolved.
-  const carsResolved = cars.every((c) => c.dontKnow || c.plate.trim() !== "");
 
   function setCarCount(count: number) {
     setCars((prev) =>
@@ -155,7 +156,9 @@ export function GuestsClient() {
   }
 
   /** These mirror the server's rules (Zod plus the pay-step gate), so a
-   * party can never pass here and be refused at payment. */
+   * party can never pass here and be refused at payment. Cars are checked
+   * here too: Center Parcs wants every car either plated or marked unknown,
+   * and an unanswered car has to say so rather than deaden the button. */
   function checkRows(): Record<string, string> {
     const found: Record<string, string> = {};
     for (const row of rows!) {
@@ -165,7 +168,18 @@ export function GuestsClient() {
       if (row.band !== "adult" && !row.dateOfBirth) {
         found[`${key}-dateOfBirth`] = "Please enter a date of birth.";
       }
+      // The server takes an optional email but refuses a malformed one with
+      // a generic message that names no field, so catch it while we can.
+      if (row.email.trim() && !EMAIL_SHAPE.test(row.email.trim())) {
+        found[`${key}-email`] = "Please enter a valid email address, or leave it empty.";
+      }
     }
+    cars.forEach((car, i) => {
+      if (!car.dontKnow && !car.plate.trim()) {
+        found[`car-${i}`] =
+          "Enter the registration, or tick that you don't know it.";
+      }
+    });
     return found;
   }
 
@@ -317,6 +331,7 @@ export function GuestsClient() {
                           <span className="mt-1 block text-xs text-foreground/50">
                             We&apos;ll send them useful updates about the stay.
                           </span>
+                          <FieldError message={fieldErrors[`${row.slot}-${row.position}-email`]} />
                         </label>
                       )}
                     </div>
@@ -378,6 +393,7 @@ export function GuestsClient() {
                     />
                     I don&apos;t know the registration
                   </label>
+                  <FieldError message={fieldErrors[`car-${i}`]} />
                 </div>
               ))}
             </div>
@@ -393,7 +409,7 @@ export function GuestsClient() {
           <div className="mt-6">
             <button
               onClick={saveAndContinue}
-              disabled={busy || !carsResolved}
+              disabled={busy}
               className="btn-primary"
             >
               {busy ? "Saving…" : "Save and continue"}

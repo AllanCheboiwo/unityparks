@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { apiFetch, isExpired } from "@/lib/api";
 import { formatKes } from "@/lib/format";
+import { planTogether } from "@/lib/placement";
 import { LODGES } from "@/content/lodges";
 import { LANES, ZONES, laneOf, type ZoneId } from "@/content/village";
 import type { LocationOffersDto, SessionSummary } from "@/lib/types";
@@ -112,8 +113,15 @@ export function LocationClient() {
       // partial, nothing saved) starts on exact with nothing chosen.
       if (summary.lodges.length > 1) {
         const kinds = summary.lodges.map((l) => l.location?.choice ?? null);
-        if (kinds.every((k) => k === "together")) setMode("together");
-        else if (kinds.every((k) => k === "none")) setMode("none");
+        if (kinds.every((k) => k === "together")) {
+          // A saved together break that is no longer seatable (availability
+          // moved under it) falls back to exact, so the guest is never left
+          // on a mode the page has stopped offering.
+          const pools = summary.lodges.map((l) => offers[l.slot]?.units ?? []);
+          const seatable =
+            pools.every((u) => u.length > 0) && planTogether(pools) !== null;
+          setMode(seatable ? "together" : "exact");
+        } else if (kinds.every((k) => k === "none")) setMode("none");
         else setMode("exact");
       }
       setOffersBySlot(offers);
@@ -145,6 +153,14 @@ export function LocationClient() {
   // card quotes the first slot that has one priced.
   const togetherFee =
     session.lodges.map((l) => offersBySlot[l.slot]?.fee).find((f) => f != null) ?? null;
+  // Only offer placing-together when one lane can actually seat this break
+  // today: the lanes carry at most two lodges of any one grade, so a
+  // three-lodge break of matching tiers can never be seated and must not be
+  // sold a fee it would only refund at checkout.
+  const togetherPossible =
+    multi &&
+    session.lodges.every((l) => (offersBySlot[l.slot]?.units.length ?? 0) > 0) &&
+    planTogether(session.lodges.map((l) => offersBySlot[l.slot]!.units)) !== null;
   const activeOffers = offersBySlot[activeSlot];
   const activeChoice = choiceBySlot[activeSlot] ?? null;
   const activeTier = session.lodges.find((l) => l.slot === activeSlot)?.lodge;
@@ -348,12 +364,24 @@ export function LocationClient() {
                   title: "Pick your exact lodges",
                   copy: "Choose a corner of the village and the exact lodge for each part of your break.",
                 })}
-                {renderModeCard({
-                  value: "together",
-                  title: "Place our lodges together",
-                  copy: "We'll pick neighbouring lodges for you. If we can't manage it for your dates, we remove the fee and still place you close.",
-                  price: togetherFee ? `${formatKes(togetherFee.amount)} per lodge` : undefined,
-                })}
+                {togetherPossible ? (
+                  renderModeCard({
+                    value: "together",
+                    title: "Place our lodges together",
+                    copy: "We'll put your lodges on the same lane, a short walk from each other. If we can't manage it for your dates, we remove the fee and still place you close.",
+                    price: togetherFee ? `${formatKes(togetherFee.amount)} per lodge` : undefined,
+                  })
+                ) : (
+                  <div className="flex flex-col rounded-lg border border-line bg-mist px-4 py-3.5 text-left">
+                    <span className="font-semibold text-foreground/50">
+                      Place our lodges together
+                    </span>
+                    <span className="mt-1 text-sm text-foreground/50">
+                      No single lane has room for all your lodges on these
+                      dates, so we can&apos;t promise it this time.
+                    </span>
+                  </div>
+                )}
                 {renderModeCard({
                   value: "none",
                   title: "No preference",
