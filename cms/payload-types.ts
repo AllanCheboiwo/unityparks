@@ -541,7 +541,7 @@ export interface HomePage {
   hero: {
     headingBefore: string;
     headingEmphasis: string;
-    headingAfter: string;
+    headingAfter?: string | null;
     subheading: string;
     intro: string;
     /**

@@ -19,6 +19,12 @@ export type LodgeContent = {
   blurb: string;
   sleeps: number;
   bedrooms: number;
+  /** The two-axis model: size is a number, grade is a name. */
+  grade: "Cedar" | "Signature";
+  /** Indicative lowest three-night price for the lodge, from the design
+   *  handoff. Recompute alongside the seasonal floors in scripts/seed-cms.ts
+   *  whenever the Apaleo rates change. */
+  fromPrice: string;
   features: string[];
   /** Tailwind-friendly accent used on cards and highlights. */
   accent: string;
@@ -74,6 +80,8 @@ export const LODGES: Record<string, LodgeContent> = {
       "Two bedrooms sleeping four, with a wood-burning stove, a full kitchen and a private deck with its own built-in braai, deep among the cedars.",
     sleeps: 4,
     bedrooms: 2,
+    grade: "Cedar",
+    fromPrice: "KES 84,000",
     features: [
       "Wood-burning stove",
       "Full kitchen",
@@ -113,11 +121,13 @@ export const LODGES: Record<string, LodgeContent> = {
   FST: {
     code: "FST",
     name: "Cedar Lodge 3 bedroom",
-    tagline: "The family favourite",
+    tagline: "Room for six",
     blurb:
       "The same warm Cedar spec with a third bedroom and room for six, for the parties that travel bigger and the breaks that stretch to a week.",
     sleeps: 6,
     bedrooms: 3,
+    grade: "Cedar",
+    fromPrice: "KES 129,000",
     features: [
       "Wood-burning stove",
       "Full kitchen",
@@ -162,6 +172,8 @@ export const LODGES: Record<string, LodgeContent> = {
       "Built for cold mornings: a private hot tub facing the mountain, a roofed wraparound deck, heated bathroom floors and two bathrooms for four guests.",
     sleeps: 4,
     bedrooms: 2,
+    grade: "Signature",
+    fromPrice: "KES 112,000",
     features: [
       "Private hot tub facing the mountain",
       "Roofed wraparound deck",
@@ -206,6 +218,8 @@ export const LODGES: Record<string, LodgeContent> = {
       "Everything Signature means, at family size: the hot tub, the roofed deck, the en-suite and second bathroom, with three bedrooms sleeping six.",
     sleeps: 6,
     bedrooms: 3,
+    grade: "Signature",
+    fromPrice: "KES 156,000",
     features: [
       "Private hot tub facing the mountain",
       "Roofed wraparound deck",
@@ -248,3 +262,22 @@ export const LODGES: Record<string, LodgeContent> = {
  *  Not strictly cheapest-first any more: Signature 2 bedroom sits between
  *  the two Cedars on price, which is the ladder working as designed. */
 export const TIER_ORDER = ["WDL", "FST", "LKV", "EXC"] as const;
+
+/** The comparison card on the homepage: the same facts as the *_INCLUDED_CORE
+ *  lists above, abridged to five and six lines so the two columns scan. */
+export const CEDAR_CARD_SUMMARY = [
+  "Wood-burning stove, insulated and double glazed",
+  "Full kitchen with oven, hob and fridge-freezer",
+  "Private deck with a built-in braai",
+  "Beds made up, towels and linen on arrival",
+  "Wi-Fi, parking beside your lodge, cot and high chair on request",
+];
+
+export const SIGNATURE_CARD_SUMMARY = [
+  "Private hot tub, deck-mounted, facing the mountain",
+  "Wraparound deck, roofed at one end, outdoor dining and braai",
+  "Underfloor heating in the bathrooms",
+  "En-suite to the main bedroom, plus a second bathroom",
+  "Dishwasher, full oven and coffee machine",
+  "Robes, slippers, heavier linen, better beds, a bigger plot",
+];

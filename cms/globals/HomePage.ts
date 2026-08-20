@@ -17,7 +17,8 @@ export const HomePage: GlobalConfig = {
         // The h1 renders as: headingBefore <em>headingEmphasis</em> headingAfter
         { name: "headingBefore", type: "text", required: true },
         { name: "headingEmphasis", type: "text", required: true },
-        { name: "headingAfter", type: "text", required: true },
+        // Optional: the current heading ends on the emphasis.
+        { name: "headingAfter", type: "text" },
         { name: "subheading", type: "text", required: true },
         { name: "intro", type: "textarea", required: true },
         {

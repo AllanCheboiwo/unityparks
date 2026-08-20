@@ -632,7 +632,7 @@ export function BookingBar({ initial }: { initial?: BookingBarInitial }) {
       )}
 
       {/* The bar */}
-      <div className="relative z-30 rounded-xl bg-white shadow-xl shadow-black/10 ring-1 ring-line flex flex-col lg:flex-row items-stretch divide-y lg:divide-y-0 lg:divide-x divide-[#e5e2da]">
+      <div className="relative z-30 rounded-xl bg-white shadow-[0_20px_48px_rgba(18,22,15,0.22)] ring-1 ring-line flex flex-col lg:flex-row items-stretch divide-y lg:divide-y-0 lg:divide-x divide-line">
         {/* Village - one village in this demo, shown fixed */}
         <div className={villageField}>
           <div className={`${chipInner} pl-4 pr-5 py-3.5 h-full lg:rounded-l-xl`}>

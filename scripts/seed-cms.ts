@@ -98,7 +98,7 @@ const ACTIVITIES = [
   {
     slug: "swimming-lagoon",
     title: "The Water Garden",
-    copy: "Warm water under a glass roof, looking at the mountain. Slides for the brave, shallows for the small, and it is included in every break, whatever the sky does.",
+    copy: "Warm water under a glass roof while the mountain air stays cold outside. Shallows for the small, lanes for the early risers.",
     photo: "activity-pool.jpg",
     displayOrder: 1,
   },
@@ -109,21 +109,21 @@ const ACTIVITIES = [
     title: "Guided forest walk",
     copy: "Mornings with a village guide, from birdsong to the big cedars, at a pace the smallest legs can manage.",
     photo: "hero-forest.jpg",
-    displayOrder: 2,
+    displayOrder: 4,
   },
   {
     slug: "cycle-trails",
-    title: "Cycle trails",
-    copy: "Shaded forest loops for every pace, from balance bikes to big rides. Hire a bike or bring your own.",
+    title: "Forest trails",
+    copy: "Shaded loops for every pace on foot or on a hired bike.",
     photo: "activity-cycle.jpg",
     displayOrder: 3,
   },
   {
     slug: "forest-spa",
-    title: "Forest spa",
-    copy: "Steam, stillness and birdsong. A grown-up pause while the rest of the family plays.",
+    title: "The Forest Spa",
+    copy: "Steam, stillness and birdsong, ten minutes uphill through the cedars.",
     photo: "activity-spa.jpg",
-    displayOrder: 4,
+    displayOrder: 2,
   },
 ];
 
@@ -185,37 +185,39 @@ const FAQS: Array<{
   {
     question: "What is included in a Unity Parks break?",
     answer:
-      "Your lodge for the whole break, the Water Garden and the outdoor pool, parking beside your lodge and the run of the forest trails. Extras such as the Forest Spa and cycle hire can be added to your break.",
+      "Your lodge for the whole break, the Water Garden every day, parking beside your lodge and the run of the village trails. Spa treatments, bike hire and firewood are added once you arrive.",
     displayOrder: 1,
   },
   {
-    question: "Who are Unity Parks breaks for?",
+    question: "What is the difference between Cedar and Signature?",
+    oldQuestion: "Who are Unity Parks breaks for?",
     answer:
-      "Anyone who wants time together. Families, grandparents, friends, couples. Every lodge is self-contained, so the whole party stays under one roof at one price per lodge.",
+      "Two axes and nothing else. Size is a number, grade is a name. Cedar is the base spec the village is built from. Signature adds the same seven things at either size: the hot tub, the roofed wraparound deck, heated bathroom floors, an en-suite plus second bathroom, the upgraded kitchen, better beds and linen, and a bigger plot.",
     displayOrder: 2,
   },
   {
     question: "How do breaks work?",
     answer:
-      "Breaks start on a Friday or a Monday. A weekend break runs Friday to Monday, a midweek break runs Monday to Friday, and a full week is seven nights. Pick your dates and lodge, tell us who is coming, and the village does the rest.",
+      "Breaks start on a Friday or a Monday. Three nights runs Friday to Monday, four nights Monday to Friday, and a week runs Friday to Friday or Monday to Monday. Check in from 2pm, check out by 11am.",
     displayOrder: 3,
   },
   {
-    question: "How do payments work in this demo?",
+    question: "Can we choose where our lodge sits?",
     answer:
-      "Unity Parks is currently a demonstration. Checkout runs against sandbox systems, so no real money moves and no real card details are needed. Everything else, from availability to your confirmation, works exactly as it will on the real village.",
+      "Yes. Grade and size are chosen when you book; the zone and lane are chosen at the Location step. The Glades and Sunrise Ridge are open now, with Riverside and Cedar Rise following in the next phase.",
     displayOrder: 4,
+  },
+  {
+    question: "How cold does it get?",
+    oldQuestion: "When is the best time to visit?",
+    answer:
+      "At 2,100 metres the evenings are cold all year, whatever the day has been. Bring a jumper; the stove, the insulation and the double glazing do the rest.",
+    displayOrder: 5,
   },
   {
     question: "Can I bring my dog?",
     answer:
       "No. The village sits against the Mount Kenya forest: colobus monkeys, bushbuck and tree hyrax live in it, and elephant and buffalo move through the trees beyond our fence. Pets stay home for everyone's safety, theirs included.",
-    displayOrder: 5,
-  },
-  {
-    question: "When is the best time to visit?",
-    answer:
-      "There is no bad time at 2,100 metres. Sunshine season (December to February) brings hot clear days, cold nights and the peaks out at breakfast. The long rains (March to May) mean clear mornings, afternoon storms and the best prices of the year. The cool season (June to September) is mist, fires lit by five and the Water Garden steaming, and the short rains (October to November) turn the forest green again.",
     displayOrder: 6,
   },
   {
@@ -224,6 +226,12 @@ const FAQS: Array<{
     answer:
       "The village is at Naro Moru, on the western slopes of Mount Kenya: about 180 km from Nairobi on the A2, two and a half to three hours, tarmac the whole way. Flying? Nanyuki airstrip is 30 km away. Parking at your lodge is included, and because we take your number plate at booking, the gate simply opens when you arrive.",
     displayOrder: 7,
+  },
+  {
+    question: "How do payments work in this demo?",
+    answer:
+      "Unity Parks is currently a demonstration. Checkout runs against sandbox systems, so no real money moves and no real card details are needed. Everything else, from availability to your confirmation, behaves exactly as it will on the real village.",
+    displayOrder: 8,
   },
 ];
 
@@ -460,12 +468,12 @@ async function main() {
     slug: "home-page",
     data: {
       hero: {
-        headingBefore: "For a",
-        headingEmphasis: "billion",
-        headingAfter: "happy memories",
+        headingBefore: "A village in the",
+        headingEmphasis: "cedar forest",
+        headingAfter: "",
         subheading: "Your forest break on Mount Kenya",
         intro:
-          "A lodge of your own among the cedars, warm water whatever the weather and time together that nobody has to plan. Breaks start every Friday and Monday at Unity Parks Mount Kenya.",
+          "A lodge of your own in the cedar forest below the peaks. Your own stove, your own deck, warm water every day, and no car once you arrive.",
         urgency: "School holiday breaks are booking fast. Find yours before they fill.",
         ctaLabel: "Find your break",
         video: mediaIds["hero-family-lake.mp4"],
@@ -473,25 +481,26 @@ async function main() {
         videoDescription: "A family walking together",
       },
       village: {
-        heading: "One village, endless memories",
+        heading: "One village, high on the mountain",
         intro:
-          "Unity Parks Mount Kenya is a car-free forest village at Naro Moru, on the western slopes of the mountain, two and a half hours from Nairobi. Every lodge, lane and warm pool is part of one village built for time together.",
+          "Unity Parks Mount Kenya stands in indigenous cedar forest above Naro Moru, where the Burguret comes down off the peaks. Lodges sit in lanes of four to six around a shared green. You park once and walk everywhere after that.",
         cardName: "Unity Parks Mount Kenya",
         locationLine: "Naro Moru, Mount Kenya",
+        // The homepage renders this as the village section's second paragraph.
         blurb:
-          "Mountain forest, two lodge grades at two sizes, warm water under glass and room for the whole family.",
-        mapAlt: "Illustrated map of the Unity Parks Mount Kenya village",
+          "At 2,100 metres the evenings are properly cold all year. Every lodge answers that: insulated, double glazed and warmed by its own wood-burning stove.",
+        mapAlt: "Illustrated map of the village, its lanes and zones",
       },
       sections: {
-        lodgesHeading: "Find the lodge that fits",
+        lodgesHeading: "Two grades, two sizes",
         lodgesIntro:
-          "Every lodge is yours alone for the whole break. One price per lodge, however many of you come.",
-        activitiesHeading: "Things to do, together",
-        activitiesIntro: "Days in the village fill themselves. Here is where they usually start.",
-        seasonsHeading: "A forest for every season",
-        seasonsFootnote: "*Lowest price for a three-night Cedar Lodge 2 bedroom break in the season, subject to availability.",
+          "Cedar is the spec the village is built from. Signature adds the same seven things at either size. One price per lodge, however many of you come.",
+        activitiesHeading: "Days that fill themselves",
+        activitiesIntro: "Everything below is inside the village, and nothing needs a car.",
+        seasonsHeading: "A mountain for every season",
+        seasonsFootnote: "*Indicative lowest price for a three-night Cedar Lodge 2 bedroom break in the season, subject to availability.",
         discoverHeading: "More from Unity Parks",
-        faqsHeading: "Questions, answered",
+        faqsHeading: "Answered before you ask",
       },
       discoverCards: DISCOVER_CARDS.map((card) => ({
         title: card.title,
@@ -499,8 +508,9 @@ async function main() {
         photo: mediaIds[card.photo],
       })),
       memories: {
-        caption: "memories made so far, counting our way to a billion",
-        explainer: "One memory is one guest, one stay in the forest.",
+        caption: "Memories made so far",
+        explainer:
+          "One memory is one guest, one stay on the mountain. Every break in the village adds to the count.",
       },
     },
   });

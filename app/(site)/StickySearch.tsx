@@ -3,11 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 
 /**
- * Keeps the booking bar on screen. The bar renders in its natural spot over
- * the media band; once that spot scrolls above the viewport, the bar locks
- * to the top of the screen in an olive band and stays there for the rest of
- * the page. A sentinel marks the natural spot so scrolling back up releases
- * the bar again.
+ * Keeps the booking bar on screen. The bar's natural spot is riding the
+ * bottom edge of the hero; once that spot scrolls out of view, the bar
+ * itself pins near the top of the viewport, centred at its own width. A
+ * sentinel marks the natural spot so scrolling back up releases the bar.
+ *
+ * Below lg the bar stacks into five rows, far too tall to pin, and it sits
+ * in normal flow under the hero anyway, so pinning is suppressed entirely.
  */
 export function StickySearch({ children }: { children: React.ReactNode }) {
   const sentinel = useRef<HTMLDivElement>(null);
@@ -21,7 +23,9 @@ export function StickySearch({ children }: { children: React.ReactNode }) {
     // throttle either; the check is one getBoundingClientRect and React
     // ignores repeat setState calls with the same value.
     const onScroll = () => {
-      setStuck(el.getBoundingClientRect().top < 0);
+      // 1024 = Tailwind lg, the breakpoint where BookingBar stops stacking.
+      const pinnable = window.innerWidth >= 1024;
+      setStuck(pinnable && el.getBoundingClientRect().top < 44);
     };
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
@@ -38,11 +42,11 @@ export function StickySearch({ children }: { children: React.ReactNode }) {
       <div
         className={
           stuck
-            ? "fixed inset-x-0 top-0 z-50 bg-olive py-2.5 shadow-[0_2px_12px_rgba(0,0,0,0.25)]"
+            ? "fixed top-3.5 left-1/2 -translate-x-1/2 z-50 w-[min(1160px,100vw-80px)]"
             : ""
         }
       >
-        <div className="mx-auto max-w-6xl px-5">{children}</div>
+        {children}
       </div>
     </>
   );

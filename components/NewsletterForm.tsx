@@ -50,7 +50,7 @@ export function NewsletterForm() {
           aria-label="Email address"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="rounded-md bg-white text-ink placeholder:text-foreground/50 px-3 py-2 text-sm w-56"
+          className="rounded-md border border-[#5a5a5a] bg-[#3d3d3d] text-white placeholder:text-white/50 px-3.5 py-2.5 text-[15px] w-64 max-w-full"
         />
         <button type="submit" disabled={busy} className="btn-primary text-sm">
           {busy ? "One moment…" : "Sign up"}
