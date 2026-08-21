@@ -102,12 +102,18 @@ const UNITS_PER_GROUP = 5; // 20 lodges in total
  * UNIT_NAMES.WDL[2]). Fig and Olive Lanes sit in The Glades, Turaco and
  * Hyrax Lanes on Sunrise Ridge; the frontend maps lane to zone. Both grades
  * appear in every lane, so grade and place stay independent.
+ *
+ * The consecutive blocks are load-bearing, not decoration: every grade owns
+ * a run of three neighbouring doors in one zone and a run of two in the
+ * other, which is what lets "place our lodges together" sell real next-door
+ * lodges for parties of up to three (MAX_LODGES). Scatter a grade across a
+ * lane again and that product quietly becomes unsellable.
  */
 const UNIT_NAMES: Record<string, readonly string[]> = {
-  WDL: ["Fig Lane 1", "Fig Lane 5", "Olive Lane 2", "Turaco Lane 3", "Hyrax Lane 5"],
-  FST: ["Fig Lane 2", "Olive Lane 1", "Olive Lane 5", "Turaco Lane 4", "Hyrax Lane 2"],
-  LKV: ["Fig Lane 3", "Olive Lane 3", "Turaco Lane 1", "Turaco Lane 5", "Hyrax Lane 3"],
-  EXC: ["Fig Lane 4", "Olive Lane 4", "Turaco Lane 2", "Hyrax Lane 1", "Hyrax Lane 4"],
+  WDL: ["Fig Lane 1", "Fig Lane 2", "Fig Lane 3", "Turaco Lane 4", "Turaco Lane 5"],
+  FST: ["Olive Lane 1", "Olive Lane 2", "Olive Lane 3", "Hyrax Lane 4", "Hyrax Lane 5"],
+  LKV: ["Turaco Lane 1", "Turaco Lane 2", "Turaco Lane 3", "Fig Lane 4", "Fig Lane 5"],
+  EXC: ["Hyrax Lane 1", "Hyrax Lane 2", "Hyrax Lane 3", "Olive Lane 4", "Olive Lane 5"],
 };
 
 /**

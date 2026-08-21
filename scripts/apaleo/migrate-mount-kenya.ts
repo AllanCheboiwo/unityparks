@@ -38,6 +38,8 @@
  *   npm run apaleo:migrate                    ← do it
  *   npm run apaleo:migrate -- --services-only ← just step 5 (no rate writes,
  *                                               so no rate-write budget spent)
+ *   npm run apaleo:migrate -- --lanes-only    ← just the lane re-map (renames
+ *                                               only, no rate-write budget)
  */
 
 // No imports remain, so this keeps the file a module with its own scope.
@@ -45,6 +47,7 @@ export {};
 
 const DRY_RUN = process.argv.includes("--dry-run");
 const SERVICES_ONLY = process.argv.includes("--services-only");
+const LANES_ONLY = process.argv.includes("--lanes-only");
 
 // ---------------------------------------------------------------------------
 // Target values. Duplicated from provision.ts on purpose: importing that
@@ -120,12 +123,13 @@ const GROUPS: GroupTarget[] = [
 ];
 
 /** Lane-and-number names, index i-1 for unit <code><i>. Same table as
- *  provision.ts. Both grades appear in every lane. */
+ *  provision.ts. Both grades appear in every lane, each as a consecutive
+ *  block, so a party can be placed in genuinely neighbouring lodges. */
 const UNIT_NAMES: Record<string, readonly string[]> = {
-  WDL: ["Fig Lane 1", "Fig Lane 5", "Olive Lane 2", "Turaco Lane 3", "Hyrax Lane 5"],
-  FST: ["Fig Lane 2", "Olive Lane 1", "Olive Lane 5", "Turaco Lane 4", "Hyrax Lane 2"],
-  LKV: ["Fig Lane 3", "Olive Lane 3", "Turaco Lane 1", "Turaco Lane 5", "Hyrax Lane 3"],
-  EXC: ["Fig Lane 4", "Olive Lane 4", "Turaco Lane 2", "Hyrax Lane 1", "Hyrax Lane 4"],
+  WDL: ["Fig Lane 1", "Fig Lane 2", "Fig Lane 3", "Turaco Lane 4", "Turaco Lane 5"],
+  FST: ["Olive Lane 1", "Olive Lane 2", "Olive Lane 3", "Hyrax Lane 4", "Hyrax Lane 5"],
+  LKV: ["Turaco Lane 1", "Turaco Lane 2", "Turaco Lane 3", "Fig Lane 4", "Fig Lane 5"],
+  EXC: ["Hyrax Lane 1", "Hyrax Lane 2", "Hyrax Lane 3", "Olive Lane 4", "Olive Lane 5"],
 };
 
 const SERVICE_PATCHES: Array<{
@@ -410,6 +414,68 @@ async function migrateUnits() {
   }
 }
 
+/**
+ * Re-map the lanes onto the consecutive-block layout in UNIT_NAMES.
+ *
+ * The new layout is a permutation of the same twenty names, so a door being
+ * freed by one unit is a door another unit is moving into. Renaming in place
+ * would put two lodges on the same name for as long as the sequence runs, so
+ * every unit that has to move parks on a temporary name first and takes its
+ * final one in a second pass. Idempotent: a group already sitting on its
+ * targets is skipped without a single write.
+ *
+ * Assignment is by current name, numerically sorted, so a re-run maps the
+ * same unit to the same door rather than shuffling the village.
+ */
+async function remapLanes() {
+  for (const g of GROUPS) {
+    const { status, data } = await api(
+      "GET",
+      `/inventory/v1/units?propertyId=${PROPERTY_ID}&unitGroupId=${PROPERTY_ID}-${g.code}&pageSize=100`,
+    );
+    if (!ok(status)) throw new Error(`Listing units for ${g.code} failed (${status}).`);
+    const units = ((data as any)?.units ?? []) as Array<{ id: string; name: string }>;
+    const targets = UNIT_NAMES[g.code];
+    if (units.length !== targets.length) {
+      log("⚠️ ", `  ${g.code}: ${units.length} units but ${targets.length} names; skipping the group.`);
+      continue;
+    }
+    // Only units sitting on a name this grade no longer owns have to move,
+    // and they take the doors nobody is holding. Anything already on one of
+    // its grade's doors stays put, so a re-run writes nothing.
+    const movers = [...units]
+      .filter((u) => !targets.includes(u.name))
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+    const free = targets.filter((t) => !units.some((u) => u.name === t));
+    const moves = movers.map((unit, i) => ({ unit, target: free[i] }));
+    if (moves.length === 0) {
+      log("✅", `  ${g.code}: already on the block layout.`);
+      continue;
+    }
+    for (const { unit, target } of moves) {
+      await updateUnit(
+        unit.id,
+        nameOps(`UP-TMP-${unit.id}`),
+        g,
+        `UP-TMP-${unit.id}`,
+        `park "${unit.name}" -> temp (heading for "${target}")`,
+      );
+    }
+    for (const { unit, target } of moves) {
+      await updateUnit(unit.id, nameOps(target), g, target, `"${unit.name}" -> "${target}"`);
+    }
+  }
+}
+
+/** A unit's name and both description locales move together. */
+function nameOps(name: string): PatchOp[] {
+  return [
+    { op: "replace", path: "/name", value: name },
+    { op: "add", path: "/description/en", value: name },
+    { op: "add", path: "/description/de", value: name },
+  ];
+}
+
 /** Units should accept JSON Patch; if they 405 like unit groups did, fall
  *  back to read-modify-PUT of the replaceable fields. */
 async function updateUnit(
@@ -635,6 +701,13 @@ async function rewriteRates(rpId: string, floorPrice: number, label: string) {
 async function main() {
   console.log(`\n🏔️  Unity Parks – migrate UPNV to Mount Kenya${DRY_RUN ? " (DRY RUN)" : ""}\n`);
 
+  if (LANES_ONLY) {
+    log("🧭", "Lane re-map only…");
+    await remapLanes();
+    console.log(`\n✨  ${DRY_RUN ? "Dry run complete: nothing was written." : "Lanes re-mapped."}\n`);
+    return;
+  }
+
   if (SERVICES_ONLY) {
     log("🎁", "Service copy only…");
     await migrateServices();
@@ -654,6 +727,10 @@ async function main() {
 
   log("🛏️ ", "Units (lane names, and maxPersons on LKV/EXC)…");
   await migrateUnits();
+  console.log();
+
+  log("🧭", "Lane re-map (consecutive blocks per grade)…");
+  await remapLanes();
   console.log();
 
   log("💰", "Rate plan names…");

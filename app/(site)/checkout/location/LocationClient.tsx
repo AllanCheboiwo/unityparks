@@ -119,7 +119,7 @@ export function LocationClient() {
           // on a mode the page has stopped offering.
           const pools = summary.lodges.map((l) => offers[l.slot]?.units ?? []);
           const seatable =
-            pools.every((u) => u.length > 0) && planTogether(pools) !== null;
+            pools.every((u) => u.length > 0) && planTogether(pools)?.adjacent === true;
           setMode(seatable ? "together" : "exact");
         } else if (kinds.every((k) => k === "none")) setMode("none");
         else setMode("exact");
@@ -153,14 +153,13 @@ export function LocationClient() {
   // card quotes the first slot that has one priced.
   const togetherFee =
     session.lodges.map((l) => offersBySlot[l.slot]?.fee).find((f) => f != null) ?? null;
-  // Only offer placing-together when one lane can actually seat this break
-  // today: the lanes carry at most two lodges of any one grade, so a
-  // three-lodge break of matching tiers can never be seated and must not be
-  // sold a fee it would only refund at checkout.
+  // Only offer placing-together when neighbouring doors are actually free
+  // for these tiers today, so the fee is never sold against a break that
+  // checkout would only refund.
   const togetherPossible =
     multi &&
     session.lodges.every((l) => (offersBySlot[l.slot]?.units.length ?? 0) > 0) &&
-    planTogether(session.lodges.map((l) => offersBySlot[l.slot]!.units)) !== null;
+    planTogether(session.lodges.map((l) => offersBySlot[l.slot]!.units))?.adjacent === true;
   const activeOffers = offersBySlot[activeSlot];
   const activeChoice = choiceBySlot[activeSlot] ?? null;
   const activeTier = session.lodges.find((l) => l.slot === activeSlot)?.lodge;
@@ -368,7 +367,7 @@ export function LocationClient() {
                   renderModeCard({
                     value: "together",
                     title: "Place our lodges together",
-                    copy: "We'll put your lodges on the same lane, a short walk from each other. If we can't manage it for your dates, we remove the fee and still place you close.",
+                    copy: "We'll pick neighbouring lodges for you. If we can't manage it for your dates, we remove the fee and still place you close.",
                     price: togetherFee ? `${formatKes(togetherFee.amount)} per lodge` : undefined,
                   })
                 ) : (
@@ -377,7 +376,7 @@ export function LocationClient() {
                       Place our lodges together
                     </span>
                     <span className="mt-1 text-sm text-foreground/50">
-                      No single lane has room for all your lodges on these
+                      No neighbouring lodges of your grades are free on these
                       dates, so we can&apos;t promise it this time.
                     </span>
                   </div>

@@ -6,8 +6,6 @@ import { useSearchParams } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { formatDate, formatKes, nightsLabel, knownPlates } from "@/lib/format";
 import { LODGES } from "@/content/lodges";
-import { laneOf } from "@/content/village";
-import { trailingNumber } from "@/lib/placement";
 import type { BookingConfirmation } from "@/lib/types";
 
 export function ConfirmationClient({ bookingId }: { bookingId: string }) {
@@ -71,10 +69,8 @@ export function ConfirmationClient({ bookingId }: { bookingId: string }) {
   );
   const settled = booking.folioBalance === 0;
   const multi = booking.lodges.length > 1;
-  // The placed-together outcome is one story for the whole group: either one
-  // lane took them all and the fee stood, or the fee left every slot. The
-  // fee buys the lane; landing next door on top of that is luck, so the
-  // numbers decide which of the two sentences the guest reads.
+  // The placed-together outcome is one story for the whole group: either the
+  // lodges are neighbours and the fee stood, or the fee left every slot.
   const togetherLodges = booking.lodges.filter((l) => l.locationChoice === "together");
   const togetherDropped = togetherLodges.some((l) => l.locationFeeDropped);
   const togetherNames = togetherLodges
@@ -82,13 +78,6 @@ export function ConfirmationClient({ bookingId }: { bookingId: string }) {
     .filter((n): n is string => Boolean(n));
   const togetherKept =
     !togetherDropped && togetherNames.length === togetherLodges.length && togetherNames.length > 1;
-  const togetherDoors = togetherNames
-    .map((n) => trailingNumber(n))
-    .filter((n): n is number => n !== null);
-  const togetherAdjacent =
-    togetherDoors.length === togetherNames.length &&
-    Math.max(...togetherDoors) - Math.min(...togetherDoors) === togetherDoors.length - 1;
-  const togetherLane = laneOf(togetherNames[0] ?? "")?.name ?? null;
 
   return (
     <div className="mx-auto max-w-xl px-5 py-10">
@@ -218,11 +207,7 @@ export function ConfirmationClient({ bookingId }: { bookingId: string }) {
           })}
           {togetherKept && (
             <p className="mt-3 text-sm text-foreground">
-              {togetherAdjacent ? "Your lodges are neighbours: " : null}
-              {!togetherAdjacent && togetherLane
-                ? `Your lodges are together on ${togetherLane}: `
-                : null}
-              {!togetherAdjacent && !togetherLane ? "Your lodges are together: " : null}
+              Your lodges are neighbours:{" "}
               <span className="font-semibold text-navy">
                 {togetherNames.slice(0, -1).join(", ")} and{" "}
                 {togetherNames[togetherNames.length - 1]}
@@ -232,7 +217,7 @@ export function ConfirmationClient({ bookingId }: { bookingId: string }) {
           )}
           {togetherDropped && (
             <p className="mt-3 rounded-md border border-bronze bg-mist px-3 py-2 text-xs text-ink">
-              We couldn&apos;t get your lodges onto one lane this time, so the
+              We couldn&apos;t place your lodges side by side this time, so the
               placing-together fee was not charged. We&apos;ve still chosen
               lovely lodges for you.
             </p>

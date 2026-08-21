@@ -807,13 +807,17 @@ type AssignmentOutcome = {
  *
  * Pass 2, "place our lodges together": one lane must seat the whole group,
  * each slot with a distinct free unit of its own tier, and the combination
- * with the tightest run of door numbers wins. One lane is what the fee sells
- * (every lane carries at most two lodges of a grade, so true next-door
- * neighbours are luck, not a promise we can keep); the confirmation reads
- * the assigned numbers and says which of the two the guest got. A 422
+ * with the tightest run of door numbers wins. The fee buys neighbours, so it
+ * only stands when that run is consecutive: the village is named in
+ * consecutive blocks per grade (provision.ts UNIT_NAMES) precisely so this
+ * is winnable, but a break that sold out around the guest can still leave
+ * only scattered doors. Those are worth assigning anyway, and the fee leaves
+ * every folio first so the guest keeps the closest lodges for free. A 422
  * mid-group earns one availability re-read and re-plan; if no lane can seat
  * the group at all, the fallback covers the WHOLE group, fees first: nobody
- * pays for a placement only half the break received.
+ * pays for a placement only half the break received. Fee removal is one-way
+ * within an attempt sequence, so a recompute that lands adjacent after a
+ * scattered attempt cannot claim a charge the folio no longer carries.
  *
  * Pass 3, everyone still without an outcome auto-assigns, so the
  * confirmation can greet every lodge with a real number.
@@ -890,6 +894,9 @@ async function assignUnits(
     // recompute, for their own slot only.
     const held = new Map<number, UnitOption>();
 
+    // Once the group's fees leave the folios they never come back, so a
+    // later recompute cannot claim a charge the folio no longer carries.
+    let feesRemoved = false;
     const attemptPlacement = async (): Promise<boolean> => {
       const availability = new Map<string, UnitOption[]>();
       for (const code of new Set(together.map((e) => e.lodge.unitGroupCode!))) {
@@ -904,13 +911,23 @@ async function assignUnits(
       }
       const plan = planTogetherUnits(together, availability, taken, held);
       if (!plan) return false;
+      if (!plan.adjacent && !feesRemoved) {
+        // Money first, before a single unit is assigned: the guest keeps the
+        // closest lodges we can offer, but not the bill for neighbours.
+        for (const { reservationId, lodge } of together) {
+          if (lodge.locationServiceId) {
+            await removeReservationService(reservationId, lodge.locationServiceId);
+          }
+        }
+        feesRemoved = true;
+      }
       for (const { index, reservationId } of together) {
         const unit = await assignSpecificUnit(reservationId, plan.units.get(index)!.id);
         held.set(index, unit);
         outcomes[index] = {
           assignedUnitId: unit.id,
           assignedUnitName: unit.name,
-          locationFeeDropped: false,
+          locationFeeDropped: feesRemoved,
         };
       }
       return true;
@@ -945,10 +962,13 @@ async function assignUnits(
       // Money first for the WHOLE group: half a break placed together is not
       // what the fee sold, so every together fee leaves the folios before
       // any lodge takes a fallback unit.
-      for (const { reservationId, lodge } of together) {
-        if (lodge.locationServiceId) {
-          await removeReservationService(reservationId, lodge.locationServiceId);
+      if (!feesRemoved) {
+        for (const { reservationId, lodge } of together) {
+          if (lodge.locationServiceId) {
+            await removeReservationService(reservationId, lodge.locationServiceId);
+          }
         }
+        feesRemoved = true;
       }
       for (const { index, reservationId } of together) {
         const fallback = await autoAssignSafely(reservationId);

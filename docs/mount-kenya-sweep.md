@@ -120,31 +120,50 @@ lanes in The Glades, creature lanes up on the forest edge. Both grades in
 every lane. Distribution per section 14: The Glades takes WDL x3, FST x3,
 LKV x2, EXC x2; Sunrise Ridge takes the rest.
 
+Each grade sits in a **consecutive block**: a run of three doors in one zone
+and a run of two in the other. This is load-bearing, not tidiness. "Place our
+lodges together" sells genuinely neighbouring lodges for parties of up to
+three (MAX_LODGES), and only consecutive doors of the same grade can deliver
+that. The first layout interleaved the grades door by door, which left no
+grade with two adjacent doors anywhere and quietly made the product
+unsellable; the fee was charged and refunded at checkout every time. Scatter
+a grade across a lane again and the same thing happens.
+
 | Unit code | New name | Zone |
 |---|---|---|
 | WDL01 | Fig Lane 1 | The Glades |
-| FST01 | Fig Lane 2 | The Glades |
-| LKV01 | Fig Lane 3 | The Glades |
-| EXC01 | Fig Lane 4 | The Glades |
-| WDL02 | Fig Lane 5 | The Glades |
-| FST02 | Olive Lane 1 | The Glades |
-| WDL03 | Olive Lane 2 | The Glades |
-| LKV02 | Olive Lane 3 | The Glades |
-| EXC02 | Olive Lane 4 | The Glades |
-| FST03 | Olive Lane 5 | The Glades |
-| LKV03 | Turaco Lane 1 | Sunrise Ridge |
-| EXC03 | Turaco Lane 2 | Sunrise Ridge |
-| WDL04 | Turaco Lane 3 | Sunrise Ridge |
-| FST04 | Turaco Lane 4 | Sunrise Ridge |
-| LKV04 | Turaco Lane 5 | Sunrise Ridge |
-| EXC04 | Hyrax Lane 1 | Sunrise Ridge |
-| FST05 | Hyrax Lane 2 | Sunrise Ridge |
-| LKV05 | Hyrax Lane 3 | Sunrise Ridge |
-| EXC05 | Hyrax Lane 4 | Sunrise Ridge |
-| WDL05 | Hyrax Lane 5 | Sunrise Ridge |
+| WDL02 | Fig Lane 2 | The Glades |
+| WDL03 | Fig Lane 3 | The Glades |
+| LKV04 | Fig Lane 4 | The Glades |
+| LKV05 | Fig Lane 5 | The Glades |
+| FST01 | Olive Lane 1 | The Glades |
+| FST02 | Olive Lane 2 | The Glades |
+| FST03 | Olive Lane 3 | The Glades |
+| EXC04 | Olive Lane 4 | The Glades |
+| EXC05 | Olive Lane 5 | The Glades |
+| LKV01 | Turaco Lane 1 | Sunrise Ridge |
+| LKV02 | Turaco Lane 2 | Sunrise Ridge |
+| LKV03 | Turaco Lane 3 | Sunrise Ridge |
+| WDL04 | Turaco Lane 4 | Sunrise Ridge |
+| WDL05 | Turaco Lane 5 | Sunrise Ridge |
+| EXC01 | Hyrax Lane 1 | Sunrise Ridge |
+| EXC02 | Hyrax Lane 2 | Sunrise Ridge |
+| EXC03 | Hyrax Lane 3 | Sunrise Ridge |
+| FST04 | Hyrax Lane 4 | Sunrise Ridge |
+| FST05 | Hyrax Lane 5 | Sunrise Ridge |
+
+Unit codes above are the intended pairing; the re-map assigns by door rather
+than by code, so a given lodge may hold a different code than this table
+shows. The names, blocks and per-grade counts are what matter.
+
+Applied by `npm run apaleo:migrate -- --lanes-only`, which parks every mover
+on a temporary name before taking its final one (the layout is a permutation
+of the same twenty names, so renaming in place would collide) and writes
+nothing when the village already matches.
 
 Historical rows: `locationUnitName` snapshots keep "Lakeview Lodge 3" on old
-bookings. Leave them; they were true when written.
+bookings, and bookings taken before the re-map keep their old lane names.
+Leave them; they were true when written.
 
 ### A4. Service copy fixes (found in the sweep, missing from section 15)
 
