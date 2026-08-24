@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
+<link href="https://fonts.googleapis.com/css2?family=Fira+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400&family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet" />
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #fff; color: #4c4e4b; font-family: "Open Sans", Arial, sans-serif; font-size: 16px; line-height: 1.55; -webkit-font-smoothing: antialiased; text-wrap: pretty; }
+  a { color: #2c5670; text-decoration: none; }
+  a:hover { color: #af6408; }
+  details > summary { list-style: none; }
+  details > summary::-webkit-details-marker { display: none; }
+  details[open] .faq-plus { transform: rotate(45deg); }
+  @keyframes up-drift { 0% { transform: scale(1.06) translate3d(0,0,0); } 100% { transform: scale(1.18) translate3d(-1.5%,-2%,0); } }
+  @media (max-width: 1240px) { .up-locale { display: none !important; } }
+  @media (max-width: 1140px) { .up-nav { gap: 22px !important; } .up-signin { display: none !important; } }
+  @media (max-width: 1060px) { .up-nav a:nth-child(n+5) { display: none; } }
+  @media (max-width: 980px) { .up-nav a:nth-child(n+4) { display: none; } }
+  @media (max-width: 860px) { .up-nav a:nth-child(n+3) { display: none; } }
+  /* Below lg the booking bar stacks, as components/BookingBar.tsx does. */
+  @media (max-width: 1120px) {
+    .up-bar { flex-direction: column !important; }
+    .up-bar .up-field { flex: none !important; width: 100%; }
+    .up-bar .up-div { width: auto !important; height: 1px; }
+    .up-bar .up-search { padding: 15px 0 !important; justify-content: center; }
+    .up-searchwrap { position: static !important; transform: none !important; }
+    .up-hero-inner { padding-bottom: 64px !important; }
+    .up-village { padding-top: 96px !important; }
+    /* A five-row stacked bar has no business being pinned to a short viewport. */
+    .up-bar { position: static !important; transform: none !important; width: auto !important; }
+  }
+  .up-ph { filter: saturate(.85) contrast(1.03); }
+  .up-burger { display: none; }
+  @media (max-width: 1000px) {
+    .up-g4 { grid-template-columns: repeat(2, 1fr) !important; }
+    .up-cmp { grid-template-columns: 1fr !important; }
+    .up-cmp > div:first-child { border-right: none !important; border-bottom: 1px solid #e9e6de; }
+    .up-act { grid-template-columns: 1fr !important; }
+    .up-act > article { min-height: 340px !important; }
+  }
+  @media (max-width: 900px) {
+    .up-vgrid, .up-faqg, .up-shead { grid-template-columns: 1fr !important; gap: 40px !important; }
+    .up-shead { gap: 14px !important; align-items: start !important; }
+    .up-faqL { position: static !important; }
+    .up-cnt { grid-template-columns: 1fr !important; gap: 36px !important; }
+    .up-cntr { border-left: none !important; padding-left: 0 !important; }
+  }
+  @media (max-width: 760px) {
+    .up-nav { display: none !important; }
+    .up-burger { display: flex !important; }
+  }
+  @media (max-width: 700px) {
+    .up-notice, .up-head, .up-searchin, .up-fwrap { padding-left: 20px !important; padding-right: 20px !important; }
+    .up-head { height: 66px !important; gap: 20px !important; }
+    .up-sec { padding: 72px 20px 0 !important; }
+    .up-village { padding: 72px 20px 0 !important; }
+    .up-hero-inner { padding: 0 20px 56px !important; }
+    .up-h1 { font-size: 40px !important; }
+    .up-tdo { padding-left: 20px !important; padding-right: 20px !important; }
+    .up-hero-sub { font-size: 16px !important; }
+    .up-cnt { padding: 64px 20px !important; }
+    .up-num { font-size: 60px !important; }
+    .up-cta { margin-top: 72px !important; padding: 0 20px !important; }
+    .up-ctain { padding: 44px 26px !important; }
+    .up-fgrid { grid-template-columns: 1fr 1fr !important; gap: 30px !important; padding: 40px 0 !important; }
+    .up-fbot { padding: 18px 20px !important; }
+    .up-news { width: 100%; }
+    .up-news input { min-width: 0 !important; flex: 1; }
+    .up-band { margin-top: 72px !important; }
+  }
+  @media (max-width: 640px) {
+    .up-g4 { grid-template-columns: 1fr !important; }
+    .up-fgrid { grid-template-columns: 1fr !important; }
+  }
+</style>
+</helmet>
+
+<div style="font-family:'Open Sans',Arial,sans-serif;color:#4c4e4b;background:#fff">
+
+  <sc-if value="{{ showNoticeBar }}" hint-placeholder-val="{{ true }}">
+    <div style="background:#2d5f73;color:#fff">
+      <div class="up-notice" style="max-width:1240px;margin:0 auto;padding:10px 40px;display:flex;align-items:center;gap:10px;font-size:14px">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="flex-shrink:0"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.8"></circle><path d="M12 8h.01M12 11v5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path></svg>
+        <span>Breaks start on a Friday or a Monday.</span>
+        <a href="#search" style="color:#fff;font-weight:700;text-decoration:underline;text-underline-offset:3px">Secure your dates and lodge</a>
+      </div>
+    </div>
+  </sc-if>
+
+  <header style="background:#fff;border-bottom:1px solid #e9e6de">
+    <div class="up-head" style="max-width:1240px;margin:0 auto;padding:0 40px;height:82px;display:flex;align-items:center;gap:44px">
+      <a href="#" style="display:flex;align-items:center;gap:11px;flex-shrink:0">
+        <svg width="36" height="36" viewBox="0 0 34 34" aria-hidden="true">
+          <circle cx="17" cy="17" r="16" fill="#536917"></circle>
+          <path d="M17 6 L24 18 H20.5 L26 26 H8 L13.5 18 H10 Z" fill="#ffffff"></path>
+          <path d="M8 26 H26" stroke="#2c5670" stroke-width="2.5"></path>
+        </svg>
+        <span style="font-family:'Fira Sans',Arial,sans-serif;font-weight:600;font-size:22px;letter-spacing:-.015em;color:#536917">Unity Parks</span>
+      </a>
+      <nav class="up-nav" style="display:flex;align-items:center;gap:30px;flex:1;min-width:0;flex-wrap:nowrap">
+        <a href="#village" style="font-size:15px;font-weight:600;color:#5e6448;white-space:nowrap">Discover Unity Parks</a>
+        <a href="#lodges" style="font-size:15px;font-weight:600;color:#5e6448;white-space:nowrap">Lodges</a>
+        <a href="#things-to-do" style="font-size:15px;font-weight:600;color:#5e6448;white-space:nowrap">Things to do</a>
+        <a href="#seasons" style="font-size:15px;font-weight:600;color:#5e6448;white-space:nowrap">Breaks</a>
+        <a href="#faq" style="font-size:15px;font-weight:600;color:#5e6448;white-space:nowrap">My booking</a>
+      </nav>
+      <div style="display:flex;align-items:center;gap:18px;flex-shrink:0">
+        <span class="up-locale" style="font-size:13px;color:#8a877f;display:flex;align-items:center;gap:6px;white-space:nowrap">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 21s-7-6.1-7-11a7 7 0 0 1 14 0c0 4.9-7 11-7 11Z"></path><circle cx="12" cy="10" r="2.5"></circle></svg>
+          Naro Moru, Mount Kenya
+        </span>
+        <a class="up-signin" href="#" style="font-size:14px;font-weight:600;color:#8b7346;border:1px solid #cfc4ac;border-radius:6px;padding:8px 16px;white-space:nowrap">Sign in</a>
+        <a href="#search" style="font-size:14px;font-weight:700;color:#fff;background:#af6408;border-radius:6px;padding:9px 18px;white-space:nowrap">Book a break</a>
+        <button type="button" class="up-burger" onClick="{{ toggleMenu }}" aria-label="Open menu" style="align-items:center;justify-content:center;width:42px;height:42px;border:1px solid #e9e6de;border-radius:6px;background:#fff;cursor:pointer;flex-shrink:0">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1d1d1d" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"></path></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <div style="{{ drawerStyle }}">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:28px">
+      <span style="font-family:'Fira Sans',Arial,sans-serif;font-weight:600;font-size:20px;color:#536917">Unity Parks</span>
+      <button type="button" onClick="{{ closeMenu }}" aria-label="Close menu" style="width:42px;height:42px;border:1px solid #e9e6de;border-radius:6px;background:#fff;cursor:pointer;font-size:20px;color:#1d1d1d">×</button>
+    </div>
+    <nav style="display:flex;flex-direction:column">
+      <a href="#village" onClick="{{ closeMenu }}" style="padding:16px 0;border-top:1px solid #e9e6de;font-family:'Fira Sans',Arial,sans-serif;font-size:20px;font-weight:600;color:#1d1d1d">Discover Unity Parks</a>
+      <a href="#lodges" onClick="{{ closeMenu }}" style="padding:16px 0;border-top:1px solid #e9e6de;font-family:'Fira Sans',Arial,sans-serif;font-size:20px;font-weight:600;color:#1d1d1d">Lodges</a>
+      <a href="#things-to-do" onClick="{{ closeMenu }}" style="padding:16px 0;border-top:1px solid #e9e6de;font-family:'Fira Sans',Arial,sans-serif;font-size:20px;font-weight:600;color:#1d1d1d">Things to do</a>
+      <a href="#seasons" onClick="{{ closeMenu }}" style="padding:16px 0;border-top:1px solid #e9e6de;font-family:'Fira Sans',Arial,sans-serif;font-size:20px;font-weight:600;color:#1d1d1d">Breaks</a>
+      <a href="#faq" onClick="{{ closeMenu }}" style="padding:16px 0;border-top:1px solid #e9e6de;border-bottom:1px solid #e9e6de;font-family:'Fira Sans',Arial,sans-serif;font-size:20px;font-weight:600;color:#1d1d1d">My booking</a>
+    </nav>
+    <a href="#search" onClick="{{ closeMenu }}" style="margin-top:28px;background:#af6408;color:#fff;font-size:16px;font-weight:700;border-radius:6px;padding:14px 0;text-align:center">Book a break</a>
+  </div>
+
+  <section id="hero" style="position:relative;background:#12160f">
+    <div style="position:relative;height:78vh;min-height:600px;max-height:820px;overflow:hidden">
+      <img class="up-ph" src="public/photos/hero-forest.jpg" alt="Cedar forest on the slopes of Mount Kenya" style="{{ motionStyle }}" />
+      <div style="position:absolute;inset:0;background:linear-gradient(100deg,rgba(12,18,10,.8) 0%,rgba(12,18,10,.5) 46%,rgba(12,18,10,.08) 100%)"></div>
+      <div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(12,18,10,.72) 0%,rgba(12,18,10,0) 42%)"></div>
+      <div class="up-hero-inner" style="position:relative;height:100%;max-width:1240px;margin:0 auto;padding:0 40px 190px;display:flex;flex-direction:column;justify-content:flex-end">
+        <p style="font-size:12px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:#c9dbb2;margin:0 0 22px">One village · 2,100 m · Naro Moru</p>
+        <h1 class="up-h1" style="font-family:'Fira Sans',Arial,sans-serif;font-weight:700;font-size:64px;line-height:1.06;letter-spacing:-.02em;color:#fff;margin:0;max-width:16ch">A village in the <em style="font-style:italic">cedar forest</em></h1>
+        <p class="up-hero-sub" style="font-size:18px;line-height:1.65;color:rgba(255,255,255,.84);margin:26px 0 0;max-width:50ch">A lodge of your own in the cedar forest below the peaks. Your own stove, your own deck, warm water every day, and no car once you arrive.</p>
+      </div>
+    </div>
+
+    <div id="search" class="up-searchwrap" style="position:absolute;left:0;right:0;bottom:0;transform:translateY(50%);z-index:30">
+      <div class="up-searchin" style="max-width:1240px;margin:0 auto;padding:0 40px">
+        <div class="up-bar" style="{{ barStyle }}">
+          <div class="up-field" style="flex:1.15;min-width:0;padding:14px 20px;display:flex;align-items:center;gap:12px">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#536917" stroke-width="1.8" aria-hidden="true" style="flex-shrink:0"><path d="M12 21s-7-5.4-7-11a7 7 0 1 1 14 0c0 5.6-7 11-7 11z"></path><circle cx="12" cy="10" r="2.5"></circle></svg>
+            <span style="min-width:0">
+              <span style="display:block;font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:#8a877f">Village</span>
+              <span style="display:block;font-size:16px;font-weight:600;color:#1d1d1d;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Unity Parks Mount Kenya</span>
+            </span>
+          </div>
+          <div class="up-div" style="width:1px;background:#e9e6de;flex-shrink:0"></div>
+          <button type="button" class="up-field" style="flex:1.35;min-width:0;padding:14px 20px;border:0;background:transparent;font-family:inherit;text-align:left;display:flex;align-items:center;gap:12px;cursor:pointer" style-hover="background:#faf9f5">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#536917" stroke-width="1.8" aria-hidden="true" style="flex-shrink:0"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 9.5h18M8 3v4M16 3v4" stroke-linecap="round"></path></svg>
+            <span style="min-width:0">
+              <span style="display:block;font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:#8a877f">Dates</span>
+              <span style="display:block;font-size:16px;font-weight:600;color:#1d1d1d;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Fri 18 Sep <span style="color:#b8b4aa">→</span> Mon 21 Sep</span>
+            </span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#b8b4aa" stroke-width="2.5" aria-hidden="true" style="margin-left:auto;flex-shrink:0"><path d="m6 9 6 6 6-6"></path></svg>
+          </button>
+          <div class="up-div" style="width:1px;background:#e9e6de;flex-shrink:0"></div>
+          <button type="button" class="up-field" style="flex:.8;min-width:0;padding:14px 20px;border:0;background:transparent;font-family:inherit;text-align:left;display:flex;align-items:center;gap:12px;cursor:pointer" style-hover="background:#faf9f5">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#536917" stroke-width="1.8" aria-hidden="true" style="flex-shrink:0"><rect x="4" y="3.5" width="16" height="17.5" rx="1"></rect><path d="M10 21v-4.5h4V21"></path><path d="M8.5 7.5h2m3 0h2m-7 4h2m3 0h2" stroke-linecap="round"></path></svg>
+            <span style="min-width:0">
+              <span style="display:block;font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:#8a877f">Lodges</span>
+              <span style="display:block;font-size:16px;font-weight:600;color:#1d1d1d">1 lodge</span>
+            </span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#b8b4aa" stroke-width="2.5" aria-hidden="true" style="margin-left:auto;flex-shrink:0"><path d="m6 9 6 6 6-6"></path></svg>
+          </button>
+          <div class="up-div" style="width:1px;background:#e9e6de;flex-shrink:0"></div>
+          <button type="button" class="up-field" style="flex:.8;min-width:0;padding:14px 20px;border:0;background:transparent;font-family:inherit;text-align:left;display:flex;align-items:center;gap:12px;cursor:pointer" style-hover="background:#faf9f5">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#536917" stroke-width="1.8" aria-hidden="true" style="flex-shrink:0"><circle cx="12" cy="8" r="3.5"></circle><path d="M5 20c1.4-3.4 4-5 7-5s5.6 1.6 7 5" stroke-linecap="round"></path></svg>
+            <span style="min-width:0">
+              <span style="display:block;font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:#8a877f">Guests</span>
+              <span style="display:block;font-size:16px;font-weight:600;color:#1d1d1d">2 adults</span>
+            </span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#b8b4aa" stroke-width="2.5" aria-hidden="true" style="margin-left:auto;flex-shrink:0"><path d="m6 9 6 6 6-6"></path></svg>
+          </button>
+          <button type="button" class="up-search" style="flex-shrink:0;border:0;background:#af6408;color:#fff;font-family:inherit;font-size:16px;font-weight:700;padding:0 34px;display:flex;align-items:center;gap:10px;cursor:pointer;align-self:stretch" style-hover="background:#8a4e06">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="11" cy="11" r="6"></circle><path d="M19.5 19.5 15.6 15.6" stroke-linecap="round"></path></svg>
+            Search
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="village" class="up-village" style="max-width:1240px;margin:0 auto;padding:180px 40px 0">
+    <div class="up-vgrid" style="display:grid;grid-template-columns:1fr 1.05fr;gap:80px;align-items:start">
+      <div>
+        <p style="font-size:12px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:#536917;margin:0 0 20px">The village</p>
+        <h2 style="font-family:'Fira Sans',Arial,sans-serif;font-size:42px;font-weight:700;line-height:1.12;letter-spacing:-.015em;color:#1d1d1d;margin:0">One village, high on the mountain</h2>
+        <p style="font-size:17px;line-height:1.75;margin:24px 0 0">Unity Parks Mount Kenya stands in indigenous cedar forest above Naro Moru, where the Burguret comes down off the peaks. Lodges sit in lanes of four to six around a shared green. You park once and walk everywhere after that.</p>
+        <p style="font-size:17px;line-height:1.75;margin:18px 0 0">At 2,100 metres the evenings are properly cold all year. Every lodge answers that: insulated, double glazed and warmed by its own wood-burning stove.</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:32px 40px;margin-top:44px;padding-top:36px;border-top:1px solid #e9e6de">
+          <div>
+            <p style="font-family:'Fira Sans',Arial,sans-serif;font-size:34px;font-weight:600;color:#536917;margin:0;line-height:1">2,100 m</p>
+            <p style="font-size:14px;margin:8px 0 0;color:#6f6c64">above sea level, in the cedar forest</p>
+          </div>
+          <div>
+            <p style="font-family:'Fira Sans',Arial,sans-serif;font-size:34px;font-weight:600;color:#536917;margin:0;line-height:1">4</p>
+            <p style="font-size:14px;margin:8px 0 0;color:#6f6c64">lodges, two grades in two sizes</p>
+          </div>
+          <div>
+            <p style="font-family:'Fira Sans',Arial,sans-serif;font-size:34px;font-weight:600;color:#536917;margin:0;line-height:1">Car-free</p>
+            <p style="font-size:14px;margin:8px 0 0;color:#6f6c64">lanes, with parking beside your lodge</p>
+          </div>
+          <div>
+            <p style="font-family:'Fira Sans',Arial,sans-serif;font-size:34px;font-weight:600;color:#536917;margin:0;line-height:1">Fri / Mon</p>
+            <p style="font-size:14px;margin:8px 0 0;color:#6f6c64">the two days every break starts</p>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div style="border:1px solid #e9e6de;border-radius:12px;overflow:hidden;background:#f5f3ee">
+          <img src="public/village-map.svg" alt="Illustrated map of the village, its lanes and zones" style="display:block;width:100%;height:auto;aspect-ratio:16/10;object-fit:cover" />
+        </div>
+        <div style="margin-top:28px">
+          <p style="font-family:'Fira Sans',Arial,sans-serif;font-size:20px;font-weight:600;color:#1d1d1d;margin:0 0 4px">Four zones, downhill to uphill</p>
+          <p style="font-size:14px;color:#8a877f;margin:0 0 18px">Grade and size decide the lodge. The zone decides the view. Price climbs with the slope.</p>
+          <div style="display:flex;flex-direction:column">
+            <div style="display:grid;grid-template-columns:1fr auto;gap:16px;align-items:baseline;padding:16px 0;border-top:1px solid #e9e6de">
+              <div>
+                <p style="font-size:15px;font-weight:700;color:#1d1d1d;margin:0">Riverside</p>
+                <p style="font-size:14px;margin:3px 0 0;color:#6f6c64">Flattest lanes, the sound of water, closest to the square.</p>
+              </div>
+              <span style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#8a877f;border:1px solid #d4d1c9;border-radius:3px;padding:4px 9px;white-space:nowrap">Phase two</span>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr auto;gap:16px;align-items:baseline;padding:16px 0;border-top:1px solid #e9e6de">
+              <div>
+                <p style="font-size:15px;font-weight:700;color:#1d1d1d;margin:0">The Glades</p>
+                <p style="font-size:14px;margin:3px 0 0;color:#6f6c64">Central, among the trees, three minutes from the Water Garden.</p>
+              </div>
+              <span style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#fff;background:#536917;border-radius:3px;padding:4px 9px;white-space:nowrap">Open</span>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr auto;gap:16px;align-items:baseline;padding:16px 0;border-top:1px solid #e9e6de">
+              <div>
+                <p style="font-size:15px;font-weight:700;color:#1d1d1d;margin:0">Cedar Rise</p>
+                <p style="font-size:14px;margin:3px 0 0;color:#6f6c64">Mid slope, facing east: the first real mountain views over the canopy.</p>
+              </div>
+              <span style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#8a877f;border:1px solid #d4d1c9;border-radius:3px;padding:4px 9px;white-space:nowrap">Phase two</span>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr auto;gap:16px;align-items:baseline;padding:16px 0;border-top:1px solid #e9e6de;border-bottom:1px solid #e9e6de">
+              <div>
+                <p style="font-size:15px;font-weight:700;color:#1d1d1d;margin:0">Sunrise Ridge</p>
+                <p style="font-size:14px;margin:3px 0 0;color:#6f6c64">Forest edge: biggest plots, widest tree screens, tubs facing the peaks.</p>
+              </div>
+              <span style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#fff;background:#536917;border-radius:3px;padding:4px 9px;white-space:nowrap">Open</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="up-band" style="margin-top:120px;position:relative;overflow:hidden">
+    <div style="position:relative;height:52vh;min-height:380px;max-height:540px">
+      <img class="up-ph" src="public/photos/season-cool.jpg" alt="Mist drifting through the cedar forest" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover" />
+      <div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(12,18,10,.7) 0%,rgba(12,18,10,.15) 55%,rgba(12,18,10,.05) 100%)"></div>
+      <div style="position:relative;height:100%;max-width:1240px;margin:0 auto;padding:0 40px 56px;display:flex;flex-direction:column;justify-content:flex-end">
+        <p style="font-size:11px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:#c9dbb2;margin:0 0 14px">Life in the village</p>
+        <p style="font-family:'Fira Sans',Arial,sans-serif;font-size:34px;font-weight:700;line-height:1.2;color:#fff;margin:0;max-width:26ch">Park once. The mountain does the rest.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="lodges" class="up-sec" style="max-width:1240px;margin:0 auto;padding:120px 40px 0">
+    <div class="up-shead" style="display:grid;grid-template-columns:1fr auto;gap:60px;align-items:end;padding-bottom:30px;border-bottom:1px solid #e9e6de">
+      <div>
+        <p style="font-size:12px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:#536917;margin:0 0 18px">Lodges</p>
+        <h2 style="font-family:'Fira Sans',Arial,sans-serif;font-size:42px;font-weight:700;line-height:1.12;letter-spacing:-.015em;color:#1d1d1d;margin:0">Two grades, two sizes</h2>
+      </div>
+      <p style="font-size:16px;line-height:1.7;margin:0;max-width:38ch;color:#6f6c64">Cedar is the spec the village is built from. Signature adds the same seven things at either size. One price per lodge, however many of you come.</p>
+    </div>
+
+    <div class="up-g4" style="display:grid;grid-template-columns:repeat(4,1fr);gap:28px;margin-top:44px">
+      <article style="display:flex;flex-direction:column">
+        <div style="overflow:hidden;aspect-ratio:4/3;background:#f5f3ee;border-radius:12px"><img class="up-ph" src="public/photos/lodge-wdl.jpg" alt="A Cedar Lodge among the trees" style="width:100%;height:100%;object-fit:cover;display:block" /></div>
+        <p style="font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#536917;margin:20px 0 8px">Cedar · 2 bedroom</p>
+        <h3 style="font-family:'Fira Sans',Arial,sans-serif;font-size:21px;font-weight:700;color:#1d1d1d;margin:0 0 4px">The break, made simple</h3>
+        <p style="font-size:14px;line-height:1.65;margin:8px 0 16px;color:#5f5c55">A wood-burning stove, a full kitchen and a private deck with its own braai, deep among the cedars.</p>
+        <div style="margin:auto 0 0;padding-top:14px;border-top:1px solid #e9e6de;display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap"><span style="font-size:13px;font-weight:700;color:#1d1d1d">2 bed · sleeps 4</span><span style="font-size:13px;color:#8a877f">from <strong style="font-family:'Fira Sans',Arial,sans-serif;font-size:17px;font-weight:700;color:#1d1d1d">KES 84,000*</strong></span></div>
+        <a href="#search" style="margin-top:14px;font-size:14px;font-weight:700;color:#af6408;display:inline-flex;align-items:center;gap:7px">See dates and prices <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="m9 5 7 7-7 7"></path></svg></a>
+      </article>
+      <article style="display:flex;flex-direction:column">
+        <div style="position:relative;overflow:hidden;aspect-ratio:4/3;background:#f5f3ee;border-radius:12px">
+          <img class="up-ph" src="public/photos/lodge-fst.jpg" alt="A Cedar Lodge 3 bedroom and its deck" style="width:100%;height:100%;object-fit:cover;display:block" />
+          <span style="position:absolute;top:14px;left:14px;background:#fff;color:#1d1d1d;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:5px 10px;border-radius:3px">Family favourite</span>
+        </div>
+        <p style="font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#536917;margin:20px 0 8px">Cedar · 3 bedroom</p>
+        <h3 style="font-family:'Fira Sans',Arial,sans-serif;font-size:21px;font-weight:700;color:#1d1d1d;margin:0 0 4px">Room for six</h3>
+        <p style="font-size:14px;line-height:1.65;margin:8px 0 16px;color:#5f5c55">The same warm Cedar spec with a third bedroom, for parties that travel bigger and breaks that stretch to a week.</p>
+        <div style="margin:auto 0 0;padding-top:14px;border-top:1px solid #e9e6de;display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap"><span style="font-size:13px;font-weight:700;color:#1d1d1d">3 bed · sleeps 6</span><span style="font-size:13px;color:#8a877f">from <strong style="font-family:'Fira Sans',Arial,sans-serif;font-size:17px;font-weight:700;color:#1d1d1d">KES 129,000*</strong></span></div>
+        <a href="#search" style="margin-top:14px;font-size:14px;font-weight:700;color:#af6408;display:inline-flex;align-items:center;gap:7px">See dates and prices <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="m9 5 7 7-7 7"></path></svg></a>
+      </article>
+      <article style="display:flex;flex-direction:column">
+        <div style="overflow:hidden;aspect-ratio:4/3;background:#f5f3ee;border-radius:12px"><img class="up-ph" src="public/photos/lodge-lkv.jpg" alt="A Signature Lodge at the edge of its tree screen" style="width:100%;height:100%;object-fit:cover;display:block" /></div>
+        <p style="font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#1d1d1d;margin:20px 0 8px">Signature · 2 bedroom</p>
+        <h3 style="font-family:'Fira Sans',Arial,sans-serif;font-size:21px;font-weight:700;color:#1d1d1d;margin:0 0 4px">The cold-weather grade</h3>
+        <p style="font-size:14px;line-height:1.65;margin:8px 0 16px;color:#5f5c55">A private hot tub facing the mountain, a roofed wraparound deck and heated bathroom floors, for four.</p>
+        <div style="margin:auto 0 0;padding-top:14px;border-top:1px solid #e9e6de;display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap"><span style="font-size:13px;font-weight:700;color:#1d1d1d">2 bed · sleeps 4</span><span style="font-size:13px;color:#8a877f">from <strong style="font-family:'Fira Sans',Arial,sans-serif;font-size:17px;font-weight:700;color:#1d1d1d">KES 112,000*</strong></span></div>
+        <a href="#search" style="margin-top:14px;font-size:14px;font-weight:700;color:#af6408;display:inline-flex;align-items:center;gap:7px">See dates and prices <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="m9 5 7 7-7 7"></path></svg></a>
+      </article>
+      <article style="display:flex;flex-direction:column">
+        <div style="overflow:hidden;aspect-ratio:4/3;background:#f5f3ee;border-radius:12px"><img class="up-ph" src="public/photos/lodge-exc.jpg" alt="A Signature Lodge 3 bedroom behind its tree screen" style="width:100%;height:100%;object-fit:cover;display:block" /></div>
+        <p style="font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#1d1d1d;margin:20px 0 8px">Signature · 3 bedroom</p>
+        <h3 style="font-family:'Fira Sans',Arial,sans-serif;font-size:21px;font-weight:700;color:#1d1d1d;margin:0 0 4px">The celebration lodge</h3>
+        <p style="font-size:14px;line-height:1.65;margin:8px 0 16px;color:#5f5c55">Everything Signature means at family size, on a bigger plot behind a wider screen of trees.</p>
+        <div style="margin:auto 0 0;padding-top:14px;border-top:1px solid #e9e6de;display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap"><span style="font-size:13px;font-weight:700;color:#1d1d1d">3 bed · sleeps 6</span><span style="font-size:13px;color:#8a877f">from <strong style="font-family:'Fira Sans',Arial,sans-serif;font-size:17px;font-weight:700;color:#1d1d1d">KES 156,000*</strong></span></div>
+        <a href="#search" style="margin-top:14px;font-size:14px;font-weight:700;color:#af6408;display:inline-flex;align-items:center;gap:7px">See dates and prices <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="m9 5 7 7-7 7"></path></svg></a>
+      </article>
+    </div>
+
+    <p style="margin:16px 2px 0;font-size:13px;color:#8a877f">*Lowest three-night break per lodge, subject to season and availability.</p>
+
+    <div class="up-cmp" style="margin-top:48px;border:1px solid #e9e6de;border-radius:12px;display:grid;grid-template-columns:1fr 1fr">
+      <div style="padding:36px 40px;border-right:1px solid #e9e6de">
+        <p style="font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#536917;margin:0 0 14px">In every Cedar lodge</p>
+        <div style="display:grid;gap:11px">
+          <p style="display:flex;gap:11px;align-items:flex-start;font-size:15px;margin:0"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#647e1b" stroke-width="3" stroke-linecap="round" aria-hidden="true" style="flex-shrink:0;margin-top:5px"><path d="m4 12.5 5.5 5.5L20 6.5"></path></svg>Wood-burning stove, insulated and double glazed</p>
+          <p style="display:flex;gap:11px;align-items:flex-start;font-size:15px;margin:0"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#647e1b" stroke-width="3" stroke-linecap="round" aria-hidden="true" style="flex-shrink:0;margin-top:5px"><path d="m4 12.5 5.5 5.5L20 6.5"></path></svg>Full kitchen with oven, hob and fridge-freezer</p>
+          <p style="display:flex;gap:11px;align-items:flex-start;font-size:15px;margin:0"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#647e1b" stroke-width="3" stroke-linecap="round" aria-hidden="true" style="flex-shrink:0;margin-top:5px"><path d="m4 12.5 5.5 5.5L20 6.5"></path></svg>Private deck with a built-in braai</p>
+          <p style="display:flex;gap:11px;align-items:flex-start;font-size:15px;margin:0"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#647e1b" stroke-width="3" stroke-linecap="round" aria-hidden="true" style="flex-shrink:0;margin-top:5px"><path d="m4 12.5 5.5 5.5L20 6.5"></path></svg>Beds made up, towels and linen on arrival</p>
+          <p style="display:flex;gap:11px;align-items:flex-start;font-size:15px;margin:0"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#647e1b" stroke-width="3" stroke-linecap="round" aria-hidden="true" style="flex-shrink:0;margin-top:5px"><path d="m4 12.5 5.5 5.5L20 6.5"></path></svg>Wi-Fi, parking beside your lodge, cot and high chair on request</p>
+        </div>
+      </div>
+      <div style="padding:36px 40px;background:#f5f3ee">
+        <p style="font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#1d1d1d;margin:0 0 14px">Signature adds, at either size</p>
+        <div style="display:grid;gap:11px">
+          <p style="display:flex;gap:11px;align-items:flex-start;font-size:15px;margin:0"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#647e1b" stroke-width="3" stroke-linecap="round" aria-hidden="true" style="flex-shrink:0;margin-top:5px"><path d="m4 12.5 5.5 5.5L20 6.5"></path></svg>Private hot tub, deck-mounted, facing the mountain</p>
+          <p style="display:flex;gap:11px;align-items:flex-start;font-size:15px;margin:0"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#647e1b" stroke-width="3" stroke-linecap="round" aria-hidden="true" style="flex-shrink:0;margin-top:5px"><path d="m4 12.5 5.5 5.5L20 6.5"></path></svg>Wraparound deck, roofed at one end, outdoor dining and braai</p>
+          <p style="display:flex;gap:11px;align-items:flex-start;font-size:15px;margin:0"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#647e1b" stroke-width="3" stroke-linecap="round" aria-hidden="true" style="flex-shrink:0;margin-top:5px"><path d="m4 12.5 5.5 5.5L20 6.5"></path></svg>Underfloor heating in the bathrooms</p>
+          <p style="display:flex;gap:11px;align-items:flex-start;font-size:15px;margin:0"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#647e1b" stroke-width="3" stroke-linecap="round" aria-hidden="true" style="flex-shrink:0;margin-top:5px"><path d="m4 12.5 5.5 5.5L20 6.5"></path></svg>En-suite to the main bedroom, plus a second bathroom</p>
+          <p style="display:flex;gap:11px;align-items:flex-start;font-size:15px;margin:0"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#647e1b" stroke-width="3" stroke-linecap="round" aria-hidden="true" style="flex-shrink:0;margin-top:5px"><path d="m4 12.5 5.5 5.5L20 6.5"></path></svg>Dishwasher, full oven and coffee machine</p>
+          <p style="display:flex;gap:11px;align-items:flex-start;font-size:15px;margin:0"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#647e1b" stroke-width="3" stroke-linecap="round" aria-hidden="true" style="flex-shrink:0;margin-top:5px"><path d="m4 12.5 5.5 5.5L20 6.5"></path></svg>Robes, slippers, heavier linen, better beds, a bigger plot</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="things-to-do" class="up-band" style="margin-top:120px">
+    <div style="background:#536917;padding:52px 0 100px">
+      <div class="up-tdo" style="max-width:1240px;margin:0 auto;padding:0 40px">
+        <div class="up-shead" style="display:grid;grid-template-columns:1fr auto;gap:60px;align-items:end">
+          <div>
+            <p style="font-size:12px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:#c9dbb2;margin:0 0 18px">Things to do</p>
+            <h2 style="font-family:'Fira Sans',Arial,sans-serif;font-size:42px;font-weight:700;line-height:1.12;letter-spacing:-.015em;color:#fff;margin:0">Days that fill themselves</h2>
+          </div>
+          <p style="font-size:16px;line-height:1.7;margin:0;max-width:34ch;color:rgba(255,255,255,.85)">Everything below is inside the village, and nothing needs a car.</p>
+        </div>
+      </div>
+    </div>
+    <div class="up-tdo" style="max-width:1240px;margin:-56px auto 0;padding:0 40px">
+    <div class="up-act" style="display:grid;grid-template-columns:1.4fr 1fr;gap:28px">
+      <article style="position:relative;border-radius:12px;overflow:hidden;min-height:460px">
+        <img class="up-ph" src="public/photos/activity-pool.jpg" alt="The Water Garden, warm water every day" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center 68%" />
+        <div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(12,18,10,.85) 0%,rgba(12,18,10,.1) 58%,rgba(12,18,10,0) 100%)"></div>
+        <div style="position:absolute;left:34px;right:34px;bottom:32px">
+          <p style="font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#c9dbb2;margin:0 0 12px">Included every day</p>
+          <h3 style="font-family:'Fira Sans',Arial,sans-serif;font-size:32px;font-weight:700;color:#fff;margin:0 0 10px">The Water Garden</h3>
+          <p style="font-size:15px;line-height:1.65;color:rgba(255,255,255,.86);margin:0;max-width:36ch">Warm water under a glass roof while the mountain air stays cold outside. Shallows for the small, lanes for the early risers.</p>
+        </div>
+      </article>
+      <div style="display:grid;grid-template-rows:1fr 1fr;gap:28px">
+        <article style="position:relative;border-radius:12px;overflow:hidden;min-height:216px">
+          <img class="up-ph" src="public/photos/activity-spa.jpg" alt="The Forest Spa" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover" />
+          <div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(12,18,10,.85) 0%,rgba(12,18,10,0) 70%)"></div>
+          <div style="position:absolute;left:26px;right:26px;bottom:24px">
+            <h3 style="font-family:'Fira Sans',Arial,sans-serif;font-size:22px;font-weight:700;color:#fff;margin:0 0 6px">The Forest Spa</h3>
+            <p style="font-size:14px;line-height:1.6;color:rgba(255,255,255,.85);margin:0">Steam, stillness and birdsong, ten minutes uphill through the cedars.</p>
+          </div>
+        </article>
+        <article style="position:relative;border-radius:12px;overflow:hidden;min-height:216px">
+          <img class="up-ph" src="public/photos/activity-cycle.jpg" alt="Cycling the village trails" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover" />
+          <div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(12,18,10,.85) 0%,rgba(12,18,10,0) 70%)"></div>
+          <div style="position:absolute;left:26px;right:26px;bottom:24px">
+            <h3 style="font-family:'Fira Sans',Arial,sans-serif;font-size:22px;font-weight:700;color:#fff;margin:0 0 6px">Forest trails</h3>
+            <p style="font-size:14px;line-height:1.6;color:rgba(255,255,255,.85);margin:0">Shaded loops for every pace on foot or on a hired bike.</p>
+          </div>
+        </article>
+      </div>
+    </div>
+    <p style="margin:22px 2px 0;font-size:14px;color:#8a877f">Spa treatments, bike hire and firewood are added to your booking in the village, not at checkout.</p>
+    </div>
+  </section>
+
+  <section id="seasons" class="up-sec" style="max-width:1240px;margin:0 auto;padding:120px 40px 0">
+    <div class="up-shead" style="display:grid;grid-template-columns:1fr auto;gap:60px;align-items:end;padding-bottom:30px;border-bottom:1px solid #e9e6de">
+      <div>
+        <p style="font-size:12px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:#536917;margin:0 0 18px">When to come</p>
+        <h2 style="font-family:'Fira Sans',Arial,sans-serif;font-size:42px;font-weight:700;line-height:1.12;letter-spacing:-.015em;color:#1d1d1d;margin:0">A mountain for every season</h2>
+      </div>
+      <p style="font-size:16px;line-height:1.7;margin:0;max-width:34ch;color:#6f6c64">The stove is lit all year. What changes is the sky.</p>
+    </div>
+
+    <div class="up-g4" style="display:grid;grid-template-columns:repeat(4,1fr);gap:28px;margin-top:44px">
+      <article style="display:flex;flex-direction:column">
+        <div style="aspect-ratio:16/10;overflow:hidden;background:#f5f3ee;border-radius:12px"><img class="up-ph" src="public/photos/season-festive.jpg" alt="Clear festive skies over the peaks" style="width:100%;height:100%;object-fit:cover;display:block" /></div>
+        <p style="font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#8a877f;margin:20px 0 6px">Dec to Feb</p>
+        <h3 style="font-family:'Fira Sans',Arial,sans-serif;font-size:21px;font-weight:700;color:#1d1d1d;margin:0 0 8px">Clear skies</h3>
+        <p style="font-size:14px;line-height:1.65;margin:0 0 18px;color:#5f5c55">The peaks out all day, cold bright nights, the village at its busiest.</p>
+        <p style="margin:auto 0 0;padding-top:16px;border-top:1px solid #e9e6de;font-size:13px;color:#8a877f">from <strong style="font-family:'Fira Sans',Arial,sans-serif;font-size:21px;font-weight:700;color:#1d1d1d;display:block;margin-top:3px">KES 109,500*</strong></p>
+      </article>
+      <article style="display:flex;flex-direction:column">
+        <div style="aspect-ratio:16/10;overflow:hidden;background:#f5f3ee;border-radius:12px"><img class="up-ph" src="public/photos/season-rains.jpg" alt="Cloud building over the forest in the long rains" style="width:100%;height:100%;object-fit:cover;display:block" /></div>
+        <p style="font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#8a877f;margin:20px 0 6px">Mar to May</p>
+        <h3 style="font-family:'Fira Sans',Arial,sans-serif;font-size:21px;font-weight:700;color:#1d1d1d;margin:0 0 8px">Long rains</h3>
+        <p style="font-size:14px;line-height:1.65;margin:0 0 18px;color:#5f5c55">Cloud on the shoulder of the mountain, empty trails, the best prices of the year.</p>
+        <p style="margin:auto 0 0;padding-top:16px;border-top:1px solid #e9e6de;font-size:13px;color:#8a877f">from <strong style="font-family:'Fira Sans',Arial,sans-serif;font-size:21px;font-weight:700;color:#1d1d1d;display:block;margin-top:3px">KES 84,000*</strong></p>
+      </article>
+      <article style="display:flex;flex-direction:column">
+        <div style="aspect-ratio:16/10;overflow:hidden;background:#f5f3ee;border-radius:12px"><img class="up-ph" src="public/photos/season-cool.jpg" alt="Mist through the cedars in the cool season" style="width:100%;height:100%;object-fit:cover;display:block" /></div>
+        <p style="font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#8a877f;margin:20px 0 6px">Jun to Sep</p>
+        <h3 style="font-family:'Fira Sans',Arial,sans-serif;font-size:21px;font-weight:700;color:#1d1d1d;margin:0 0 8px">Cool season</h3>
+        <p style="font-size:14px;line-height:1.65;margin:0 0 18px;color:#5f5c55">Mist in the cedars, firewood evenings, and the hot tub earning its keep.</p>
+        <p style="margin:auto 0 0;padding-top:16px;border-top:1px solid #e9e6de;font-size:13px;color:#8a877f">from <strong style="font-family:'Fira Sans',Arial,sans-serif;font-size:21px;font-weight:700;color:#1d1d1d;display:block;margin-top:3px">KES 96,000*</strong></p>
+      </article>
+      <article style="display:flex;flex-direction:column">
+        <div style="aspect-ratio:16/10;overflow:hidden;background:#f5f3ee;border-radius:12px"><img class="up-ph" src="public/photos/season-green.jpg" alt="The forest greening in the short rains" style="width:100%;height:100%;object-fit:cover;display:block" /></div>
+        <p style="font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#8a877f;margin:20px 0 6px">Oct to Nov</p>
+        <h3 style="font-family:'Fira Sans',Arial,sans-serif;font-size:21px;font-weight:700;color:#1d1d1d;margin:0 0 8px">Short rains</h3>
+        <p style="font-size:14px;line-height:1.65;margin:0 0 18px;color:#5f5c55">Afternoon showers, a forest turning green, good value before the festive rush.</p>
+        <p style="margin:auto 0 0;padding-top:16px;border-top:1px solid #e9e6de;font-size:13px;color:#8a877f">from <strong style="font-family:'Fira Sans',Arial,sans-serif;font-size:21px;font-weight:700;color:#1d1d1d;display:block;margin-top:3px">KES 90,000*</strong></p>
+      </article>
+    </div>
+    <p style="margin:20px 2px 0;font-size:13px;color:#8a877f">*Indicative lowest price for a three-night Cedar 2 bedroom break in the season, subject to availability.</p>
+  </section>
+
+  <section style="margin-top:120px;background:#536917">
+    <div class="up-cnt" style="max-width:1240px;margin:0 auto;padding:84px 40px;display:grid;grid-template-columns:auto 1fr;gap:64px;align-items:center">
+      <div>
+        <p class="up-num" style="font-family:'Fira Sans',Arial,sans-serif;font-size:88px;font-weight:600;line-height:1;letter-spacing:-.03em;color:#fff;margin:0;font-variant-numeric:tabular-nums">{{ counter }}</p>
+        <p style="font-size:13px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#c9dbb2;margin:16px 0 0">Memories made so far</p>
+      </div>
+      <div class="up-cntr" style="border-left:1px solid rgba(255,255,255,.28);padding-left:64px">
+        <h2 style="font-family:'Fira Sans',Arial,sans-serif;font-size:34px;font-weight:700;line-height:1.2;color:#fff;margin:0;max-width:22ch">Counting our way to a billion</h2>
+        <p style="font-size:15px;line-height:1.7;color:rgba(255,255,255,.82);margin:16px 0 0;max-width:54ch">One memory is one guest, one stay on the mountain. Every break in the village adds to the count, and there are {{ remaining }} still to go.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="faq" class="up-sec" style="max-width:1240px;margin:0 auto;padding:120px 40px 0">
+    <div class="up-faqg" style="display:grid;grid-template-columns:1fr 1.5fr;gap:80px;align-items:start">
+      <div class="up-faqL" style="position:sticky;top:40px">
+        <p style="font-size:12px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:#536917;margin:0 0 18px">Questions</p>
+        <h2 style="font-family:'Fira Sans',Arial,sans-serif;font-size:42px;font-weight:700;line-height:1.12;letter-spacing:-.015em;color:#1d1d1d;margin:0">Answered before you ask</h2>
+        <p style="font-size:16px;line-height:1.7;margin:22px 0 0;color:#6f6c64">Still stuck? Call the village on <a href="tel:+254700000000" style="font-weight:700">+254 700 000 000</a>.</p>
+      </div>
+      <div>
+        <details open="">
+          <summary style="display:flex;align-items:center;justify-content:space-between;gap:24px;padding:24px 0;border-top:1px solid #e9e6de;cursor:pointer;font-family:'Fira Sans',Arial,sans-serif;font-size:19px;font-weight:600;color:#1d1d1d">What is included in a Unity Parks break?<span class="faq-plus" style="flex-shrink:0;color:#536917;font-size:24px;font-weight:300;transition:transform .18s ease">+</span></summary>
+          <p style="font-size:15px;line-height:1.75;margin:0 0 24px;max-width:66ch">Your lodge for the whole break, the Water Garden every day, parking beside your lodge and the run of the village trails. Spa treatments, bike hire and firewood are added once you arrive.</p>
+        </details>
+        <details>
+          <summary style="display:flex;align-items:center;justify-content:space-between;gap:24px;padding:24px 0;border-top:1px solid #e9e6de;cursor:pointer;font-family:'Fira Sans',Arial,sans-serif;font-size:19px;font-weight:600;color:#1d1d1d">What is the difference between Cedar and Signature?<span class="faq-plus" style="flex-shrink:0;color:#536917;font-size:24px;font-weight:300;transition:transform .18s ease">+</span></summary>
+          <p style="font-size:15px;line-height:1.75;margin:0 0 24px;max-width:66ch">Two axes and nothing else. Size is a number, grade is a name. Cedar is the base spec the village is built from. Signature adds the same seven things at either size: the hot tub, the roofed wraparound deck, heated bathroom floors, an en-suite plus second bathroom, the upgraded kitchen, better beds and linen, and a bigger plot.</p>
+        </details>
+        <details>
+          <summary style="display:flex;align-items:center;justify-content:space-between;gap:24px;padding:24px 0;border-top:1px solid #e9e6de;cursor:pointer;font-family:'Fira Sans',Arial,sans-serif;font-size:19px;font-weight:600;color:#1d1d1d">How do breaks work?<span class="faq-plus" style="flex-shrink:0;color:#536917;font-size:24px;font-weight:300;transition:transform .18s ease">+</span></summary>
+          <p style="font-size:15px;line-height:1.75;margin:0 0 24px;max-width:66ch">Breaks start on a Friday or a Monday. Three nights runs Friday to Monday, four nights Monday to Friday, and a week runs Friday to Friday or Monday to Monday. Check in from 2pm, check out by 11am.</p>
+        </details>
+        <details>
+          <summary style="display:flex;align-items:center;justify-content:space-between;gap:24px;padding:24px 0;border-top:1px solid #e9e6de;cursor:pointer;font-family:'Fira Sans',Arial,sans-serif;font-size:19px;font-weight:600;color:#1d1d1d">Can we choose where our lodge sits?<span class="faq-plus" style="flex-shrink:0;color:#536917;font-size:24px;font-weight:300;transition:transform .18s ease">+</span></summary>
+          <p style="font-size:15px;line-height:1.75;margin:0 0 24px;max-width:66ch">Yes. Grade and size are chosen when you book; the zone and lane are chosen at the Location step. The Glades and Sunrise Ridge are open now, with Riverside and Cedar Rise following in the next phase.</p>
+        </details>
+        <details>
+          <summary style="display:flex;align-items:center;justify-content:space-between;gap:24px;padding:24px 0;border-top:1px solid #e9e6de;cursor:pointer;font-family:'Fira Sans',Arial,sans-serif;font-size:19px;font-weight:600;color:#1d1d1d">How cold does it get?<span class="faq-plus" style="flex-shrink:0;color:#536917;font-size:24px;font-weight:300;transition:transform .18s ease">+</span></summary>
+          <p style="font-size:15px;line-height:1.75;margin:0 0 24px;max-width:66ch">At 2,100 metres the evenings are cold all year, whatever the day has been. Bring a jumper; the stove, the insulation and the double glazing do the rest.</p>
+        </details>
+        <details>
+          <summary style="display:flex;align-items:center;justify-content:space-between;gap:24px;padding:24px 0;border-top:1px solid #e9e6de;border-bottom:1px solid #e9e6de;cursor:pointer;font-family:'Fira Sans',Arial,sans-serif;font-size:19px;font-weight:600;color:#1d1d1d">How do payments work in this demo?<span class="faq-plus" style="flex-shrink:0;color:#536917;font-size:24px;font-weight:300;transition:transform .18s ease">+</span></summary>
+          <p style="font-size:15px;line-height:1.75;margin:0 0 24px;max-width:66ch">Unity Parks is currently a demonstration. Checkout runs against sandbox systems, so no real money moves and no real card details are needed. Everything else, from availability to your confirmation, behaves exactly as it will on the real village.</p>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <section class="up-cta" style="max-width:1240px;margin:120px auto 0;padding:0 40px">
+    <div style="position:relative;border-radius:12px;overflow:hidden;min-height:340px;display:flex;align-items:center">
+      <img class="up-ph" src="public/photos/discover-groups.jpg" alt="A party gathered on the deck of a lodge" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover" />
+      <div style="position:absolute;inset:0;background:linear-gradient(100deg,rgba(12,18,10,.88) 0%,rgba(12,18,10,.4) 66%,rgba(12,18,10,.1) 100%)"></div>
+      <div class="up-ctain" style="position:relative;padding:64px;max-width:660px">
+        <h2 style="font-family:'Fira Sans',Arial,sans-serif;font-size:36px;font-weight:700;line-height:1.15;letter-spacing:-.015em;color:#fff;margin:0">Your dates are still free. <em style="font-style:italic">For now.</em></h2>
+        <p style="font-size:16px;line-height:1.7;color:rgba(255,255,255,.85);margin:18px 0 30px;max-width:46ch">School holidays and festive weeks fill first. Find yours while the lanes are still open.</p>
+        <div style="display:flex;gap:14px;flex-wrap:wrap">
+          <a href="#search" style="background:#af6408;color:#fff;font-size:16px;font-weight:700;border-radius:6px;padding:13px 28px" style-hover="background:#8a4e06">Find your break</a>
+          <a href="#lodges" style="border:1px solid rgba(255,255,255,.6);color:#fff;font-size:16px;font-weight:600;border-radius:6px;padding:13px 28px" style-hover="background:rgba(255,255,255,.12)">Compare the lodges</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer style="margin-top:120px;background:#333;color:#fff">
+    <div class="up-fwrap" style="max-width:1240px;margin:0 auto;padding:0 40px">
+      <div style="padding:36px 0;border-bottom:1px solid rgba(255,255,255,.15);display:flex;flex-wrap:wrap;gap:24px;align-items:center;justify-content:space-between">
+        <p style="font-size:15px;margin:0;max-width:44ch">Sign up for village news, seasonal openings and a first look at new lodges.</p>
+        <div class="up-news" style="display:flex;gap:10px">
+          <input type="email" placeholder="Your email address" style="border:1px solid #5a5a5a;background:#3d3d3d;color:#fff;border-radius:6px;padding:11px 14px;font-family:inherit;font-size:15px;min-width:280px" />
+          <button type="button" style="background:#af6408;color:#fff;border:0;border-radius:6px;padding:11px 24px;font-family:inherit;font-size:15px;font-weight:700;cursor:pointer" style-hover="background:#8a4e06">Sign up</button>
+        </div>
+      </div>
+      <div class="up-fgrid" style="padding:48px 0;display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr;gap:44px">
+        <div>
+          <div style="display:flex;align-items:center;gap:11px;margin-bottom:16px">
+            <svg width="28" height="28" viewBox="0 0 34 34" aria-hidden="true"><circle cx="17" cy="17" r="16" fill="#647e1b"></circle><path d="M17 6 L24 18 H20.5 L26 26 H8 L13.5 18 H10 Z" fill="#ffffff"></path><path d="M8 26 H26" stroke="#333333" stroke-width="2.5"></path></svg>
+            <span style="font-family:'Fira Sans',Arial,sans-serif;font-weight:600;font-size:20px">Unity Parks</span>
+          </div>
+          <p style="font-size:14px;line-height:1.75;color:rgba(255,255,255,.7);margin:0;max-width:34ch">One car-free forest village at Naro Moru, on the slopes of Mount Kenya. Breaks start every Friday and Monday.</p>
+        </div>
+        <div>
+          <p style="font-family:'Fira Sans',Arial,sans-serif;font-size:16px;font-weight:600;margin:0 0 16px">Explore</p>
+          <div style="display:flex;flex-direction:column;gap:11px;font-size:14px">
+            <a href="#village" style="color:rgba(255,255,255,.75)">Our village</a>
+            <a href="#lodges" style="color:rgba(255,255,255,.75)">Lodges</a>
+            <a href="#things-to-do" style="color:rgba(255,255,255,.75)">Things to do</a>
+            <a href="#seasons" style="color:rgba(255,255,255,.75)">Breaks</a>
+            <a href="#faq" style="color:rgba(255,255,255,.75)">Questions and answers</a>
+          </div>
+        </div>
+        <div>
+          <p style="font-family:'Fira Sans',Arial,sans-serif;font-size:16px;font-weight:600;margin:0 0 16px">Get in touch</p>
+          <div style="display:flex;flex-direction:column;gap:11px;font-size:14px">
+            <a href="#" style="color:rgba(255,255,255,.75)">Find my booking</a>
+            <a href="tel:+254700000000" style="color:rgba(255,255,255,.75)">+254 700 000 000</a>
+            <a href="mailto:hello@unityparks.example" style="color:rgba(255,255,255,.75)">hello@unityparks.example</a>
+          </div>
+        </div>
+        <div>
+          <p style="font-family:'Fira Sans',Arial,sans-serif;font-size:16px;font-weight:600;margin:0 0 16px">Legal</p>
+          <div style="display:flex;flex-direction:column;gap:11px;font-size:14px;color:rgba(255,255,255,.6)">
+            <span>Terms and conditions</span>
+            <span>Privacy policy</span>
+            <span>Cookies</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div style="background:#2b2b2b">
+      <div class="up-fbot" style="max-width:1240px;margin:0 auto;padding:20px 40px;display:flex;flex-wrap:wrap;gap:12px 32px;justify-content:space-between;font-size:13px;color:rgba(255,255,255,.55)">
+        <span>© 2026 Unity Parks Ltd · demo environment, no real payments.</span>
+        <span>Counting our way to a billion memories.</span>
+      </div>
+    </div>
+  </footer>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;showNoticeBar&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Layout&quot;},&quot;heroMotion&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Layout&quot;}}">
+class Component extends DCLogic {
+  state = { shown: 0, stuck: false, menuOpen: false };
+
+  componentDidMount() {
+    const target = 12864;
+    const start = performance.now();
+    const tick = (t) => {
+      const p = Math.min(1, (t - start) / 1600);
+      this.setState({ shown: Math.round(target * (1 - Math.pow(1 - p, 3))) });
+      if (p < 1) this._raf = requestAnimationFrame(tick);
+    };
+    this._raf = requestAnimationFrame(tick);
+
+    // Mirrors StickySearch.tsx: the bar rides the bottom edge of the motion
+    // band, then locks to the top of the viewport in an olive band.
+    this._onScroll = () => {
+      const hero = document.getElementById("hero");
+      if (!hero) return;
+      const bottom = hero.getBoundingClientRect().bottom;
+      const next = bottom < 44;
+      if (next !== this.state.stuck) this.setState({ stuck: next });
+    };
+    this._onScroll();
+    window.addEventListener("scroll", this._onScroll, { passive: true });
+    window.addEventListener("resize", this._onScroll);
+  }
+
+  componentWillUnmount() {
+    cancelAnimationFrame(this._raf);
+    window.removeEventListener("scroll", this._onScroll);
+    window.removeEventListener("resize", this._onScroll);
+  }
+
+  renderVals() {
+    const stuck = this.state.stuck;
+    const motion = this.props.heroMotion ?? true;
+    return {
+      counter: this.state.shown.toLocaleString("en-GB"),
+      remaining: (1000000000 - this.state.shown).toLocaleString("en-GB"),
+      showNoticeBar: this.props.showNoticeBar ?? true,
+      toggleMenu: () => this.setState((s) => ({ menuOpen: !s.menuOpen })),
+      closeMenu: () => this.setState({ menuOpen: false }),
+      drawerStyle: this.state.menuOpen
+        ? "position:fixed;inset:0;z-index:100;background:#fff;display:flex;flex-direction:column;padding:20px 24px 32px;overflow-y:auto"
+        : "display:none",
+      motionStyle:
+        "position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform-origin:60% 55%;" +
+        (motion
+          ? "animation:up-drift 26s ease-in-out infinite alternate;"
+          : "transform:scale(1.02);"),
+      barStyle:
+        "display:flex;align-items:stretch;flex-wrap:nowrap;background:#fff;border-radius:12px;overflow:hidden;" +
+        (stuck
+          ? "position:fixed;top:14px;left:50%;transform:translateX(-50%);width:min(1160px,calc(100vw - 80px));z-index:60;box-shadow:0 12px 32px rgba(18,22,15,.28);border:1px solid #e9e6de;"
+          : "box-shadow:0 20px 48px rgba(18,22,15,.22);border:1px solid #e9e6de;"),
+    };
+  }
+}
+
+</script>
+</body>
+</html>

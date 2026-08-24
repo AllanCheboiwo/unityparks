@@ -22,8 +22,9 @@ export type ExtraSnapshot = {
 
 /**
  * The location step's choice for one lodge. "unit" carries the picked lodge
- * plus the fee exactly as Apaleo's service offer priced it; "none" is the
- * free no-preference option.
+ * plus the fee exactly as Apaleo's service offer priced it; "together" pays
+ * the same fee per lodge for checkout to seat the break's lodges side by
+ * side (no unit until then); "none" is the free no-preference option.
  */
 export type LocationChoice =
   | { choice: "none" }
@@ -33,7 +34,8 @@ export type LocationChoice =
       unitName: string;
       serviceId: string;
       fee: number;
-    };
+    }
+  | { choice: "together"; serviceId: string; fee: number };
 
 function freshExpiry(): Date {
   return new Date(Date.now() + SESSION_TTL_MS);
@@ -173,13 +175,21 @@ export async function setLocation(
           locationServiceId: location.serviceId,
           locationFee: location.fee,
         }
-      : {
-          locationChoice: "none",
-          locationUnitId: null,
-          locationUnitName: null,
-          locationServiceId: null,
-          locationFee: null,
-        };
+      : location.choice === "together"
+        ? {
+            locationChoice: "together",
+            locationUnitId: null,
+            locationUnitName: null,
+            locationServiceId: location.serviceId,
+            locationFee: location.fee,
+          }
+        : {
+            locationChoice: "none",
+            locationUnitId: null,
+            locationUnitName: null,
+            locationServiceId: null,
+            locationFee: null,
+          };
   await prisma.sessionLodge.update({
     where: { sessionId_slot: { sessionId: id, slot } },
     data,

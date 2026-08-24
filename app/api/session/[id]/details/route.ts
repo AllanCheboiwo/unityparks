@@ -11,6 +11,7 @@ import { getCurrentUser, createAuthSession } from "@/server/auth/session";
 import { hashPassword } from "@/server/auth/password";
 import { normalizeEmail } from "@/server/auth/normalize";
 import { claimByEmail } from "@/server/auth/claim";
+import { sendWelcomeEmail } from "@/server/email/welcome";
 import { handleRoute, jsonError } from "@/server/api-helpers";
 
 const DetailsBody = z.object({
@@ -21,14 +22,15 @@ const DetailsBody = z.object({
   phone: z.string().min(7),
   dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   // Postal address (welcome-pack story). Stays local: session snapshot and
-  // account profile, never Apaleo. Line 2, county and postcode are optional -
-  // postcodes are patchy in Kenya.
-  addressLine1: z.string().trim().min(1),
+  // account profile, never Apaleo. The form no longer asks for any of it,
+  // so every field is optional; the columns stay for the data already in
+  // them.
+  addressLine1: z.string().trim().min(1).optional(),
   addressLine2: z.string().trim().optional(),
-  townCity: z.string().trim().min(1),
+  townCity: z.string().trim().min(1).optional(),
   county: z.string().trim().optional(),
   postcode: z.string().trim().optional(),
-  country: z.string().trim().min(1),
+  country: z.string().trim().min(1).optional(),
   marketingEmail: z.boolean().optional(),
   marketingSms: z.boolean().optional(),
   // The client gates submit on the checkbox; the server enforces it too.
@@ -52,12 +54,12 @@ function profileData(
     phone: guest.phone,
     title: guest.title ?? null,
     dateOfBirth: guest.dateOfBirth,
-    addressLine1: guest.addressLine1,
+    addressLine1: guest.addressLine1 ?? null,
     addressLine2: guest.addressLine2 ?? null,
-    townCity: guest.townCity,
+    townCity: guest.townCity ?? null,
     county: guest.county ?? null,
     postcode: guest.postcode ?? null,
-    country: guest.country,
+    country: guest.country ?? null,
     marketingEmail: guest.marketingEmail ?? false,
     marketingSms: guest.marketingSms ?? false,
   };
@@ -133,6 +135,10 @@ export async function POST(
       await claimByEmail(user.id, email);
       // Signs the response: the guest reaches the pay step already signed in.
       await createAuthSession(user.id);
+      // Fire-and-forget: the account exists whether or not the mail lands.
+      void sendWelcomeEmail({ to: user.email, firstName: user.firstName }).catch(
+        (err) => console.error(`[email] welcome to ${email} failed:`, err),
+      );
       accountCreated = true;
     }
 

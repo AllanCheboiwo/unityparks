@@ -26,9 +26,14 @@ export default async function RemindersOpsPage() {
     <div className="mx-auto max-w-5xl px-5 py-10">
       <div className="flex items-center justify-between">
         <h1 className="font-display text-3xl font-bold text-ink">Balance reminders</h1>
-        <Link href="/ops/referrals" className="btn-outline text-sm">
-          Referrals
-        </Link>
+        <div className="flex gap-2">
+          <Link href="/ops/memories" className="btn-outline text-sm">
+            Memories
+          </Link>
+          <Link href="/ops/referrals" className="btn-outline text-sm">
+            Referrals
+          </Link>
+        </div>
       </div>
       <p className="mt-2 max-w-2xl text-sm text-foreground">
         Every deposit-paid booking still owing money. A booking gets a

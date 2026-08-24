@@ -17,7 +17,8 @@ export const HomePage: GlobalConfig = {
         // The h1 renders as: headingBefore <em>headingEmphasis</em> headingAfter
         { name: "headingBefore", type: "text", required: true },
         { name: "headingEmphasis", type: "text", required: true },
-        { name: "headingAfter", type: "text", required: true },
+        // Optional: the current heading ends on the emphasis.
+        { name: "headingAfter", type: "text" },
         { name: "subheading", type: "text", required: true },
         { name: "intro", type: "textarea", required: true },
         {
@@ -84,22 +85,6 @@ export const HomePage: GlobalConfig = {
         { name: "title", type: "text", required: true },
         { name: "copy", type: "textarea", required: true },
         { name: "photo", type: "upload", relationTo: "media", required: true },
-      ],
-    },
-    {
-      name: "memories",
-      type: "group",
-      fields: [
-        { name: "caption", type: "text", required: true },
-        {
-          name: "explainer",
-          type: "text",
-          required: true,
-          admin: {
-            description:
-              "The countdown sentence (Just N to go) is appended in code.",
-          },
-        },
       ],
     },
   ],

@@ -11,6 +11,7 @@ import { Activities } from "./cms/collections/Activities";
 import { Seasons } from "./cms/collections/Seasons";
 import { Faqs } from "./cms/collections/Faqs";
 import { Campaigns } from "./cms/collections/Campaigns";
+import { Extras } from "./cms/collections/Extras";
 import { HomePage } from "./cms/globals/HomePage";
 import { SiteSettings } from "./cms/globals/SiteSettings";
 
@@ -22,7 +23,7 @@ export default buildConfig({
   admin: {
     user: "admins",
   },
-  collections: [Admins, Media, Activities, Seasons, Faqs, Campaigns],
+  collections: [Admins, Media, Activities, Seasons, Faqs, Campaigns, Extras],
   globals: [HomePage, SiteSettings],
   db: postgresAdapter({
     pool: {

@@ -74,10 +74,10 @@ export async function GET(
   });
 }
 
-// The client only says WHICH unit; the name, the fee service and the fee
-// amount are all derived server-side from Apaleo, so a doctored request can
-// never smuggle in a unit from another tier, a foreign service id, or a
-// made-up price.
+// The client only says WHICH unit, or that the break's lodges go together;
+// the name, the fee service and the fee amount are all derived server-side
+// from Apaleo, so a doctored request can never smuggle in a unit from
+// another tier, a foreign service id, or a made-up price.
 const LocationBody = z.discriminatedUnion("choice", [
   z.object({
     choice: z.literal("none"),
@@ -86,6 +86,10 @@ const LocationBody = z.discriminatedUnion("choice", [
   z.object({
     choice: z.literal("unit"),
     unitId: z.string().min(1),
+    slot: z.number().int().min(0).max(2).default(0),
+  }),
+  z.object({
+    choice: z.literal("together"),
     slot: z.number().int().min(0).max(2).default(0),
   }),
 ]);
@@ -123,6 +127,23 @@ export async function POST(
     if (!lodge.unitGroupCode || !lodge.ratePlanId) {
       return jsonError(400, "Choose a lodge first.");
     }
+
+    if (body.choice === "together") {
+      if (session.lodges.length < 2) {
+        return jsonError(400, "Placing lodges together needs more than one lodge in your break.");
+      }
+      const { feeOffer } = await loadOffers(session, lodge);
+      if (!feeOffer) {
+        return jsonError(502, "Lodge selection isn't available right now. Choose no preference to continue.");
+      }
+      await setLocation(
+        id,
+        { choice: "together", serviceId: feeOffer.serviceId, fee: feeOffer.totalGrossAmount },
+        body.slot,
+      );
+      return NextResponse.json({ ok: true });
+    }
+
     if (
       session.lodges.some((l) => l.slot !== body.slot && l.locationUnitId === body.unitId)
     ) {

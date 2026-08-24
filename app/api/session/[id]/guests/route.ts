@@ -9,8 +9,8 @@ const GuestsBody = z.object({
     .array(
       z.object({
         position: z.number().int().min(0),
-        firstName: z.string().optional(),
-        lastName: z.string().optional(),
+        firstName: z.string().trim().min(1),
+        lastName: z.string().trim().min(1),
         dateOfBirth: z.string().optional(),
         email: z.string().trim().email().optional(),
       }),
@@ -67,6 +67,12 @@ export async function PUT(
     if (!parsed.success) return jsonError(400, "Please check the guest details.");
     const lodge = session.lodges.find((l) => l.slot === parsed.data.slot);
     if (!lodge) return jsonError(400, "That lodge slot is not part of this break.");
+
+    // saveGuests rejects extra or duplicated rows; this side demands one row
+    // per band seat, so the funnel can never save a lodge half-named.
+    if (parsed.data.guests.length < partyBands(lodge).length) {
+      return jsonError(400, "Please name everyone staying in this lodge.");
+    }
 
     await saveGuests(lodge, parsed.data.guests);
     return NextResponse.json({ ok: true });

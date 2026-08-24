@@ -19,7 +19,7 @@
   --navy: #2c5670; /* calendar selection, lodge names */
   --teal: #2d5f73; /* info banner */
   --mist: #f5f3ee; /* alternating sections, panels */
-  --line: #d9d6cf; /* hairlines */
+  --line: #e9e6de; /* hairlines */
   --footer: #333333;
 
   /* Legacy aliases so pre-restyle classes keep rendering on-brand. */
@@ -122,6 +122,11 @@ body {
   font-size: 18px;
   font-weight: 700;
   padding: 11px 22px;
+}
+
+/* Every photo gets the same quiet grade so mixed stock reads as one set. */
+.photo-tone {
+  filter: saturate(0.85) contrast(1.03);
 }
 
 /* Subtle contour-line texture for feature panels (see DESIGN.md item 14). */

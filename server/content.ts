@@ -10,6 +10,7 @@ import type {
   Season,
   SiteSetting,
 } from "@/cms/payload-types";
+import type { ExtrasContentDto } from "@/lib/types";
 
 /**
  * The only door to CMS content. Server components call these functions and
@@ -80,6 +81,33 @@ export async function getSiteBanner(): Promise<SiteSetting["banner"] | null> {
     return settings?.banner?.text ? settings.banner : null;
   } catch {
     return null;
+  }
+}
+
+/**
+ * Marketing content for the extras cards, keyed by Apaleo service code. Soft
+ * fallback like the banner: on any error the extras pages still render from
+ * Apaleo's offer data with icon tiles, so this returns {} rather than throws.
+ */
+export async function getExtrasContent(): Promise<Record<string, ExtrasContentDto>> {
+  const payload = await getPayload({ config });
+  try {
+    const result = await payload.find({
+      collection: "extras",
+      sort: "displayOrder",
+      pagination: false,
+    });
+    const content: Record<string, ExtrasContentDto> = {};
+    for (const doc of result.docs) {
+      content[doc.serviceCode] = {
+        image: doc.photo ? mediaRef(doc.photo) : null,
+        noun: doc.noun ?? undefined,
+        more: (doc.more ?? []).map((s) => ({ heading: s.heading, body: s.body })),
+      };
+    }
+    return content;
+  } catch {
+    return {};
   }
 }
 

@@ -8,7 +8,7 @@
  *
  *   2 grades x 2 sizes = 4 lodge types  ×  5 units each  =  20 lodges
  *   1 flexible KES rate plan per type
- *   6 extras (services) on the enhancements page
+ *   7 extras (services) on the enhancements page
  *   Friday + Monday turnover restrictions, 13-month rolling window
  *
  * Usage (from the frontend repo root; credentials are the CLIENT_ID and
@@ -102,12 +102,18 @@ const UNITS_PER_GROUP = 5; // 20 lodges in total
  * UNIT_NAMES.WDL[2]). Fig and Olive Lanes sit in The Glades, Turaco and
  * Hyrax Lanes on Sunrise Ridge; the frontend maps lane to zone. Both grades
  * appear in every lane, so grade and place stay independent.
+ *
+ * The consecutive blocks are load-bearing, not decoration: every grade owns
+ * a run of three neighbouring doors in one zone and a run of two in the
+ * other, which is what lets "place our lodges together" sell real next-door
+ * lodges for parties of up to three (MAX_LODGES). Scatter a grade across a
+ * lane again and that product quietly becomes unsellable.
  */
 const UNIT_NAMES: Record<string, readonly string[]> = {
-  WDL: ["Fig Lane 1", "Fig Lane 5", "Olive Lane 2", "Turaco Lane 3", "Hyrax Lane 5"],
-  FST: ["Fig Lane 2", "Olive Lane 1", "Olive Lane 5", "Turaco Lane 4", "Hyrax Lane 2"],
-  LKV: ["Fig Lane 3", "Olive Lane 3", "Turaco Lane 1", "Turaco Lane 5", "Hyrax Lane 3"],
-  EXC: ["Fig Lane 4", "Olive Lane 4", "Turaco Lane 2", "Hyrax Lane 1", "Hyrax Lane 4"],
+  WDL: ["Fig Lane 1", "Fig Lane 2", "Fig Lane 3", "Turaco Lane 4", "Turaco Lane 5"],
+  FST: ["Olive Lane 1", "Olive Lane 2", "Olive Lane 3", "Hyrax Lane 4", "Hyrax Lane 5"],
+  LKV: ["Turaco Lane 1", "Turaco Lane 2", "Turaco Lane 3", "Fig Lane 4", "Fig Lane 5"],
+  EXC: ["Hyrax Lane 1", "Hyrax Lane 2", "Hyrax Lane 3", "Olive Lane 4", "Olive Lane 5"],
 };
 
 /**
@@ -150,13 +156,25 @@ const SERVICES = [
     serviceType: "FoodAndBeverages" as const,
   },
   {
+    // Fire and braai sell separately: the firewood pack is logs only, the
+    // BBQ pack below carries the charcoal and the meat.
     code: "FIREWOOD",
-    name: "Firewood & BBQ Pack",
+    name: "Firewood Pack",
     description:
-      "Seasoned hardwood logs, charcoal, firelighters, and a full meat selection for an evening braai on the deck.",
-    price: 2_200,
+      "Seasoned hardwood logs, kindling and firelighters for the lodge fire pit. One pack, set up ready for your first evening.",
+    price: 1_000,
     pricingUnit: "Room" as const,
-    mode: "Daily" as const,
+    mode: "Arrival" as const,
+    serviceType: "FoodAndBeverages" as const,
+  },
+  {
+    code: "BBQ",
+    name: "BBQ Pack",
+    description:
+      "Charcoal, firelighters and a full meat selection for an evening braai on the deck.",
+    price: 1_000,
+    pricingUnit: "Room" as const,
+    mode: "Arrival" as const,
     serviceType: "FoodAndBeverages" as const,
   },
   {
@@ -828,8 +846,8 @@ async function main() {
 ║  Signature Lodge 3 bedroom – KES 56,000+  (sleeps 6)     ║
 ║                                                           ║
 ║  Units      : ${String(UNIT_GROUPS.length * UNITS_PER_GROUP).padEnd(42)} ║
-║  Extras     : Early check-in, Grocery pack, Firewood/BBQ ║
-║               Cycle hire, Spa day pass, Location choice   ║
+║  Extras     : Early check-in, Grocery pack, Firewood     ║
+║               BBQ pack, Cycle hire, Spa pass, Location    ║
 ║  Calendar   : Fri + Mon only, 13 months ahead            ║
 ╠═══════════════════════════════════════════════════════════╣
 ║  Next: verify in Swagger                                  ║

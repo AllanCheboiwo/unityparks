@@ -31,12 +31,6 @@ export default async function DetailsPage() {
               phone: user.phone ?? "",
               title: user.title ?? "",
               dateOfBirth: user.dateOfBirth ?? "",
-              addressLine1: user.addressLine1 ?? "",
-              addressLine2: user.addressLine2 ?? "",
-              townCity: user.townCity ?? "",
-              county: user.county ?? "",
-              postcode: user.postcode ?? "",
-              country: user.country ?? "",
               marketingEmail: user.marketingEmail,
               marketingSms: user.marketingSms,
             }
