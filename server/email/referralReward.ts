@@ -1,5 +1,6 @@
 import { VILLAGE_LOCALE_LINE } from "@/content/village";
 import "server-only";
+import { participantEffectiveContact } from "@/lib/referral";
 import { prisma } from "../db";
 import { sendEmail } from "./resend";
 
@@ -40,7 +41,7 @@ export async function sendReferralReward(recordId: string): Promise<void> {
     const attribution = await prisma.referralAttribution.findUnique({
       where: { recordId },
       include: {
-        participant: true,
+        participant: { include: { user: { select: { email: true, phone: true } } } },
         record: { include: { session: { select: { departure: true } } } },
       },
     });
@@ -48,7 +49,10 @@ export async function sendReferralReward(recordId: string): Promise<void> {
     // Gift attributions never earn, and a participant without an email
     // simply has no inbox; neither consumes the stamp.
     if (!attribution || attribution.state !== "earned") return;
-    const toEmail = attribution.participant.email;
+    // Clients are written to at their account's CURRENT address, falling
+    // back to the claim-era copy; influencers have no account and keep
+    // stored fields (one copy instead of two, plan section 8).
+    const toEmail = participantEffectiveContact(attribution.participant).email;
     if (!toEmail) return;
 
     const claimed = await prisma.referralAttribution.updateMany({

@@ -228,3 +228,21 @@ export function matchesPriorContact(
   if (guest.email && prior.email && guest.email === prior.email) return true;
   return phonesMatch(guest.phone, prior.phone);
 }
+
+/**
+ * The contact a participant is reachable at NOW. A linked account (clients;
+ * influencers have none) is the living copy, so account edits propagate to
+ * self-use checks, reward emails and the ops list with one copy instead of
+ * two. The stored claim-era fields are the fallback: an account that never
+ * set a phone keeps the claim-era one working for self-use detection.
+ */
+export function participantEffectiveContact(p: {
+  email: string | null;
+  phone: string | null;
+  user?: { email: string; phone: string | null } | null;
+}): { email: string | null; phone: string | null } {
+  return {
+    email: p.user?.email ?? p.email,
+    phone: p.user?.phone ?? p.phone,
+  };
+}

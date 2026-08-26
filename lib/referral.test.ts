@@ -10,6 +10,7 @@ import {
   isValidCodeFormat,
   matchesPriorContact,
   normalizeReferralCode,
+  participantEffectiveContact,
   phonesMatch,
   splitAcrossLodges,
 } from "./referral";
@@ -238,5 +239,37 @@ describe("matchesPriorContact", () => {
     ).toBe(false);
     expect(matchesPriorContact({ email: null, phone: null }, prior)).toBe(false);
     expect(matchesPriorContact({ email: "a@b.co", phone: "0700123456" }, { email: null, phone: null })).toBe(false);
+  });
+});
+
+describe("participantEffectiveContact", () => {
+  it("reads through the linked account when present", () => {
+    expect(
+      participantEffectiveContact({
+        email: "old@example.com",
+        phone: "0700000001",
+        user: { email: "new@example.com", phone: "0700000002" },
+      }),
+    ).toEqual({ email: "new@example.com", phone: "0700000002" });
+  });
+
+  it("falls back per field: an account with no phone keeps the stored one", () => {
+    expect(
+      participantEffectiveContact({
+        email: "old@example.com",
+        phone: "0700000001",
+        user: { email: "new@example.com", phone: null },
+      }),
+    ).toEqual({ email: "new@example.com", phone: "0700000001" });
+  });
+
+  it("no account (influencers) means stored fields as-is", () => {
+    expect(
+      participantEffectiveContact({ email: "inf@example.com", phone: null, user: null }),
+    ).toEqual({ email: "inf@example.com", phone: null });
+    expect(participantEffectiveContact({ email: null, phone: "0700000003" })).toEqual({
+      email: null,
+      phone: "0700000003",
+    });
   });
 });

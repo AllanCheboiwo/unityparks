@@ -7,6 +7,7 @@ import {
   isValidCodeFormat,
   matchesPriorContact,
   normalizeReferralCode,
+  participantEffectiveContact,
   phonesMatch,
 } from "@/lib/referral";
 
@@ -46,9 +47,17 @@ export async function validateReferralCode(input: {
   const code = normalizeReferralCode(input.code);
   if (!isValidCodeFormat(code)) return { ok: false, reason: "unknown_code" };
 
-  const participant = await prisma.referralParticipant.findUnique({ where: { code } });
+  const participant = await prisma.referralParticipant.findUnique({
+    where: { code },
+    include: { user: { select: { email: true, phone: true } } },
+  });
   if (!participant) return { ok: false, reason: "unknown_code" };
   if (participant.revokedAt) return { ok: false, reason: "revoked" };
+
+  // Clients read contact through their linked account, so an email or phone
+  // edit there moves the self-use boundary with it; the claim-era copy is
+  // only the fallback. Influencers have no account and keep stored fields.
+  const ownContact = participantEffectiveContact(participant);
 
   const configs = await prisma.referralConfig.findMany();
   const config = configInForce(configs, new Date().toISOString().slice(0, 10));
@@ -57,10 +66,10 @@ export async function validateReferralCode(input: {
   // Self-use: the person staying is the code's owner. Contact match is the
   // honest boundary of what we can detect (plan section 8).
   const guestEmail = input.guestEmail ? normalizeEmail(input.guestEmail) : null;
-  if (guestEmail && participant.email && guestEmail === participant.email) {
+  if (guestEmail && ownContact.email && guestEmail === ownContact.email) {
     return { ok: false, reason: "self_use" };
   }
-  if (phonesMatch(input.guestPhone, participant.phone)) {
+  if (phonesMatch(input.guestPhone, ownContact.phone)) {
     return { ok: false, reason: "self_use" };
   }
 
