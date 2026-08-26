@@ -477,6 +477,12 @@ model ReferralConfig {
   defaultCommissionRate Float // used when an influencer's own rate is null
   creditExpiryDays      Int // client credit only; commissions never expire
 
+  // VAT rate divided OUT of the commission base: base = (lodging - discount)
+  // / (1 + vatRate). 0 on gross-basis rows (pre 25 Aug 2026). Arithmetic,
+  // not Apaleo: UPNV is a DE sandbox property and can never express KE 16%,
+  // so the folio stays vatType "Without" and this row is the tax truth.
+  vatRate Float @default(0)
+
   attributions ReferralAttribution[]
 }
 
@@ -581,4 +587,28 @@ model ReferralLedgerEntry {
   // participant's rows instead of the whole relation, so two guests
   // redeeming at once never abort each other.
   @@index([participantId])
+}
+
+model OpsAlert {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  // folio_drift | mid_cancel_drift. New kinds are just new strings; the
+  // ops page renders whatever arrives.
+  kind String
+
+  // The booking this is about, when there is one. A plain column, not a
+  // relation: an alert must be writable even mid-crash, and it outlives
+  // any cleanup of the record.
+  recordId String?
+
+  // One human-readable line for the list, and the full diagnostics blob
+  // (the same JSON the console.error carries) for the detail view.
+  summary String
+  detail  String
+
+  // Resolution is a human statement of "I looked", nothing more. The row
+  // stays forever as the audit trail.
+  resolvedAt DateTime?
+  resolvedBy String? // admin email
 }

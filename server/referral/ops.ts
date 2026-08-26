@@ -6,7 +6,7 @@ import { normalizeEmail } from "../auth/normalize";
 import { commissionOwed, pendingCreditBalance, vestedCreditBalance } from "./derive";
 import { releaseClaim } from "./claim";
 import { cancelReservationOnce } from "../apaleo/cancel";
-import { isValidCodeFormat, normalizeReferralCode } from "@/lib/referral";
+import { isValidCodeFormat, normalizeReferralCode, participantEffectiveContact } from "@/lib/referral";
 
 /**
  * Everything the /ops/referrals pages read and do. Reads are derived sums
@@ -26,6 +26,7 @@ export async function participantsOverview() {
     orderBy: { createdAt: "asc" },
     include: {
       attributions: { select: { state: true, createdAt: true, gift: true } },
+      user: { select: { email: true, phone: true } },
     },
   });
   const since = new Date(Date.now() - VELOCITY_WINDOW_DAYS * 24 * 60 * 60 * 1000);
@@ -34,8 +35,10 @@ export async function participantsOverview() {
       id: p.id,
       kind: p.kind,
       name: p.name,
-      email: p.email,
-      phone: p.phone,
+      // Clients show their account's current contact (claim-era copy as
+      // fallback); influencers have no account and show stored fields.
+      email: participantEffectiveContact(p).email,
+      phone: participantEffectiveContact(p).phone,
       code: p.code,
       commissionRate: p.commissionRate,
       revokedAt: p.revokedAt,

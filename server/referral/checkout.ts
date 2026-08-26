@@ -182,7 +182,7 @@ export async function applyReferralAtCheckout(input: {
     }
 
     const rate = check.participant.commissionRate ?? check.config.defaultCommissionRate;
-    const base = commissionBaseFor(lodgingGross, discount);
+    const base = commissionBaseFor(lodgingGross, discount, check.config.vatRate);
     attribution = {
       participantId: check.participant.id,
       configId: check.config.id,

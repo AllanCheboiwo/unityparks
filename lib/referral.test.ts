@@ -8,7 +8,10 @@ import {
   isCreditEarnVested,
   isSpendActive,
   isValidCodeFormat,
+  matchesPriorContact,
   normalizeReferralCode,
+  participantEffectiveContact,
+  phonesMatch,
   splitAcrossLodges,
 } from "./referral";
 
@@ -88,8 +91,8 @@ describe("capApplicableCredit", () => {
 
 describe("configInForce", () => {
   const configs = [
-    { id: "a", effectiveFrom: "2026-01-01", guestDiscount: 5000, clientCredit: 5000, defaultCommissionRate: 0.04, creditExpiryDays: 365 },
-    { id: "b", effectiveFrom: "2026-09-01", guestDiscount: 7000, clientCredit: 6000, defaultCommissionRate: 0.05, creditExpiryDays: 365 },
+    { id: "a", effectiveFrom: "2026-01-01", guestDiscount: 5000, clientCredit: 5000, defaultCommissionRate: 0.04, creditExpiryDays: 365, vatRate: 0 },
+    { id: "b", effectiveFrom: "2026-09-01", guestDiscount: 7000, clientCredit: 6000, defaultCommissionRate: 0.05, creditExpiryDays: 365, vatRate: 0.16 },
   ];
 
   it("picks the latest row on or before the date", () => {
@@ -107,6 +110,18 @@ describe("commission base and amount", () => {
   it("is lodging minus discount, floored at zero", () => {
     expect(commissionBaseFor(96_000, 5000)).toBe(91_000);
     expect(commissionBaseFor(4000, 5000)).toBe(0);
+  });
+
+  it("divides the config VAT rate out of the base", () => {
+    expect(commissionBaseFor(96_000, 5000, 0.16)).toBe(78_448); // 91000/1.16
+    expect(commissionBaseFor(96_000, 5000, 0)).toBe(91_000); // gross-era rows
+    expect(commissionBaseFor(4000, 5000, 0.16)).toBe(0); // still floored
+  });
+
+  it("same shillings sanity: 4% of gross ~ 4.64% of ex-VAT", () => {
+    const gross = commissionAmountFor(commissionBaseFor(96_000, 5000, 0), 0.04);
+    const exVat = commissionAmountFor(commissionBaseFor(96_000, 5000, 0.16), 0.0464);
+    expect(Math.abs(gross - exVat)).toBeLessThan(10);
   });
 
   it("rounds the commission to whole KES", () => {
@@ -188,5 +203,73 @@ describe("isSpendActive", () => {
   it("no record: counts only while the session is fresh", () => {
     expect(isSpendActive({ recordStatus: null, sessionExpiresAt: fresh, now })).toBe(true);
     expect(isSpendActive({ recordStatus: null, sessionExpiresAt: stale, now })).toBe(false);
+  });
+});
+
+describe("phonesMatch", () => {
+  it("matches across formats on the last nine digits", () => {
+    expect(phonesMatch("+254 700 123 456", "0700123456")).toBe(true);
+    expect(phonesMatch("0700-123-456", "700123456")).toBe(true);
+  });
+
+  it("refuses different numbers, short numbers, and blanks", () => {
+    expect(phonesMatch("+254700123456", "+254700123457")).toBe(false);
+    expect(phonesMatch("12345", "12345")).toBe(false); // under 7 digits
+    expect(phonesMatch(null, "0700123456")).toBe(false);
+    expect(phonesMatch("0700123456", undefined)).toBe(false);
+  });
+});
+
+describe("matchesPriorContact", () => {
+  const prior = { email: "amina@example.com", phone: "+254 700 123 456" };
+
+  it("matches on email alone", () => {
+    expect(matchesPriorContact({ email: "amina@example.com", phone: null }, prior)).toBe(true);
+  });
+
+  it("matches on phone alone, across formats", () => {
+    expect(matchesPriorContact({ email: "other@example.com", phone: "0700123456" }, prior)).toBe(
+      true,
+    );
+  });
+
+  it("no match when both differ or are missing", () => {
+    expect(
+      matchesPriorContact({ email: "other@example.com", phone: "0711999888" }, prior),
+    ).toBe(false);
+    expect(matchesPriorContact({ email: null, phone: null }, prior)).toBe(false);
+    expect(matchesPriorContact({ email: "a@b.co", phone: "0700123456" }, { email: null, phone: null })).toBe(false);
+  });
+});
+
+describe("participantEffectiveContact", () => {
+  it("reads through the linked account when present", () => {
+    expect(
+      participantEffectiveContact({
+        email: "old@example.com",
+        phone: "0700000001",
+        user: { email: "new@example.com", phone: "0700000002" },
+      }),
+    ).toEqual({ email: "new@example.com", phone: "0700000002" });
+  });
+
+  it("falls back per field: an account with no phone keeps the stored one", () => {
+    expect(
+      participantEffectiveContact({
+        email: "old@example.com",
+        phone: "0700000001",
+        user: { email: "new@example.com", phone: null },
+      }),
+    ).toEqual({ email: "new@example.com", phone: "0700000001" });
+  });
+
+  it("no account (influencers) means stored fields as-is", () => {
+    expect(
+      participantEffectiveContact({ email: "inf@example.com", phone: null, user: null }),
+    ).toEqual({ email: "inf@example.com", phone: null });
+    expect(participantEffectiveContact({ email: null, phone: "0700000003" })).toEqual({
+      email: null,
+      phone: "0700000003",
+    });
   });
 });

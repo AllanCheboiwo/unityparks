@@ -93,6 +93,7 @@ export type ReferralConfigRow = {
   clientCredit: number;
   defaultCommissionRate: number;
   creditExpiryDays: number;
+  vatRate: number; // divided out of the commission base; 0 = gross basis
 };
 
 /**
@@ -112,11 +113,18 @@ export function configInForce<T extends ReferralConfigRow>(configs: T[], isoDate
 /**
  * Commission base for an influencer attribution: the lodging-only session
  * snapshots minus the referral discount (the program does not pay commission
- * on revenue it gave away), floored at zero. Gross, VAT-inclusive: the rate
- * is chosen with that in mind (plan section 6.4).
+ * on revenue it gave away), with the config's VAT rate divided out, floored
+ * at zero. vatRate 0 reproduces the launch-era gross basis exactly, so old
+ * config rows keep meaning what they meant. The arithmetic lives here and
+ * not in Apaleo on purpose: the sandbox property is German and can never
+ * carry the Kenyan rate (plan section 12, decided 25 Aug 2026).
  */
-export function commissionBaseFor(lodgingGross: number, discount: number): number {
-  return Math.max(0, Math.round(lodgingGross - discount));
+export function commissionBaseFor(
+  lodgingGross: number,
+  discount: number,
+  vatRate: number = 0,
+): number {
+  return Math.max(0, Math.round((lodgingGross - discount) / (1 + vatRate)));
 }
 
 /** rate * base, whole KES. */
@@ -194,4 +202,47 @@ export function isSpendActive(ctx: SpendContext): boolean {
   if (ctx.recordStatus === "cancelled" || ctx.recordStatus === "failed") return false;
   if (ctx.recordStatus !== null) return true;
   return ctx.sessionExpiresAt.getTime() >= ctx.now.getTime();
+}
+
+/** Digits-only comparison so "+254 700..." and "0700..." can still match. */
+export function phonesMatch(a: string | null | undefined, b: string | null | undefined): boolean {
+  if (!a || !b) return false;
+  const digits = (s: string) => s.replace(/\D/g, "");
+  const da = digits(a);
+  const db = digits(b);
+  if (da.length < 7 || db.length < 7) return false;
+  return da.slice(-9) === db.slice(-9);
+}
+
+/**
+ * First-stay classification: does this guest's contact match one prior
+ * booking's lead guest? Emails must arrive normalized (both sides are, on
+ * every path: sessions store them lowercased, validate.ts normalizes its
+ * input). Same honest boundary as the self-use check: a determined second
+ * email defeats it, a matching phone catches most of those.
+ */
+export function matchesPriorContact(
+  guest: { email: string | null; phone: string | null },
+  prior: { email: string | null; phone: string | null },
+): boolean {
+  if (guest.email && prior.email && guest.email === prior.email) return true;
+  return phonesMatch(guest.phone, prior.phone);
+}
+
+/**
+ * The contact a participant is reachable at NOW. A linked account (clients;
+ * influencers have none) is the living copy, so account edits propagate to
+ * self-use checks, reward emails and the ops list with one copy instead of
+ * two. The stored claim-era fields are the fallback: an account that never
+ * set a phone keeps the claim-era one working for self-use detection.
+ */
+export function participantEffectiveContact(p: {
+  email: string | null;
+  phone: string | null;
+  user?: { email: string; phone: string | null } | null;
+}): { email: string | null; phone: string | null } {
+  return {
+    email: p.user?.email ?? p.email,
+    phone: p.user?.phone ?? p.phone,
+  };
 }
