@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/server/auth/session";
 import {
   lockedSpends,
   participantsOverview,
+  programmeInForce,
   recentAttributions,
   VELOCITY_ALERT_THRESHOLD,
   VELOCITY_WINDOW_DAYS,
@@ -21,11 +22,13 @@ export default async function ReferralOpsPage() {
   if (!user) redirect("/login?next=/ops/referrals");
   if (!user.isAdmin) notFound();
 
-  const [participants, attributions, locked] = await Promise.all([
+  const [participants, attributions, locked, programme] = await Promise.all([
     participantsOverview(),
     recentAttributions(),
     lockedSpends(),
+    programmeInForce(),
   ]);
+  const pct = (rate: number) => `${(rate * 100).toFixed(1).replace(/\.0$/, "")}%`;
 
   const th = "px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-foreground/50";
   const td = "px-3 py-2 text-sm text-foreground";
@@ -76,10 +79,11 @@ export default async function ReferralOpsPage() {
                   </td>
                   <td className={td}>{p.kind}</td>
                   <td className={td}>
-                    {p.kind === "influencer"
-                      ? p.commissionRate != null
-                        ? `${(p.commissionRate * 100).toFixed(1)}%`
-                        : "default"
+                    {/* Display only: one internal rate for everyone (25 Aug
+                        2026), the config row in force. Stored per-participant
+                        rates are inert; checkout never reads them. */}
+                    {p.kind === "influencer" && programme
+                      ? pct(programme.defaultCommissionRate)
                       : "-"}
                   </td>
                   <td className={td}>
@@ -111,7 +115,9 @@ export default async function ReferralOpsPage() {
           <h3 className="text-sm font-bold text-ink">Onboard an influencer</h3>
           <p className="mt-1 text-xs text-foreground/60">
             Vetting and the contract happen before this form; this stores the
-            outcome. Blank rate means the config default at each booking.
+            outcome. Commission is the programme rate for everyone
+            {programme ? ` (currently ${pct(programme.defaultCommissionRate)} of ex-VAT lodging)` : ""},
+            set by config row, not per person.
           </p>
           <InfluencerForm />
         </div>

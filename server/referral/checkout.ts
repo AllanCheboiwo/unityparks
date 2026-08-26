@@ -181,7 +181,10 @@ export async function applyReferralAtCheckout(input: {
       }
     }
 
-    const rate = check.participant.commissionRate ?? check.config.defaultCommissionRate;
+    // One internal rate for everyone (decided 25 Aug 2026): the config row
+    // in force, never a per-participant number. The commissionRate column
+    // stays as the seam for negotiated rates later; nothing reads it today.
+    const rate = check.config.defaultCommissionRate;
     const base = commissionBaseFor(lodgingGross, discount, check.config.vatRate);
     attribution = {
       participantId: check.participant.id,
