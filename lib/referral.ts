@@ -93,6 +93,7 @@ export type ReferralConfigRow = {
   clientCredit: number;
   defaultCommissionRate: number;
   creditExpiryDays: number;
+  vatRate: number; // divided out of the commission base; 0 = gross basis
 };
 
 /**
@@ -112,11 +113,18 @@ export function configInForce<T extends ReferralConfigRow>(configs: T[], isoDate
 /**
  * Commission base for an influencer attribution: the lodging-only session
  * snapshots minus the referral discount (the program does not pay commission
- * on revenue it gave away), floored at zero. Gross, VAT-inclusive: the rate
- * is chosen with that in mind (plan section 6.4).
+ * on revenue it gave away), with the config's VAT rate divided out, floored
+ * at zero. vatRate 0 reproduces the launch-era gross basis exactly, so old
+ * config rows keep meaning what they meant. The arithmetic lives here and
+ * not in Apaleo on purpose: the sandbox property is German and can never
+ * carry the Kenyan rate (plan section 12, decided 25 Aug 2026).
  */
-export function commissionBaseFor(lodgingGross: number, discount: number): number {
-  return Math.max(0, Math.round(lodgingGross - discount));
+export function commissionBaseFor(
+  lodgingGross: number,
+  discount: number,
+  vatRate: number = 0,
+): number {
+  return Math.max(0, Math.round((lodgingGross - discount) / (1 + vatRate)));
 }
 
 /** rate * base, whole KES. */

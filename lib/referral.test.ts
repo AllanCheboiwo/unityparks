@@ -90,8 +90,8 @@ describe("capApplicableCredit", () => {
 
 describe("configInForce", () => {
   const configs = [
-    { id: "a", effectiveFrom: "2026-01-01", guestDiscount: 5000, clientCredit: 5000, defaultCommissionRate: 0.04, creditExpiryDays: 365 },
-    { id: "b", effectiveFrom: "2026-09-01", guestDiscount: 7000, clientCredit: 6000, defaultCommissionRate: 0.05, creditExpiryDays: 365 },
+    { id: "a", effectiveFrom: "2026-01-01", guestDiscount: 5000, clientCredit: 5000, defaultCommissionRate: 0.04, creditExpiryDays: 365, vatRate: 0 },
+    { id: "b", effectiveFrom: "2026-09-01", guestDiscount: 7000, clientCredit: 6000, defaultCommissionRate: 0.05, creditExpiryDays: 365, vatRate: 0.16 },
   ];
 
   it("picks the latest row on or before the date", () => {
@@ -109,6 +109,18 @@ describe("commission base and amount", () => {
   it("is lodging minus discount, floored at zero", () => {
     expect(commissionBaseFor(96_000, 5000)).toBe(91_000);
     expect(commissionBaseFor(4000, 5000)).toBe(0);
+  });
+
+  it("divides the config VAT rate out of the base", () => {
+    expect(commissionBaseFor(96_000, 5000, 0.16)).toBe(78_448); // 91000/1.16
+    expect(commissionBaseFor(96_000, 5000, 0)).toBe(91_000); // gross-era rows
+    expect(commissionBaseFor(4000, 5000, 0.16)).toBe(0); // still floored
+  });
+
+  it("same shillings sanity: 4% of gross ~ 4.64% of ex-VAT", () => {
+    const gross = commissionAmountFor(commissionBaseFor(96_000, 5000, 0), 0.04);
+    const exVat = commissionAmountFor(commissionBaseFor(96_000, 5000, 0.16), 0.0464);
+    expect(Math.abs(gross - exVat)).toBeLessThan(10);
   });
 
   it("rounds the commission to whole KES", () => {

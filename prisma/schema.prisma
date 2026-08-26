@@ -477,6 +477,12 @@ model ReferralConfig {
   defaultCommissionRate Float // used when an influencer's own rate is null
   creditExpiryDays      Int // client credit only; commissions never expire
 
+  // VAT rate divided OUT of the commission base: base = (lodging - discount)
+  // / (1 + vatRate). 0 on gross-basis rows (pre 25 Aug 2026). Arithmetic,
+  // not Apaleo: UPNV is a DE sandbox property and can never express KE 16%,
+  // so the folio stays vatType "Without" and this row is the tax truth.
+  vatRate Float @default(0)
+
   attributions ReferralAttribution[]
 }
 

@@ -1269,6 +1269,18 @@ Settled, and where they live:
   onboarded, 6 characters from the unambiguous alphabet for generated
   client codes. Collisions surface to the admin as "That code is already
   taken."
+- Decided 25 Aug 2026: commission moved to a true ex-VAT base, done as
+  arithmetic rather than Apaleo accounting. The config row now carries
+  `vatRate` (0.16 from 2026-08-25; 0 on the launch row, which keeps its
+  gross meaning), and the base becomes (lodging - discount) / (1 +
+  vatRate), still frozen per attribution. The default rate moved from
+  0.04 of gross to 0.05 of ex-VAT (~4.64% would have been
+  payout-neutral; 5% is a small deliberate raise). Apaleo stays vatType
+  "Without" everywhere: UPNV is a German sandbox property and can never
+  express the Kenyan 16%, so folio-level VAT would freeze bases on a
+  rate nobody means. Participants with a stored gross-era
+  commissionRate keep their number against the new smaller base; review
+  them in /ops/referrals when the row lands.
 
 Genuinely open:
 
@@ -1280,5 +1292,6 @@ Genuinely open:
   influencer form.
 - Vanity code taste, and whether to reserve prefixes for the future
   family and organizer tracks before influencer codes eat the namespace.
-- Whether commission should move to a true ex-VAT base with WHT columns,
-  which is an accountant's call rather than an engineering one (6.4).
+- WHT columns on the payout CSV. The ex-VAT base itself is settled above
+  (25 Aug 2026); whether withholding tax gets its own columns stays an
+  accountant's call (6.4).
