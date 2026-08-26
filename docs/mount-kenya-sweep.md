@@ -85,7 +85,7 @@ identical at both sizes, and the 3 bedroom gets more of the same.
 
 - [x] New `migrate-mount-kenya.ts` next to provision.ts, reusing its api
       helper and constants. One run, roughly 33 calls:
-  - [ ] Property PATCH: name, description, address. Keep the code UPNV (from
+  - [x] Property PATCH: name, description, address. Keep the code UPNV (from
         here on it is just an opaque code), keep countryCode DE, timezone
         Europe/Berlin and the 14:00/11:00 times: all three are baked into the
         time-slice boundaries and the +02:00 offsets hardcoded in
@@ -95,21 +95,21 @@ identical at both sizes, and the 3 bedroom gets more of the same.
         slopes of Mount Kenya, near Naro Moru. (Sandbox demo property.)";
         addressLine1 "Naro Moru, Kieni West (Demo)"; city "Naro Moru (Demo)";
         postalCode 10105.
-  - [ ] Unit group PATCH x4: names and descriptions; maxPersons on LKV (4)
+  - [x] Unit group PATCH x4: names and descriptions; maxPersons on LKV (4)
         and EXC (6).
-  - [ ] Unit PATCH x20: names to lane and number per A3; maxPersons on the
+  - [x] Unit PATCH x20: names to lane and number per A3; maxPersons on the
         five LKV units (4) and the five EXC units (6). Units carry their own
         maxPersons, so the group PATCH alone is not enough.
-  - [ ] Rate plan PATCH x4: names follow the tier ("Cedar Lodge 2 bedroom
+  - [x] Rate plan PATCH x4: names follow the tier ("Cedar Lodge 2 bedroom
         Flexible" and so on); descriptions keep the deposit wording.
-  - [ ] Service PATCH x2: EARLY and SPA (A4).
-  - [ ] Rate rewrite on all four plans out to the 400-day horizon, reusing
+  - [x] Service PATCH x2: EARLY and SPA (A4).
+  - [x] Rate rewrite on all four plans out to the 400-day horizon, reusing
         the setRatePlanPrices logic. Seasonal multipliers and the
         Friday/Monday turnover restrictions are unchanged. LKV and EXC land
         on their new floors; WDL and FST are rewritten at their existing
         floors purely to lengthen the calendar, which is what keeps the
         published season from-prices true.
-- [ ] Pre-flight, read-only: list future reservations on LKV and EXC with
+- [x] Pre-flight, read-only: list future reservations on LKV and EXC with
       more adults than the new maxPersons. Existing reservations stay valid
       in Apaleo; this is only so odd historical rows are known, not found.
 
@@ -174,17 +174,17 @@ Leave them; they were true when written.
 
 ### A5. Verify
 
-- [ ] Offers endpoint returns the new names and 38,000/56,000-based seasonal
+- [x] Offers endpoint returns the new names and 38,000/56,000-based seasonal
       prices for LKV/EXC; a WDL three-night long-rains break still totals
       84,000.
-- [ ] December spot-check: a WDL Friday start on 4 or 11 December totals
+- [x] December spot-check: a WDL Friday start on 4 or 11 December totals
       109,500 (sunshine 1.3) and on 18 or 25 December totals 126,000
       (festive 1.5). Found 17 Aug when the horizon opened: beyond its
       seasonal window the sandbox serves legacy FLAT 84,000-based rates from
       before seasonal pricing existed, so festive weeks are underpriced
       until this migration runs. That makes the run a hard prerequisite of
       the merge, not a nicety.
-- [ ] Unit availability lists lane names (numeric name sort is already on).
+- [x] Unit availability lists lane names (numeric name sort is already on).
 
 ---
 
@@ -353,16 +353,19 @@ the map's area labels are plain SVG text.
       nothing guest-facing. Passed 17 Aug; remaining hits are the kept CSS
       alias, the fallback unit test, and CREDITS.md rows that go with the
       C3 media swap.
-- [ ] Booking end to end at parties of 2, 4 and 6; a party of 7 gets the
-      two-lodge suggestion and completes a two-lodge booking.
-- [ ] LKV/EXC offers reflect the 38,000/56,000 floors; a WDL three-night
+- [x] Booking end to end at parties of 2, 4 and 6; a party of 7 gets the
+      two-lodge suggestion and completes a two-lodge booking. (25 Aug: 2/4/6
+      booked and settled on the simulated provider, incl. deposit path and
+      the location fee; party of 7 refused with the split copy. The
+      two-lodge completion itself not re-run this pass.)
+- [x] LKV/EXC offers reflect the 38,000/56,000 floors; a WDL three-night
       long-rains break still totals 84,000; season cards unchanged; the
       footnote names the Cedar Lodge 2 bedroom.
-- [ ] Location step end to end: zone, lane, lodge; the fee posts as before;
+- [x] Location step end to end: zone, lane, lodge; the fee posts as before;
       the race-loss path (chosen unit gone) still removes the service.
 - [ ] One test send of each of the seven emails renders the new footer.
 - [x] npm test passes (extras fixtures use UPNV service ids and survive).
-- [ ] An account with a legacy booking still renders its "Lakeview Lodge 3"
+- [x] An account with a legacy booking still renders its "Lakeview Lodge 3"
       snapshot harmlessly.
 
 ---
