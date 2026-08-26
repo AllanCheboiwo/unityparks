@@ -17,7 +17,7 @@ Sizing: full path for anything touching money, auth, the Prisma schema, Apaleo/P
 The kanban board in Linear (official MCP + GitHub integration) is the visible read-out of work for Allan and his contractor. It never gates anything; git stays the source of truth.
 
 - Feature-sized work starts from a Linear issue. If Allan asks for a feature with no issue, create one first, then proceed as normal.
-- Branch names include the issue ID (e.g. `allan/uni-12-promo-codes`); PR descriptions include "Fixes UNI-12" so the GitHub integration moves issues automatically.
+- Branch names include the issue ID (e.g. `unp-7-promo-codes`); PR descriptions include "Fixes UNP-7" so the GitHub integration moves issues automatically. Team prefix is UNP.
 - Done means merged to main. Commits on a feature branch keep the issue In Progress; note pending Railway deploy steps as an issue comment, not a status.
 - Review findings or out-of-scope discoveries that are not fixed inline become Backlog issues, filed at the moment they surface.
 - Say what you did in chat whenever you write to Linear (e.g. "filed UNI-23"), so the board never changes silently.
