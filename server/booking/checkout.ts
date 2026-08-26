@@ -24,6 +24,7 @@ import { paymentsProvider } from "./provider";
 import { getSession, parseChildrenAges, parseExtras, parseVehiclePlates } from "./session";
 import { loadGuests, partyBands } from "./guests";
 import { sendBookingConfirmation } from "../email/bookingConfirmation";
+import { raiseOpsAlert } from "../ops/alerts";
 import { sendBalanceReceipt } from "../email/balanceReceipt";
 import { applyReferralAtCheckout, reconcileCreditFlags } from "../referral/checkout";
 import { sendReferralReward } from "../email/referralReward";
@@ -1218,17 +1219,23 @@ async function settlePayment(
     const untouched = Math.abs(balance - remaining[i]) < 0.01;
     const alreadyPosted = Math.abs(balance - (remaining[i] - shares[i])) < 0.01;
     if (!untouched && !alreadyPosted) {
-      console.error(
-        "Folio drifted from local bookkeeping",
-        JSON.stringify({
-          recordId: record.id,
-          transactionId: transaction.id,
-          slot: children[i].slot,
-          folioBalance: balance,
-          remaining: remaining[i],
-          share: shares[i],
-        }),
-      );
+      const detail = {
+        recordId: record.id,
+        transactionId: transaction.id,
+        slot: children[i].slot,
+        folioBalance: balance,
+        remaining: remaining[i],
+        share: shares[i],
+      };
+      console.error("Folio drifted from local bookkeeping", JSON.stringify(detail));
+      // Durable alert before the throw: the guest is told to contact us,
+      // so ops must already know when they do.
+      await raiseOpsAlert({
+        kind: "folio_drift",
+        recordId: record.id,
+        summary: `Folio drifted from local bookkeeping on ${record.id} (slot ${children[i].slot})`,
+        detail,
+      });
       throw new PublicError(
         502,
         "Your booking changed while the payment was in progress. Please contact us - do not pay again.",

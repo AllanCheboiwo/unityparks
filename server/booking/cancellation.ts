@@ -6,6 +6,7 @@ import { getFolioForReservation } from "../apaleo/bookings";
 import { refundFolio } from "../apaleo/payments";
 import { PublicError } from "../api-helpers";
 import { sendBookingCancellation } from "../email/bookingCancellation";
+import { raiseOpsAlert } from "../ops/alerts";
 import { computeRefund, daysBetween } from "@/lib/paymentPlan";
 
 /**
@@ -234,15 +235,22 @@ export async function cancelBooking(staleRecord: RecordForCancel): Promise<Cance
         select: { paidAmount: true },
       });
       if (after && Math.abs(after.paidAmount - record.paidAmount) > 0.01) {
+        const detail = {
+          recordId: record.id,
+          basisPaid: record.paidAmount,
+          nowPaid: after.paidAmount,
+          refunded,
+        };
         console.error(
           "Balance payment landed MID-CANCEL; refund basis was stale",
-          JSON.stringify({
-            recordId: record.id,
-            basisPaid: record.paidAmount,
-            nowPaid: after.paidAmount,
-            refunded,
-          }),
+          JSON.stringify(detail),
         );
+        await raiseOpsAlert({
+          kind: "mid_cancel_drift",
+          recordId: record.id,
+          summary: `Payment landed mid-cancel on ${record.id}; guest is owed more back than was refunded`,
+          detail,
+        });
       }
     } catch (err) {
       console.error("Mid-cancel drift check failed (non-fatal)", err);

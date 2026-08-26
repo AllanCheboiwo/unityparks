@@ -1256,6 +1256,15 @@ Settled, and where they live:
 - Decided 4 Aug 2026: the discount applies once per booking, not per
   lodge; cancellation restores spent credit, which now falls out of the
   derivation for free.
+- Decided 25 Aug 2026: codes are first-stay only. A lead guest whose
+  contact (normalized email, or phone on its last nine digits) matches any
+  prior deposit-paid or paid, non-cancelled booking is refused with
+  `not_first_stay` at both check sites. "Prior" means any prior kept
+  booking, not any departed stay, so a new guest cannot book breaks two
+  and three discounted before break one happens. Matched on the lead
+  guest, never the booker's account, so a past guest gifting a break to a
+  first-timer stays legitimate. Same honest contact-match boundary as
+  self-use.
 - Code format: 3 to 12 letters and digits for anything typed or
   onboarded, 6 characters from the unambiguous alphabet for generated
   client codes. Collisions surface to the admin as "That code is already

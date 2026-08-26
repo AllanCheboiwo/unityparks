@@ -8,7 +8,9 @@ import {
   isCreditEarnVested,
   isSpendActive,
   isValidCodeFormat,
+  matchesPriorContact,
   normalizeReferralCode,
+  phonesMatch,
   splitAcrossLodges,
 } from "./referral";
 
@@ -188,5 +190,41 @@ describe("isSpendActive", () => {
   it("no record: counts only while the session is fresh", () => {
     expect(isSpendActive({ recordStatus: null, sessionExpiresAt: fresh, now })).toBe(true);
     expect(isSpendActive({ recordStatus: null, sessionExpiresAt: stale, now })).toBe(false);
+  });
+});
+
+describe("phonesMatch", () => {
+  it("matches across formats on the last nine digits", () => {
+    expect(phonesMatch("+254 700 123 456", "0700123456")).toBe(true);
+    expect(phonesMatch("0700-123-456", "700123456")).toBe(true);
+  });
+
+  it("refuses different numbers, short numbers, and blanks", () => {
+    expect(phonesMatch("+254700123456", "+254700123457")).toBe(false);
+    expect(phonesMatch("12345", "12345")).toBe(false); // under 7 digits
+    expect(phonesMatch(null, "0700123456")).toBe(false);
+    expect(phonesMatch("0700123456", undefined)).toBe(false);
+  });
+});
+
+describe("matchesPriorContact", () => {
+  const prior = { email: "amina@example.com", phone: "+254 700 123 456" };
+
+  it("matches on email alone", () => {
+    expect(matchesPriorContact({ email: "amina@example.com", phone: null }, prior)).toBe(true);
+  });
+
+  it("matches on phone alone, across formats", () => {
+    expect(matchesPriorContact({ email: "other@example.com", phone: "0700123456" }, prior)).toBe(
+      true,
+    );
+  });
+
+  it("no match when both differ or are missing", () => {
+    expect(
+      matchesPriorContact({ email: "other@example.com", phone: "0711999888" }, prior),
+    ).toBe(false);
+    expect(matchesPriorContact({ email: null, phone: null }, prior)).toBe(false);
+    expect(matchesPriorContact({ email: "a@b.co", phone: "0700123456" }, { email: null, phone: null })).toBe(false);
   });
 });

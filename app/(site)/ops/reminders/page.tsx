@@ -30,6 +30,9 @@ export default async function RemindersOpsPage() {
           <Link href="/ops/memories" className="btn-outline text-sm">
             Memories
           </Link>
+          <Link href="/ops/alerts" className="btn-outline text-sm">
+            Alerts
+          </Link>
           <Link href="/ops/referrals" className="btn-outline text-sm">
             Referrals
           </Link>
