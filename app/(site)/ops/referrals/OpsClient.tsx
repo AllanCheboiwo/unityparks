@@ -10,7 +10,7 @@ import { apiFetch } from "@/lib/api";
 
 export function InfluencerForm() {
   const router = useRouter();
-  const [form, setForm] = useState({ name: "", email: "", phone: "", code: "", rate: "" });
+  const [form, setForm] = useState({ name: "", email: "", phone: "", code: "" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -18,12 +18,6 @@ export function InfluencerForm() {
     e.preventDefault();
     setBusy(true);
     setError(null);
-    const rate = form.rate.trim() ? Number(form.rate) : undefined;
-    if (rate !== undefined && (!Number.isFinite(rate) || rate <= 0 || rate >= 0.5)) {
-      setError("Rate is a fraction, e.g. 0.04 for 4%. Leave blank for the config default.");
-      setBusy(false);
-      return;
-    }
     const result = await apiFetch<{ id: string; code: string }>(
       `/api/ops/referrals/participants`,
       {
@@ -33,13 +27,12 @@ export function InfluencerForm() {
           email: form.email || undefined,
           phone: form.phone || undefined,
           code: form.code,
-          commissionRate: rate,
         }),
       },
     );
     setBusy(false);
     if (!result.ok) return setError(result.error);
-    setForm({ name: "", email: "", phone: "", code: "", rate: "" });
+    setForm({ name: "", email: "", phone: "", code: "" });
     router.refresh();
   }
 
@@ -56,8 +49,6 @@ export function InfluencerForm() {
         onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} />
       <input placeholder="Phone (for payouts)" value={form.phone} className={input}
         onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} />
-      <input placeholder="Rate as fraction, blank = default" value={form.rate} className={input}
-        onChange={(e) => setForm((f) => ({ ...f, rate: e.target.value }))} />
       <button type="submit" disabled={busy} className="btn-primary text-sm">
         {busy ? "Adding…" : "Add influencer"}
       </button>

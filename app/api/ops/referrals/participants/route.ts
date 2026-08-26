@@ -9,9 +9,6 @@ const CreateBody = z.object({
   email: z.string().trim().optional(),
   phone: z.string().trim().optional(),
   code: z.string().trim().min(3).max(12),
-  // A fraction, e.g. 0.04. Blank means the config default in force at each
-  // booking applies.
-  commissionRate: z.number().optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -24,7 +21,6 @@ export async function POST(req: NextRequest) {
       email: parsed.data.email || null,
       phone: parsed.data.phone || null,
       code: parsed.data.code,
-      commissionRate: parsed.data.commissionRate ?? null,
     });
     return NextResponse.json({ id: participant.id, code: participant.code });
   });

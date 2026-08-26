@@ -6,7 +6,12 @@ import { normalizeEmail } from "../auth/normalize";
 import { commissionOwed, pendingCreditBalance, vestedCreditBalance } from "./derive";
 import { releaseClaim } from "./claim";
 import { cancelReservationOnce } from "../apaleo/cancel";
-import { isValidCodeFormat, normalizeReferralCode, participantEffectiveContact } from "@/lib/referral";
+import {
+  configInForce,
+  isValidCodeFormat,
+  normalizeReferralCode,
+  participantEffectiveContact,
+} from "@/lib/referral";
 
 /**
  * Everything the /ops/referrals pages read and do. Reads are derived sums
@@ -113,19 +118,21 @@ function isLockedSpend(
   return session.booking?.status === "created" && session.expiresAt < now;
 }
 
+/** The config row in force today; the ops page shows its rate read-only. */
+export async function programmeInForce() {
+  const configs = await prisma.referralConfig.findMany();
+  return configInForce(configs, new Date().toISOString().slice(0, 10));
+}
+
 export async function createInfluencer(input: {
   name: string;
   email?: string | null;
   phone?: string | null;
   code: string;
-  commissionRate?: number | null;
 }) {
   const code = normalizeReferralCode(input.code);
   if (!isValidCodeFormat(code)) {
     throw new PublicError(400, "Codes are 3-12 letters and digits.");
-  }
-  if (input.commissionRate != null && (input.commissionRate <= 0 || input.commissionRate >= 0.5)) {
-    throw new PublicError(400, "The rate is a fraction, e.g. 0.04 for 4%.");
   }
   try {
     return await prisma.referralParticipant.create({
@@ -135,7 +142,10 @@ export async function createInfluencer(input: {
         email: input.email ? normalizeEmail(input.email) : null,
         phone: input.phone?.trim() || null,
         code,
-        commissionRate: input.commissionRate ?? null,
+        // Decided 25 Aug 2026: one internal rate for everyone, the config
+        // default in force at each booking. The column stays as the seam
+        // for negotiated rates later; nothing writes it today.
+        commissionRate: null,
       },
     });
   } catch (err) {
