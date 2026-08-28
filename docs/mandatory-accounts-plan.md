@@ -9,6 +9,7 @@ Tier: full path (touches auth and the checkout details step)
 Plan approved: 28 Aug 2026, Allan wrote "plan approved!"
 Tests approved: 28 Aug 2026, commit 8746ff1 (suite dd60e4a + hardening 8746ff1), Allan wrote "tests approved!"
 Test change approved: 28 Aug 2026, commit 139cac3, reason: fake declarations typed as zero-arg made tsc fail on mock.calls reads; types-only fix, no assertion changed. Allan wrote "i approve of this"
+Test change approved: 28 Aug 2026, commit 5252871, reason: code-review finding, the details route named the keep-me-signed-in flag keepSignedIn while login and register used remember; fixture key renamed, no assertion changed. Allan wrote "approve the rename"
 
 ## The problem
 
