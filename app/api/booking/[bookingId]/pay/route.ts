@@ -35,7 +35,6 @@ export async function POST(
     assertBookingAccess(record, {
       user: await getCurrentUser(),
       sessionId: req.nextUrl.searchParams.get("session"),
-      email: req.nextUrl.searchParams.get("email"),
     });
 
     if (record.status === "paid") {

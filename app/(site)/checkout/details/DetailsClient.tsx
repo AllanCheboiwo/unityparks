@@ -311,11 +311,11 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
   const [showSigninPassword, setShowSigninPassword] = useState(false);
   const [signinBusy, setSigninBusy] = useState(false);
   const [signinError, setSigninError] = useState<string | null>(null);
-  const [declinedSignIn, setDeclinedSignIn] = useState(false);
+  const [signinRemember, setSigninRemember] = useState(false);
 
   // "Create my Unity Parks account", pre-checked by default.
-  const [createAccount, setCreateAccount] = useState(true);
   const [newPassword, setNewPassword] = useState("");
+  const [keepSignedIn, setKeepSignedIn] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
 
   const [summary, setSummary] = useState<SessionSummary | null>(null);
@@ -373,14 +373,22 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
   const formUnlocked = knownUser !== null || gate !== null;
 
   const showGate = !knownUser;
-  const showSignInPanel = gate?.status === "active" && !knownUser && !declinedSignIn;
-  const showCreateAccount = !knownUser && gate?.status === "none";
+  const showSignInPanel = gate?.status === "active" && !knownUser;
+  // "unknown" (the advisory check failed) gets the account card too: with
+  // accounts mandatory there is no plain-guest path to fall back to, so we
+  // collect a password regardless. If the email secretly has an account the
+  // submit's emailTaken flip turns this card into sign-in.
+  const showCreateAccount =
+    !knownUser && (gate?.status === "none" || gate?.status === "unknown");
+  // Distinct from showCreateAccount on purpose: whether we collect a
+  // password and whether the guest gets the step-by-step first-timer flow
+  // are different questions. "unknown" collects a password but keeps the
+  // whole form open, per the comment below.
   // Who gets the phased form: an email we have never seen, so someone typing
   // all of this from scratch. Anyone else is reviewing rather than entering -
   // signed in, prefilled, or an email check that failed and left us unsure -
-  // and gets the whole form open. Same condition as the account offer,
-  // because it is the same person: a brand new guest.
-  const phased = showCreateAccount;
+  // and gets the whole form open.
+  const phased = !knownUser && gate?.status === "none";
 
   function stepState(index: number): SectionState {
     if (!phased) return "plain";
@@ -411,7 +419,17 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
     );
     setChecking(false);
     if (!result.ok) {
-      // The check is advisory: on failure, carry on as a plain guest.
+      // A 400 is the guest's email failing real validation (the client only
+      // checks for an @): show it at the field instead of swallowing it
+      // into "unknown", where the mandatory account card would demand a
+      // password for an email the server will never accept.
+      if (result.status === 400) {
+        setGateError(result.error);
+        return;
+      }
+      // Anything else is our outage. The check is advisory, so carry on;
+      // the account card still shows (there is no guest path any more) and
+      // a secretly-taken email is caught by the submit's emailTaken flip.
       setGate({ email, status: "unknown" });
       return;
     }
@@ -422,7 +440,6 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
 
   function changeEmail() {
     setGate(null);
-    setDeclinedSignIn(false);
     setSigninPassword("");
     setSigninError(null);
   }
@@ -433,7 +450,12 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
     setSigninError(null);
     const result = await apiFetch<KnownUser>(`/api/auth/login`, {
       method: "POST",
-      body: JSON.stringify({ email: gate.email, password: signinPassword, sessionId }),
+      body: JSON.stringify({
+        email: gate.email,
+        password: signinPassword,
+        sessionId,
+        remember: signinRemember,
+      }),
     });
     setSigninBusy(false);
     if (!result.ok) {
@@ -484,7 +506,7 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
       }
     }
     if (index === 1) {
-      if (showCreateAccount && createAccount && newPassword.length < 8) {
+      if (showCreateAccount && newPassword.length < 8) {
         e.newPassword = "Please choose a password of at least 8 characters.";
       }
       if (!termsAccepted) {
@@ -515,6 +537,14 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    // With accounts mandatory, the Welcome back card is the only way
+    // forward for an email that has one. The form below is deliberately
+    // left unlocked (reviewing typed fields must stay possible), so the
+    // gate is enforced here instead of by a dead button.
+    if (showSignInPanel) {
+      setSigninError("Please sign in above to continue with your booking.");
+      return;
+    }
     // Belt and braces for the phased path: a guest can reopen a finished
     // step, break it, and reach this button without pressing Save. Refuse,
     // and open the step that is wrong rather than reporting it from afar.
@@ -529,8 +559,6 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
     setFieldErrors({});
     setBusy(true);
     setError(null);
-    const wantsAccount =
-      !knownUser && gate?.status === "none" && createAccount && newPassword.length >= 8;
     const { phoneCountry, phoneNumber, ...fields } = form;
     const result = await apiFetch<{ ok: boolean; accountCreated: boolean }>(
       `/api/session/${sessionId}/details`,
@@ -543,17 +571,35 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
           marketingEmail,
           marketingSms,
           termsAccepted,
-          password: wantsAccount ? newPassword : undefined,
+          // Accounts are mandatory: a new email always brings its password.
+          password: showCreateAccount ? newPassword : undefined,
+          remember: showCreateAccount ? keepSignedIn : undefined,
         }),
       },
     );
     if (isExpired(result)) return setExpired(true);
     if (!result.ok) {
+      // Identity skew, server-detected: a sign-in from another tab (or an
+      // earlier submit whose cookie survived a lost response) made the
+      // create-account card stale. Reload lands in the signed-in view,
+      // which prefills every field from the account.
+      if (result.alreadySignedIn) {
+        window.location.reload();
+        return;
+      }
+      // The mirror skew: we rendered the signed-in view but the cookie is
+      // dead. Relock the form behind the gate, keeping everything typed.
+      if (result.signedOut && knownUser) {
+        setKnownUser(null);
+        setGate(null);
+        setError("Your sign-in has expired. Please check your email again to continue.");
+        setBusy(false);
+        return;
+      }
       // The email grew an account between the check and the submit: flip
       // into the sign-in card, keeping everything the guest typed.
       if (result.emailTaken) {
         setGate({ email: form.email.trim().toLowerCase(), status: "active" });
-        setDeclinedSignIn(false);
         setSigninError(result.error);
       } else {
         setError(result.error);
@@ -678,6 +724,15 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
                           <span>{signinError}</span>
                         </div>
                       )}
+                      <label className="mt-3 flex items-center gap-2 text-sm text-foreground/80">
+                        <input
+                          type="checkbox"
+                          checked={signinRemember}
+                          onChange={(e) => setSigninRemember(e.target.checked)}
+                          className="h-4 w-4 accent-[#536917]"
+                        />
+                        Keep me signed in
+                      </label>
                       <div className="mt-4 flex items-center gap-4">
                         <button
                           type="button"
@@ -687,18 +742,13 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
                         >
                           {signinBusy ? "Signing in…" : "Sign in"}
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => setDeclinedSignIn(true)}
-                          className="text-sm text-foreground/60 underline underline-offset-2"
+                        <Link
+                          href="/forgot-password"
+                          className="text-sm text-navy underline underline-offset-2"
                         >
-                          Not now, continue as guest
-                        </button>
+                          Forgotten your password?
+                        </Link>
                       </div>
-                      <p className="mt-2 text-xs text-foreground/50">
-                        Forgotten your password? Password reset is not part of
-                        this demo.
-                      </p>
                     </div>
                   )}
                 </>
@@ -869,25 +919,17 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
                     <p className="font-display text-lg font-bold text-ink">
                       Create your account
                     </p>
-                    <label className="mt-3 flex items-start gap-3">
-                      <input
-                        type="checkbox"
-                        checked={createAccount}
-                        onChange={(e) => setCreateAccount(e.target.checked)}
-                        className="mt-1 h-4 w-4 accent-[#536917]"
-                      />
-                      <span>
-                        <span className="block font-semibold text-ink">
-                          Create my Unity Parks account
-                        </span>
-                        <span className="text-sm text-foreground/60 block mt-0.5">
-                          We&apos;ll set it up as part of this booking, so you can
-                          see and manage your breaks any time.
-                        </span>
-                      </span>
-                    </label>
-                    {createAccount && (
-                      <label className="block mt-4">
+                    <p className="mt-2 text-sm text-foreground/70">
+                      Every booking comes with a Unity Parks account. With
+                      yours you can:
+                    </p>
+                    <ul className="mt-2 list-disc pl-5 text-sm text-foreground/70 space-y-1">
+                      <li>speed up your future bookings</li>
+                      <li>see and manage your breaks in one place</li>
+                      <li>add and edit your party&apos;s guest details</li>
+                      <li>pay your remaining balance any time</li>
+                    </ul>
+                    <label className="block mt-4">
                         <span className={labelClass}>
                           Choose a password
                           <RequiredMark />
@@ -915,7 +957,15 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
                         </span>
                         <FieldError message={fieldErrors.newPassword} />
                       </label>
-                    )}
+                    <label className="mt-4 flex items-center gap-2 text-sm text-foreground/80">
+                      <input
+                        type="checkbox"
+                        checked={keepSignedIn}
+                        onChange={(e) => setKeepSignedIn(e.target.checked)}
+                        className="h-4 w-4 accent-[#536917]"
+                      />
+                      Keep me signed in for 6 months
+                    </label>
                   </div>
                 )}
 

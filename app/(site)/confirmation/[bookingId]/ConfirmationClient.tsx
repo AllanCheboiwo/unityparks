@@ -9,15 +9,13 @@ import { LODGES } from "@/content/lodges";
 import type { BookingConfirmation } from "@/lib/types";
 
 export function ConfirmationClient({ bookingId }: { bookingId: string }) {
-  // Proof of access rides the URL: ?session= fresh from checkout, ?email=
-  // when arriving from the find-my-booking challenge via the manage page.
+  // Proof of access rides the URL: ?session= fresh from checkout. Everyone
+  // else proves ownership with their account cookie.
   const searchParams = useSearchParams();
-  const proofPairs = new URLSearchParams();
   const proofSession = searchParams.get("session");
-  const proofEmail = searchParams.get("email");
-  if (proofSession) proofPairs.set("session", proofSession);
-  if (proofEmail) proofPairs.set("email", proofEmail);
-  const proofQuery = proofPairs.size > 0 ? `?${proofPairs.toString()}` : "";
+  const proofQuery = proofSession
+    ? `?session=${encodeURIComponent(proofSession)}`
+    : "";
 
   const [booking, setBooking] = useState<BookingConfirmation | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -39,15 +37,11 @@ export function ConfirmationClient({ bookingId }: { bookingId: string }) {
       <div className="mx-auto max-w-lg text-center py-20 px-5">
         <p className="font-display text-2xl font-bold text-ink">This booking is private</p>
         <p className="mt-2 text-sm text-foreground">
-          Sign in to your account, or find the booking with its reference and
-          the lead guest&apos;s email.
+          Sign in to the account that made this booking to view it.
         </p>
         <div className="mt-6 flex justify-center gap-3">
           <Link href={`/login?next=/confirmation/${bookingId}`} className="btn-primary">
             Sign in
-          </Link>
-          <Link href="/manage" className="btn-dark-outline">
-            Find my booking
           </Link>
         </div>
       </div>

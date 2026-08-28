@@ -23,8 +23,8 @@ async function creditAppliedFor(sessionId: string): Promise<number | null> {
 /**
  * Confirmation data, driven by our recorded state (never a redirect) plus a
  * live folio read so "settled" is Apaleo's word, not ours. Proof of access
- * (cookie, ?session= from a fresh checkout, or ?email= from the challenge)
- * is checked before the Apaleo call so probes cost no API budget.
+ * (cookie, or ?session= from a fresh checkout) is checked before the Apaleo
+ * call so probes cost no API budget.
  */
 export async function GET(
   req: NextRequest,
@@ -46,7 +46,6 @@ export async function GET(
     assertBookingAccess(record, {
       user,
       sessionId: req.nextUrl.searchParams.get("session"),
-      email: req.nextUrl.searchParams.get("email"),
     });
 
     // The confirmation page's account nudge: does this booking's viewer

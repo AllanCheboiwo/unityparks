@@ -114,7 +114,7 @@ export default async function RootLayout({
               <div>
                 <p className="font-display text-base font-semibold mb-4">Get in touch</p>
                 <ul className="space-y-2.5 text-sm">
-                  <li><Link className="text-white/75 hover:text-moss" href="/manage">Find my booking</Link></li>
+                  <li><Link className="text-white/75 hover:text-moss" href="/account">My bookings</Link></li>
                   <li><a className="text-white/75 hover:text-moss" href="tel:+254700000000">+254 700 000 000</a></li>
                   <li><a className="text-white/75 hover:text-moss" href="mailto:hello@unityparks.example">hello@unityparks.example</a></li>
                 </ul>

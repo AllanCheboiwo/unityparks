@@ -35,8 +35,16 @@ const DetailsBody = z.object({
   marketingSms: z.boolean().optional(),
   // The client gates submit on the checkbox; the server enforces it too.
   termsAccepted: z.literal(true),
-  // Present when the guest ticked "Create my Unity Parks account".
+  // Mandatory for a signed-out guest, forbidden for a signed-in one. The
+  // rule is conditional on identity, so it cannot live in the shape: it is
+  // enforced below, after getCurrentUser, where the refusal can say which
+  // of the two mistakes was made.
   password: z.string().min(8).optional(),
+  // "Keep me signed in" from the create-account card. Same wire name as the
+  // login and register routes: one vocabulary for one flag, so a change to
+  // remember semantics cannot miss this door. Absent means unticked -
+  // consent never defaults on.
+  remember: z.boolean().optional(),
   // The referral code field, always sent (prefilled from the session);
   // empty string means the guest cleared it. Last code standing wins.
   referralCode: z.string().trim().max(40).optional(),
@@ -97,7 +105,7 @@ export async function POST(
     const parsed = DetailsBody.safeParse(await req.json());
     if (!parsed.success) return jsonError(400, "Please check the details form.");
     // termsAccepted is validated by Zod (must be true) and not stored.
-    const { password, termsAccepted, referralCode, ...guest } = parsed.data;
+    const { password, remember, termsAccepted, referralCode, ...guest } = parsed.data;
     void termsAccepted;
     if (!adultAtArrival(guest.dateOfBirth, session.arrival)) {
       return jsonError(400, "The lead booker must be over 18 at the time of arrival.");
@@ -109,7 +117,28 @@ export async function POST(
     let user = await getCurrentUser();
     let accountCreated = false;
 
-    if (!user && password) {
+    // Mandatory accounts (UNP-19): a booking cannot leave this step without
+    // an owner. One if/else on identity, so the invariant lives in exactly
+    // one place: signed out, the password mints the owner; signed in, the
+    // form is a view of the account and a riding password is refused rather
+    // than ignored (it is either a stale form or a bid for a second
+    // account). Each refusal names the mistake and carries a machine flag,
+    // because the client's rendered state can lag the cookie's truth and
+    // the flag is how it resyncs.
+    if (!user) {
+      if (!password) {
+        // signedOut: a client that believed it was signed in (dead cookie,
+        // sign-out in another tab) resyncs instead of hunting for a
+        // password field it never rendered.
+        return NextResponse.json(
+          {
+            error:
+              "Please choose a password to create your account. Every booking needs one.",
+            signedOut: true,
+          },
+          { status: 400 },
+        );
+      }
       try {
         user = await prisma.user.create({
           data: {
@@ -134,19 +163,29 @@ export async function POST(
       }
       await claimByEmail(user.id, email);
       // Signs the response: the guest reaches the pay step already signed in.
-      await createAuthSession(user.id);
+      await createAuthSession(user.id, remember ?? false);
       // Fire-and-forget: the account exists whether or not the mail lands.
       void sendWelcomeEmail({ to: user.email, firstName: user.firstName }).catch(
         (err) => console.error(`[email] welcome to ${email} failed:`, err),
       );
       accountCreated = true;
-    }
-
-    // Center Parcs semantics: for a signed-in guest this form is a view of
-    // their account, and edits write back. A just-created account already
-    // carries these fields; email is never touched (the lead-guest email
-    // edits the booking, not the account).
-    if (user && !accountCreated) {
+    } else {
+      if (password) {
+        // alreadySignedIn: the create-account card was rendered, then a
+        // sign-in landed from another tab or an earlier submit's cookie
+        // survived a lost response. The client reloads into the signed-in
+        // view, which prefills from the account.
+        return NextResponse.json(
+          {
+            error: "You are already signed in, so there is no password to set here.",
+            alreadySignedIn: true,
+          },
+          { status: 400 },
+        );
+      }
+      // Center Parcs semantics: for a signed-in guest this form is a view of
+      // their account, and edits write back. Email is never touched (the
+      // lead-guest email edits the booking, not the account).
       await prisma.user.update({ where: { id: user.id }, data: profileData(guest) });
     }
 
@@ -156,7 +195,7 @@ export async function POST(
     // silently skipped at checkout (display disagreeing with the charge) or
     // spend the previous user's credit. Give any committed claim back to
     // its owner and clear the flags; the guest re-applies at the pay step.
-    if (session.userId !== (user?.id ?? null)) {
+    if (session.userId !== user.id) {
       const claim = await findClaim(id);
       if (isLiveClaim(claim)) {
         const released = await releaseClaim(claim);
@@ -176,7 +215,7 @@ export async function POST(
       });
     }
 
-    await setGuestDetails(id, guest, user?.id ?? null);
+    await setGuestDetails(id, guest, user.id);
 
     // Referral: last code standing at details submit wins. Valid codes stamp
     // the code plus the advisory discount snapshot; anything else clears
@@ -199,7 +238,7 @@ export async function POST(
         code: typedCode,
         guestEmail: email,
         guestPhone: guest.phone,
-        sessionUserId: user?.id ?? null,
+        sessionUserId: user.id,
       });
       if (check.ok) {
         await setReferralOnSession(id, { code: typedCode, discount: check.discount });

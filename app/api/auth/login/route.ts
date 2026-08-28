@@ -14,6 +14,8 @@ const LoginBody = z.object({
   // Present when signing in inline at the details step: the funnel session
   // to stamp with the freshly proven identity.
   sessionId: z.string().optional(),
+  // "Keep me signed in": absent means unticked, consent never defaults on.
+  remember: z.boolean().optional(),
 });
 
 /** One generic 401 whether the email is unknown or the password wrong -
@@ -36,7 +38,7 @@ export async function POST(req: NextRequest) {
       where: { userId: user.id, expiresAt: { lt: new Date() } },
     });
     await claimByEmail(user.id, email);
-    await createAuthSession(user.id);
+    await createAuthSession(user.id, parsed.data.remember ?? false);
 
     if (parsed.data.sessionId) {
       await stampSessionUser(parsed.data.sessionId, user.id);

@@ -11,6 +11,8 @@ export type ApiResult<T> =
       refused?: boolean;
       soldOut?: boolean;
       emailTaken?: boolean;
+      signedOut?: boolean;
+      alreadySignedIn?: boolean;
     };
 
 export async function apiFetch<T>(
@@ -31,6 +33,8 @@ export async function apiFetch<T>(
         refused: body.refused === true,
         soldOut: body.soldOut === true,
         emailTaken: body.emailTaken === true,
+        signedOut: body.signedOut === true,
+        alreadySignedIn: body.alreadySignedIn === true,
       };
     }
     return { ok: true, data: body as T };

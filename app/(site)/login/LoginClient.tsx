@@ -13,6 +13,7 @@ export function LoginClient() {
   const rawNext = params.get("next");
   const next = rawNext?.startsWith("/") && !rawNext.startsWith("//") ? rawNext : "/account";
   const [form, setForm] = useState({ email: params.get("email") ?? "", password: "" });
+  const [remember, setRemember] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -22,7 +23,7 @@ export function LoginClient() {
     setError(null);
     const result = await apiFetch(`/api/auth/login`, {
       method: "POST",
-      body: JSON.stringify(form),
+      body: JSON.stringify({ ...form, remember }),
     });
     if (!result.ok) {
       setError(result.error);
@@ -71,6 +72,16 @@ export function LoginClient() {
             />
           </label>
 
+          <label className="flex items-center gap-2 text-sm text-foreground/80">
+            <input
+              type="checkbox"
+              checked={remember}
+              onChange={(e) => setRemember(e.target.checked)}
+              className="h-4 w-4 accent-[#536917]"
+            />
+            Keep me signed in
+          </label>
+
           {error && (
             <div className="rounded-md border border-[#b3261e]/30 bg-red-50 px-4 py-3 text-sm text-[#b3261e]">
               {error}
@@ -88,13 +99,6 @@ export function LoginClient() {
         <Link href="/register" className="font-semibold text-navy underline underline-offset-2">
           Create an account
         </Link>
-      </p>
-      <p className="mt-2 text-sm text-foreground">
-        No account?{" "}
-        <Link href="/manage" className="font-semibold text-navy underline underline-offset-2">
-          Find your booking
-        </Link>{" "}
-        with its reference and email instead.
       </p>
       <p className="mt-2 text-sm text-foreground">
         Forgotten your password?{" "}
