@@ -7,6 +7,7 @@ import { apiFetch } from "@/lib/api";
 
 export function RegisterClient() {
   const router = useRouter();
+  const [remember, setRemember] = useState(false);
   const [form, setForm] = useState({
     firstName: "",
     lastName: "",
@@ -32,6 +33,7 @@ export function RegisterClient() {
       body: JSON.stringify({
         ...form,
         phone: form.phone.trim() || undefined,
+        remember,
       }),
     });
     if (!result.ok) {
@@ -135,6 +137,16 @@ export function RegisterClient() {
               )}
             </div>
           )}
+
+          <label className="flex items-center gap-2 text-sm text-foreground/80">
+            <input
+              type="checkbox"
+              checked={remember}
+              onChange={(e) => setRemember(e.target.checked)}
+              className="h-4 w-4 accent-[#536917]"
+            />
+            Keep me signed in for 6 months
+          </label>
 
           <button type="submit" disabled={busy} className="btn-primary w-full">
             {busy ? "Creating your account…" : "Create account"}

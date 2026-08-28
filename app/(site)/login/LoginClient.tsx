@@ -13,6 +13,7 @@ export function LoginClient() {
   const rawNext = params.get("next");
   const next = rawNext?.startsWith("/") && !rawNext.startsWith("//") ? rawNext : "/account";
   const [form, setForm] = useState({ email: params.get("email") ?? "", password: "" });
+  const [remember, setRemember] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -22,7 +23,7 @@ export function LoginClient() {
     setError(null);
     const result = await apiFetch(`/api/auth/login`, {
       method: "POST",
-      body: JSON.stringify(form),
+      body: JSON.stringify({ ...form, remember }),
     });
     if (!result.ok) {
       setError(result.error);
@@ -69,6 +70,16 @@ export function LoginClient() {
               onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
               className={inputClass}
             />
+          </label>
+
+          <label className="flex items-center gap-2 text-sm text-foreground/80">
+            <input
+              type="checkbox"
+              checked={remember}
+              onChange={(e) => setRemember(e.target.checked)}
+              className="h-4 w-4 accent-[#536917]"
+            />
+            Keep me signed in
           </label>
 
           {error && (
