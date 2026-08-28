@@ -17,6 +17,8 @@ const RegisterBody = z.object({
   password: z.string().min(8),
   phone: z.string().min(7).optional(),
   dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  // "Keep me signed in": absent means unticked, consent never defaults on.
+  remember: z.boolean().optional(),
 });
 
 /** Creates the account, adopts any past guest bookings with this email,
@@ -57,7 +59,7 @@ export async function POST(req: NextRequest) {
     }
 
     await claimByEmail(user.id, email);
-    await createAuthSession(user.id, false);
+    await createAuthSession(user.id, parsed.data.remember ?? false);
     // Fire-and-forget: the account exists whether or not the mail lands.
     void sendWelcomeEmail({ to: user.email, firstName: user.firstName }).catch(
       (err) => console.error(`[email] welcome to ${email} failed:`, err),
