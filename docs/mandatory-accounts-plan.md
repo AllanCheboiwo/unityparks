@@ -1,12 +1,13 @@
 # Mandatory accounts at checkout (UNP-19)
 
-Status: plan-approved
+Status: tests-approved
 
 Linear: UNP-19 "Make accounts mandatory at checkout (CP parity)"
 Branch: unp-19-mandatory-accounts (not yet created)
 Tier: full path (touches auth and the checkout details step)
 
 Plan approved: 28 Aug 2026, Allan wrote "plan approved!"
+Tests approved: 28 Aug 2026, commit 8746ff1 (suite dd60e4a + hardening 8746ff1), Allan wrote "tests approved!"
 
 ## The problem
 
