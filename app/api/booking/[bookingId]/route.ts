@@ -46,7 +46,6 @@ export async function GET(
     assertBookingAccess(record, {
       user,
       sessionId: req.nextUrl.searchParams.get("session"),
-      email: req.nextUrl.searchParams.get("email"),
     });
 
     // The confirmation page's account nudge: does this booking's viewer

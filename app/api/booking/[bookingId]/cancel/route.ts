@@ -24,7 +24,6 @@ async function loadRecord(bookingId: string) {
 function proofFrom(req: NextRequest) {
   return {
     sessionId: req.nextUrl.searchParams.get("session"),
-    email: req.nextUrl.searchParams.get("email"),
   };
 }
 

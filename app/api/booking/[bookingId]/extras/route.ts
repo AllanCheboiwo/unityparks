@@ -55,7 +55,6 @@ export async function GET(
     assertBookingAccess(record, {
       user: await getCurrentUser(),
       sessionId: req.nextUrl.searchParams.get("session"),
-      email: req.nextUrl.searchParams.get("email"),
     });
 
     return NextResponse.json(await quoteManageExtras(record));
@@ -73,7 +72,6 @@ export async function POST(
     assertBookingAccess(record, {
       user: await getCurrentUser(),
       sessionId: req.nextUrl.searchParams.get("session"),
-      email: req.nextUrl.searchParams.get("email"),
     });
 
     const parsed = AddBody.safeParse(await req.json().catch(() => null));

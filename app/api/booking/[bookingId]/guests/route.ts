@@ -39,7 +39,6 @@ export async function PUT(
     assertBookingAccess(record, {
       user: await getCurrentUser(),
       sessionId: req.nextUrl.searchParams.get("session"),
-      email: req.nextUrl.searchParams.get("email"),
     });
 
     const parsed = GuestsBody.safeParse(await req.json());
