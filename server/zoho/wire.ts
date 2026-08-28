@@ -2,6 +2,7 @@ import "server-only";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../db";
 import { getFolioDetails } from "../apaleo/bookings";
+import { raiseOpsAlert } from "../ops/alerts";
 import { createZohoBooksApi, createZohoClient } from "./client";
 import {
   drainExports,
@@ -128,7 +129,16 @@ export function zohoDeps(): ExportDeps {
   const zoho = createZohoBooksApi(
     createZohoClient({ clientId, clientSecret, refreshToken, orgId }),
   );
-  return { store, zoho, readBooking, customerId, now: () => new Date() };
+  return {
+    store,
+    zoho,
+    readBooking,
+    customerId,
+    now: () => new Date(),
+    // The durable escalation channel the rest of ops already watches;
+    // raiseOpsAlert swallows its own failures.
+    alert: raiseOpsAlert,
+  };
 }
 
 /**

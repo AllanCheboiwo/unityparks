@@ -67,12 +67,25 @@ export type BookingReader = (input: { bookingId: string; trackingId: string }) =
   payment: { amount: number; paidAtIso: string };
 }>;
 
+export type ExportAlert = {
+  kind: string;
+  recordId?: string | null;
+  summary: string;
+  detail: Record<string, unknown>;
+};
+
 export type ExportDeps = {
   store: ExportStore;
   zoho: ZohoApi;
   readBooking: BookingReader;
   customerId: string;
   now: () => Date;
+  /**
+   * Optional durable escalation (production wires raiseOpsAlert). Called
+   * when a row exhausts its retries and when a queue insert is lost, the
+   * two moments money can quietly diverge from the books.
+   */
+  alert?: (input: ExportAlert) => Promise<void>;
 };
 
 export async function queueExport(
@@ -142,13 +155,15 @@ export async function drainExports(
       errored += 1;
       blockedBookings.add(row.bookingId);
       const attempts = row.attempts + 1;
+      const message = err instanceof Error ? err.message : String(err);
+      const failed = attempts >= MAX_ATTEMPTS;
       try {
         await deps.store.update(row.id, {
           // Errors keep a row pending (retried by any later drain) until
           // MAX_ATTEMPTS, when it escalates to failed and the ops button.
-          status: attempts >= MAX_ATTEMPTS ? "failed" : "pending",
+          status: failed ? "failed" : "pending",
           attempts,
-          lastError: err instanceof Error ? err.message : String(err),
+          lastError: message,
         });
       } catch (updateErr) {
         // The store itself is down. Leave the row in pushing (the stale
@@ -161,6 +176,20 @@ export async function drainExports(
             error: updateErr instanceof Error ? updateErr.message : String(updateErr),
           }),
         );
+      }
+      if (failed) {
+        // failed means "a human has to look now"; a row on /ops/zoho that
+        // nobody is told about is not an escalation.
+        try {
+          await deps.alert?.({
+            kind: "zoho_export_failed",
+            recordId: row.bookingId,
+            summary: `Zoho export gave up after ${attempts} attempts for payment ${row.trackingId}`,
+            detail: { rowId: row.id, trackingId: row.trackingId, lastError: message },
+          });
+        } catch {
+          // Alerting must never take the drain down with it.
+        }
       }
     }
   }
@@ -243,6 +272,25 @@ export async function queueAndPushInline(
 ): Promise<void> {
   try {
     await queueExport(deps, input);
+  } catch (err) {
+    // A lost INSERT is the one failure with no row behind it: nothing
+    // pending, nothing on /ops/zoho, nothing any drain can ever heal. It
+    // must be durably loud before it is swallowed.
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("Zoho export queue failed", JSON.stringify({ ...input, error: message }));
+    try {
+      await deps.alert?.({
+        kind: "zoho_export_lost",
+        recordId: input.bookingId,
+        summary: `Zoho export never queued for payment ${input.trackingId}`,
+        detail: { ...input, error: message },
+      });
+    } catch {
+      // Alerting must never surface into the payment flow.
+    }
+    return;
+  }
+  try {
     await drainExports(deps);
   } catch (err) {
     console.error(
