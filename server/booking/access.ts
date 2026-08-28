@@ -20,9 +20,10 @@ import { PublicError } from "../api-helpers";
  */
 export function assertBookingAccess(
   record: BookingRecord & { session: BookingSession },
-  // `email` is accepted and ignored on purpose: confirmation and reminder
-  // emails already in inboxes carry ?email=, and a stale link should be a
-  // no-op rather than a crash. It grants nothing.
+  // `email` is accepted and ignored on purpose, and the frozen UNP-19 suite
+  // pins that a passed email grants nothing (access.test.ts). Do not wire it
+  // back up as a proof, and do not delete it either: the pinned tests must
+  // stay expressible.
   proof: { user: User | null; sessionId: string | null; email?: string | null },
 ): void {
   if (proof.user && record.userId === proof.user.id) return;

@@ -116,25 +116,27 @@ export async function POST(
     let accountCreated = false;
 
     // Mandatory accounts (UNP-19): a booking cannot leave this step without
-    // an owner. Signed out, the password is what mints that owner; signed
-    // in, one is already here and a password riding along would be either a
-    // stale form or an attempt at a second account, so it is refused rather
-    // than ignored. Both messages name the mistake: this is the only door,
-    // so a guest stuck here has nowhere else to go.
-    if (!user && !password) {
-      return jsonError(
-        400,
-        "Please choose a password to create your account. Every booking needs one.",
-      );
-    }
-    if (user && password) {
-      return jsonError(
-        400,
-        "You are already signed in, so there is no password to set here.",
-      );
-    }
-
-    if (!user && password) {
+    // an owner. One if/else on identity, so the invariant lives in exactly
+    // one place: signed out, the password mints the owner; signed in, the
+    // form is a view of the account and a riding password is refused rather
+    // than ignored (it is either a stale form or a bid for a second
+    // account). Each refusal names the mistake and carries a machine flag,
+    // because the client's rendered state can lag the cookie's truth and
+    // the flag is how it resyncs.
+    if (!user) {
+      if (!password) {
+        // signedOut: a client that believed it was signed in (dead cookie,
+        // sign-out in another tab) resyncs instead of hunting for a
+        // password field it never rendered.
+        return NextResponse.json(
+          {
+            error:
+              "Please choose a password to create your account. Every booking needs one.",
+            signedOut: true,
+          },
+          { status: 400 },
+        );
+      }
       try {
         user = await prisma.user.create({
           data: {
@@ -165,13 +167,23 @@ export async function POST(
         (err) => console.error(`[email] welcome to ${email} failed:`, err),
       );
       accountCreated = true;
-    }
-
-    // Center Parcs semantics: for a signed-in guest this form is a view of
-    // their account, and edits write back. A just-created account already
-    // carries these fields; email is never touched (the lead-guest email
-    // edits the booking, not the account).
-    if (user && !accountCreated) {
+    } else {
+      if (password) {
+        // alreadySignedIn: the create-account card was rendered, then a
+        // sign-in landed from another tab or an earlier submit's cookie
+        // survived a lost response. The client reloads into the signed-in
+        // view, which prefills from the account.
+        return NextResponse.json(
+          {
+            error: "You are already signed in, so there is no password to set here.",
+            alreadySignedIn: true,
+          },
+          { status: 400 },
+        );
+      }
+      // Center Parcs semantics: for a signed-in guest this form is a view of
+      // their account, and edits write back. Email is never touched (the
+      // lead-guest email edits the booking, not the account).
       await prisma.user.update({ where: { id: user.id }, data: profileData(guest) });
     }
 
@@ -181,7 +193,7 @@ export async function POST(
     // silently skipped at checkout (display disagreeing with the charge) or
     // spend the previous user's credit. Give any committed claim back to
     // its owner and clear the flags; the guest re-applies at the pay step.
-    if (session.userId !== (user?.id ?? null)) {
+    if (session.userId !== user.id) {
       const claim = await findClaim(id);
       if (isLiveClaim(claim)) {
         const released = await releaseClaim(claim);
@@ -201,7 +213,7 @@ export async function POST(
       });
     }
 
-    await setGuestDetails(id, guest, user?.id ?? null);
+    await setGuestDetails(id, guest, user.id);
 
     // Referral: last code standing at details submit wins. Valid codes stamp
     // the code plus the advisory discount snapshot; anything else clears
@@ -224,7 +236,7 @@ export async function POST(
         code: typedCode,
         guestEmail: email,
         guestPhone: guest.phone,
-        sessionUserId: user?.id ?? null,
+        sessionUserId: user.id,
       });
       if (check.ok) {
         await setReferralOnSession(id, { code: typedCode, discount: check.discount });

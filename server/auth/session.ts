@@ -19,9 +19,9 @@ const COOKIE_NAME = "up_session";
 // means a session cookie: no expiry attribute, so the browser drops it when
 // it closes. Shortening a persistent cookie instead would still keep a guest
 // signed in after they declined to be, which is the thing the tick asks
-// about. The DB row needs a value in both cases, but for the unticked case
-// it is only a server-side cap on a token the browser has already thrown
-// away - garbage collection, not a promise to the guest.
+// about. Caveat: browsers with "continue where you left off" restore session
+// cookies across a restart, so the unticked DB cap below is a real security
+// bound on that window, not just garbage collection.
 const REMEMBERED_TTL_MS = 182 * 24 * 60 * 60 * 1000; // about six months
 const SESSION_ONLY_TTL_MS = 24 * 60 * 60 * 1000;
 

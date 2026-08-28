@@ -71,11 +71,10 @@ export function ManageClient({
   // Proof of access rides the URL: ?session= fresh from checkout. Everyone
   // else proves ownership with their account cookie.
   const searchParams = useSearchParams();
-  const proofPairs = new URLSearchParams();
   const proofSession = searchParams.get("session");
-  if (proofSession) proofPairs.set("session", proofSession);
-
-  const proofQuery = proofPairs.size > 0 ? `?${proofPairs.toString()}` : "";
+  const proofQuery = proofSession
+    ? `?session=${encodeURIComponent(proofSession)}`
+    : "";
 
   const [booking, setBooking] = useState<BookingConfirmation | null>(null);
   const [error, setError] = useState<string | null>(null);

@@ -380,12 +380,15 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
   // submit's emailTaken flip turns this card into sign-in.
   const showCreateAccount =
     !knownUser && (gate?.status === "none" || gate?.status === "unknown");
+  // Distinct from showCreateAccount on purpose: whether we collect a
+  // password and whether the guest gets the step-by-step first-timer flow
+  // are different questions. "unknown" collects a password but keeps the
+  // whole form open, per the comment below.
   // Who gets the phased form: an email we have never seen, so someone typing
   // all of this from scratch. Anyone else is reviewing rather than entering -
   // signed in, prefilled, or an email check that failed and left us unsure -
-  // and gets the whole form open. Same condition as the account offer,
-  // because it is the same person: a brand new guest.
-  const phased = showCreateAccount;
+  // and gets the whole form open.
+  const phased = !knownUser && gate?.status === "none";
 
   function stepState(index: number): SectionState {
     if (!phased) return "plain";
@@ -416,7 +419,17 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
     );
     setChecking(false);
     if (!result.ok) {
-      // The check is advisory: on failure, carry on as a plain guest.
+      // A 400 is the guest's email failing real validation (the client only
+      // checks for an @): show it at the field instead of swallowing it
+      // into "unknown", where the mandatory account card would demand a
+      // password for an email the server will never accept.
+      if (result.status === 400) {
+        setGateError(result.error);
+        return;
+      }
+      // Anything else is our outage. The check is advisory, so carry on;
+      // the account card still shows (there is no guest path any more) and
+      // a secretly-taken email is caught by the submit's emailTaken flip.
       setGate({ email, status: "unknown" });
       return;
     }
@@ -524,6 +537,14 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    // With accounts mandatory, the Welcome back card is the only way
+    // forward for an email that has one. The form below is deliberately
+    // left unlocked (reviewing typed fields must stay possible), so the
+    // gate is enforced here instead of by a dead button.
+    if (showSignInPanel) {
+      setSigninError("Please sign in above to continue with your booking.");
+      return;
+    }
     // Belt and braces for the phased path: a guest can reopen a finished
     // step, break it, and reach this button without pressing Save. Refuse,
     // and open the step that is wrong rather than reporting it from afar.
@@ -558,6 +579,23 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
     );
     if (isExpired(result)) return setExpired(true);
     if (!result.ok) {
+      // Identity skew, server-detected: a sign-in from another tab (or an
+      // earlier submit whose cookie survived a lost response) made the
+      // create-account card stale. Reload lands in the signed-in view,
+      // which prefills every field from the account.
+      if (result.alreadySignedIn) {
+        window.location.reload();
+        return;
+      }
+      // The mirror skew: we rendered the signed-in view but the cookie is
+      // dead. Relock the form behind the gate, keeping everything typed.
+      if (result.signedOut && knownUser) {
+        setKnownUser(null);
+        setGate(null);
+        setError("Your sign-in has expired. Please check your email again to continue.");
+        setBusy(false);
+        return;
+      }
       // The email grew an account between the check and the submit: flip
       // into the sign-in card, keeping everything the guest typed.
       if (result.emailTaken) {
