@@ -4,6 +4,8 @@ Status: writing-tests
 
 Plan approved: 26 Aug 2026, Allan wrote "plan approved!"
 
+Tests approval withdrawn 27 Aug 2026: the morning "tests approved!" predated the adversarial-review amendments (4 high, 8 medium, 5 low findings, 26 Aug). Suite to be amended, then re-reviewed fresh for a single approval.
+
 Export booking money into Zoho Books so bookkeeping is visible outside the PMS. One-way sync, folio as source of truth, Zoho Books free plan (Kenya org, KES), branch `unp-5-zoho-accounting`, Linear issue UNP-5.
 
 ## Problem
@@ -88,8 +90,9 @@ model ZohoExport {
 ## Zoho side
 
 - Auth: Zoho self client (OAuth). `ZOHO_CLIENT_ID`, `ZOHO_CLIENT_SECRET`, `ZOHO_REFRESH_TOKEN`, `ZOHO_ORG_ID` in env. Access tokens fetched and cached in memory, refreshed on expiry, same pattern as server/apaleo/client.ts and server/pesapal/client.ts.
+- Data center: global US DC (books.zoho.com; Kenya org created 26 Aug 2026 after an abandoned Canadian-DC account). OAuth endpoint `https://accounts.zoho.com/oauth/v2/token`, API base `https://www.zohoapis.com/books/v3`. These are the client defaults; overridable for tests only.
 - API: Zoho Books REST v3 (invoices, customerpayments, contacts). The generic customer is created once by a setup script and its id stored in env (`ZOHO_CUSTOMER_ID`) to keep the runtime path free of lookups.
-- The Zoho Books MCP is the agent's verification window only; app code never touches it.
+- Agent verification happens through throwaway scripts using the env credentials (proven 26 Aug for the open-question check); the official Zoho Books MCP is not needed and not set up. It can be added later for conversational bookkeeping if wanted; app code would never touch it either way.
 
 ## Files touched
 
@@ -150,9 +153,22 @@ Changed:
 6. Ops UI is a plain table with a retry button, gated like /ops/referrals.
 7. Best-effort inline push right after queueing, so the demo shows near-instant Zoho updates without a scheduler.
 
+## Decisions pinned by the test adversarial pass (27 Aug 2026)
+
+The 26 Aug adversarial review of the frozen-to-be suite (4 high, 8 medium, 5 low findings) was applied as a second test-only commit (08d2c34). Behavior decisions the amended suite now pins, each made with the boring default and open to challenge at the tests gate:
+
+- Referral discounts map to Zoho's invoice-level `discount` field (a whole-KES number), not a negative line item. The interview phrase "discount line" is realized as this field; totals are identical either way.
+- The mappers own the complete payload. The client adapter never adds, strips, or rewrites payload fields; the no-PII guarantee rests on this. If live Zoho demands an extra field (for example payment_mode), that is an approved amendment to the mapper tests, not adapter patching.
+- Payment dates are Africa/Nairobi (UTC+3) calendar days derived from the Pesapal confirmation time, so the books match the Kenyan business day.
+- Rounding: charge lines round per line, allowances are summed then rounded once, Math.round half-up everywhere. The discount-exceeds-charges guard compares rounded values; a discount that rounds to exactly the charge total is a free stay, not an error.
+- A folio charge with a zero or negative amount fails the mapping with a clear error; the row stays pending and surfaces on the ops page. Manual folio adjustments are UNP-12 territory.
+- Simulator-provider settles (no Pesapal tracking id) never export; the books track the Pesapal flow only.
+- The settle path calls exactly one function, queueZohoExportAfterSettle, whose contract (queue by tracking id, drain inline, skip trackerless settles, swallow every failure) is frozen. The single call site inside settlePayment is covered by the acceptance check, like the confirmation-email hooks; a mocked-world test of confirmPesapalPayment would be a change detector and was deliberately not written.
+- The client is pinned to the US data-center endpoints (accounts.zoho.com, www.zohoapis.com/books/v3), and the books adapter creates invoices draft-then-sent before any payment, with find-by-reference matching exact references only (Zoho's search is contains-based).
+
 ## Open questions
 
-- Verify on the live Zoho org that line items on a partially paid invoice can be updated via API. Docs point to yes: API updates to sent/open invoices are allowed but require a mandatory `reason` field (error 110701 without it), and the frozen-transaction rule only covers payments taken through a Zoho-side card processor, which ours never are (Pesapal collects outside Zoho, we record manually). Check happens at setup time, before tests are frozen. If somehow no, the mapping needs a rethink (void-and-recreate or invoice-per-payment), which reopens the plan. Mapping consequence already adopted: every invoice update sends a reason string.
+- RESOLVED 26 Aug 2026, verified live against the Unity Parks org (KE, KES): line items on a partially paid invoice CAN be updated via API (1,000 KES invoice, 400 partial payment, edit to 1,300 accepted while partially_paid). The `reason` field is mandatory on updates to sent invoices (110701 without it), as the tests assume. Two setup facts learned: a created invoice starts as draft and must be marked sent (POST /invoices/{id}/status/sent) before payments can be applied, so the pusher does create, mark sent, then pay; and the throwaway check records were deleted, leaving the org empty.
 
 ## Interview notes (26 Aug 2026)
 
