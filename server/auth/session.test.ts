@@ -83,10 +83,13 @@ describe("createAuthSession, keep-me-signed-in ticked", () => {
     expect(ttl).toBeLessThanOrEqual(200 * DAY);
   });
 
-  it("gives the DB row the same life as the cookie", async () => {
+  it("keeps the DB row alive at least as long as the cookie", async () => {
+    // The guarantee is no dead-cookie period: the browser must never hold a
+    // cookie the server has already expired. Exact equality would be a
+    // change detector - server-side slack beyond the cookie is invisible.
     await createAuthSession("user-1", true);
     const expires = cookieCall().options.expires as Date;
-    expect(createdRow().expiresAt.getTime()).toBe(expires.getTime());
+    expect(createdRow().expiresAt.getTime()).toBeGreaterThanOrEqual(expires.getTime());
   });
 });
 

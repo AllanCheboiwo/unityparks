@@ -106,8 +106,10 @@ describe("details submit, signed out", () => {
   it("refuses to book without a password: 400 and nothing written", async () => {
     const { status, body } = await submit(guestBody());
     expect(status).toBe(400);
-    expect(typeof body.error).toBe("string");
-    expect(body.error.length).toBeGreaterThan(0);
+    // The spec demands a usable message, not a Zod shape error: the guest
+    // must learn WHAT was missing. Any honest wording names the password;
+    // the exact copy stays free.
+    expect(String(body.error).toLowerCase()).toContain("password");
     expect(db.user.create).not.toHaveBeenCalled();
     expect(bookingSession.setGuestDetails).not.toHaveBeenCalled();
   });
