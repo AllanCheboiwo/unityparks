@@ -26,4 +26,5 @@ The kanban board in Linear (official MCP + GitHub integration) is the visible re
 
 - Database: `prisma db push` only, never `prisma migrate`. Local first (brew postgresql@15, unity_parks_dev); Allan pushes Railway himself, then git push.
 - Tests: vitest, colocated `*.test.ts`, run with `npm test`.
+- No change detector tests. Assert what the code guarantees, not how it works. The check: if the function were rewritten completely but behaved identically, would this test still pass? If no, rewrite it. Details in `docs/ai-development-workflow.md`.
 - Money: amounts flow through the folio; check `lib/paymentPlan.ts` patterns before adding money math.

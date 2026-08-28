@@ -924,8 +924,10 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
                     Keeping in touch
                   </p>
                   <p className="mt-2">
-                    Tick below to hear the latest Unity Parks news, and to
-                    receive your exclusive repeat guest offer after your break.
+                    To receive the latest Unity Parks news and information,
+                    including our Repeat Guest offer with a KSh 5,000 discount
+                    off your next break, as well as your chance to win a break,
+                    please tick below.
                   </p>
                   <div className="mt-3 flex gap-6">
                     <label className="flex items-center gap-2">

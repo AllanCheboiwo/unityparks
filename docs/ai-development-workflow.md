@@ -56,6 +56,22 @@ So we do not cargo-cult the red-green ritual. We do this instead:
 2. **Allan reviews the tests, not skims them.** This is the highest-leverage review in the whole workflow, because whoever controls the tests controls what "done" means. For each test ask: does this assert real behavior, or does it just mirror the implementation? Would it fail if the code were broken? (That question is straight from Google's review guide.) Are the amounts and edge cases from the spec actually present?
 3. Once approved, **tests are frozen**. During implementation Claude does not edit, delete, skip, or loosen any test. If a test turns out to be wrong, Claude stops, says so, and Allan approves the test change as a separate visible commit. Any silent test edit in an implementation diff is treated as an incident, not a nitpick.
 
+### No change detector tests
+
+A change detector asserts *how* the code works rather than *what* it guarantees. It goes red on a refactor that broke nothing, so it costs more than it protects.
+
+The check, applied to every test before it is approved: **if the function were rewritten completely but behaved identically, would this test still pass?** If no, it is a change detector and it gets rewritten or dropped.
+
+In practice that means:
+
+- Assert observable outcomes and invariants, not internal structure. "Invoice total equals charges minus allowances", not "calls the helper twice".
+- Do not assert call counts or call order unless the ordering IS the guarantee (oldest-first draining, one Zoho push per row).
+- Test through the public entry point. A test for an internal helper needs a reason: the rule is genuinely unreachable from outside, or reaching it costs an unreadable amount of setup.
+- No blanket snapshots of whole objects for their own sake. Pinning an exact shape is allowed only when the shape itself is the guarantee, and the test must say so in a comment (the no-PII key list in `lib/zohoMap.test.ts` is the worked example).
+- Fakes are dumb storage. Every decision belongs to the module under test, so the test fails when that logic breaks and not otherwise.
+
+When Claude writes a test that trips this rule anyway, it flags it inline with the reason it is worth the trade, so Allan can rule on it during the Phase 2 review rather than discovering it during a refactor.
+
 For behavior that is hard to unit test (Apaleo calls, Pesapal webhooks), the spec's acceptance check from Phase 1 is the substitute: a scripted end-to-end walkthrough we run before calling it done.
 
 ## Phase 3: Implement

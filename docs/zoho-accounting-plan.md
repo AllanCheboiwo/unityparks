@@ -1,6 +1,6 @@
 # Zoho Books accounting export (UNP-5)
 
-Status: in-review
+Status: shipping
 
 Plan approved: 26 Aug 2026, Allan wrote "plan approved!"
 
