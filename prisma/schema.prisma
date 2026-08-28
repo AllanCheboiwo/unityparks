@@ -612,3 +612,21 @@ model OpsAlert {
   resolvedAt DateTime?
   resolvedBy String? // admin email
 }
+
+// The Zoho export outbox (UNP-5). One row per confirmed Pesapal payment;
+// the pusher drains it into Zoho Books. Rows are never deleted: the unique
+// trackingId IS the idempotency guard against duplicate Pesapal
+// confirmations, and deleting a done row would let a late duplicate
+// re-insert and double-post the payment.
+model ZohoExport {
+  id            String   @id @default(cuid())
+  bookingId     String // our BookingRecord id
+  trackingId    String   @unique // Pesapal tracking id; the idempotency key
+  status        String   @default("pending") // pending | pushing | done | failed
+  attempts      Int      @default(0)
+  lastError     String?
+  zohoInvoiceId String? // set eagerly, the moment the invoice exists
+  zohoPaymentId String? // set once the payment is recorded
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}

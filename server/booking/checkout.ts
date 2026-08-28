@@ -6,6 +6,7 @@ import {
   type PesapalTransaction,
 } from "@prisma/client";
 import { prisma } from "../db";
+import { pushZohoAfterSettle } from "../zoho/wire";
 import { createBooking, getFolioForReservation, type FolioSummary } from "../apaleo/bookings";
 import {
   assignSpecificUnit,
@@ -1430,6 +1431,15 @@ async function settlePayment(
   // settle because a balance payment can be the one that completes the
   // booking; the module checks earned-state and owns its own claim.
   await sendReferralReward(paid.id);
+
+  // The Zoho export outbox (UNP-5): queue this settled payment and fire a
+  // best-effort push. void on purpose - the books must never block or fail
+  // the payment flow, and the ops drain heals anything missed here.
+  // Simulator settles carry no tracking id and are skipped inside.
+  void pushZohoAfterSettle({
+    bookingId: paid.id,
+    orderTrackingId: transaction.orderTrackingId,
+  });
 
   return paid;
 }

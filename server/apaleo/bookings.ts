@@ -112,3 +112,47 @@ export async function getFolioForReservation(reservationId: string): Promise<Fol
     currency: folio.balance.currency,
   };
 }
+
+export type FolioDetails = {
+  folioId: string;
+  currency: string;
+  charges: Array<{ description: string; amount: number }>;
+  allowances: Array<{ description: string; amount: number }>;
+};
+
+/**
+ * The full folio for the Zoho export (UNP-5): every charge and allowance,
+ * gross amounts. Read fresh at push time; the folio is the money source of
+ * truth and there is no fallback to local copies. Throws on any shape
+ * surprise rather than exporting a zero: a failed read just leaves the
+ * export row pending with a clear error.
+ */
+export async function getFolioDetails(reservationId: string): Promise<FolioDetails> {
+  const summary = await getFolioForReservation(reservationId);
+  const folio = await apaleo<{
+    charges?: Array<{ name?: string; amount?: { grossAmount?: number } }>;
+    allowances?: Array<{ reason?: string; amount?: { grossAmount?: number } }>;
+  }>("GET", `/finance/v1/folios/${encodeURIComponent(summary.folioId)}`);
+  if (!folio) throw new Error(`Empty folio detail for ${summary.folioId}`);
+
+  const gross = (line: { amount?: { grossAmount?: number } }, what: string): number => {
+    const amount = line.amount?.grossAmount;
+    if (typeof amount !== "number") {
+      throw new Error(`Folio ${summary.folioId} ${what} carries no gross amount`);
+    }
+    return amount;
+  };
+
+  return {
+    folioId: summary.folioId,
+    currency: summary.currency,
+    charges: (folio.charges ?? []).map((c) => ({
+      description: c.name ?? "Charge",
+      amount: gross(c, `charge "${c.name ?? "?"}"`),
+    })),
+    allowances: (folio.allowances ?? []).map((a) => ({
+      description: a.reason ?? "Allowance",
+      amount: gross(a, `allowance "${a.reason ?? "?"}"`),
+    })),
+  };
+}
