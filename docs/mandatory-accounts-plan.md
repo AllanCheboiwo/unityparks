@@ -1,6 +1,6 @@
 # Mandatory accounts at checkout (UNP-19)
 
-Status: implementing
+Status: in-review
 
 Linear: UNP-19 "Make accounts mandatory at checkout (CP parity)"
 Branch: unp-19-mandatory-accounts (not yet created)
