@@ -134,19 +134,24 @@ export async function drainExports(
 ): Promise<{ done: number; errored: number }> {
   const includeFailed = opts.includeFailed ?? false;
   const rows = (await deps.store.listOpen())
-    .filter((row) => isClaimable(row, { includeFailed, now: deps.now() }))
+    .filter((row) => row.status !== "done")
     .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
 
   let done = 0;
   let errored = 0;
   // A booking's rows are strictly ordered (the deposit row creates the
   // invoice the balance row attaches to), and that ordering must survive
-  // OVERLAPPING drains too: once one of a booking's rows is lost to another
-  // drain or errors in this pass, its later rows wait for the next drain
+  // OVERLAPPING drains too. Any open row we may not touch right now (fresh
+  // pushing on another drain, failed outside an ops run, lost claim, error)
+  // holds its booking's place in line: later rows wait for the next drain
   // rather than racing ahead and minting a second invoice.
   const blockedBookings = new Set<string>();
   for (const row of rows) {
     if (blockedBookings.has(row.bookingId)) continue;
+    if (!isClaimable(row, { includeFailed, now: deps.now() })) {
+      blockedBookings.add(row.bookingId);
+      continue;
+    }
     // The concurrency guard: only the drain that wins this conditional
     // flip proceeds; the loser skips the whole booking for this pass.
     if (!(await deps.store.claim(row.id, row.status, row.updatedAt))) {
