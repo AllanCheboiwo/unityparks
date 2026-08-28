@@ -53,7 +53,7 @@ export type ZohoApi = {
 };
 
 /** Reads the booking's folios FRESH from Apaleo plus the payment being exported. */
-export type BookingReader = (input: { bookingId: string }) => Promise<{
+export type BookingReader = (input: { bookingId: string; trackingId: string }) => Promise<{
   bookingReference: string;
   folios: FolioSnapshot[];
   payment: { amount: number; paidAtIso: string };
@@ -138,7 +138,10 @@ export async function drainExports(
 async function pushOne(deps: ExportDeps, row: ExportRow): Promise<void> {
   // Amounts come from the folio read at push time, never a local copy. If
   // this read fails the row stays pending; there is no fallback.
-  const booking = await deps.readBooking({ bookingId: row.bookingId });
+  const booking = await deps.readBooking({
+    bookingId: row.bookingId,
+    trackingId: row.trackingId,
+  });
   const invoiceInput = {
     customerId: deps.customerId,
     bookingReference: booking.bookingReference,
