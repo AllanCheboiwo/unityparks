@@ -220,7 +220,14 @@ No schema change. Everything needed already exists:
 3. Password minimum stays at **8 characters** (see out of scope).
 4. The `?email=` proof is removed from `assertBookingAccess` in the same feature
    rather than left dangling. It is the same decision as 1, expressed on the
-   server.
+   server. The `email` key stays in the proof type, accepted and ignored, so
+   ?email= links in already-sent emails are a no-op instead of a crash.
+5. Addendum found during implementation: when the email-status check itself
+   fails, the client used to fall back to "carry on as a plain guest" - a state
+   this feature abolishes. An "unknown" gate now gets the create-account card
+   (password collected regardless); if the email secretly has an account, the
+   submit's emailTaken 409 flips the card to sign-in. The advisory check stays
+   advisory, and no server rule changed.
 
 ## Open questions
 
