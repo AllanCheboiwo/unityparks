@@ -38,8 +38,12 @@ export type ExportStore = {
   insert(input: { bookingId: string; trackingId: string }): Promise<"inserted" | "duplicate">;
   /** Whatever rows might need work, in no promised order; done rows may leak through. */
   listOpen(): Promise<ExportRow[]>;
-  /** Conditional pending/failed/pushing -> pushing flip; false means another drain won. */
-  claim(id: string, fromStatus: string): Promise<boolean>;
+  /**
+   * Conditional flip to pushing; false means another drain won. The
+   * seenUpdatedAt guard is what makes the STALE reclaim exclusive too:
+   * pushing -> pushing on status alone would let every racing drain "win".
+   */
+  claim(id: string, fromStatus: string, seenUpdatedAt: Date): Promise<boolean>;
   update(id: string, fields: Partial<ExportRow>): Promise<void>;
   /** The one-invoice-per-booking memory: an earlier done row's invoice id. */
   doneInvoiceIdForBooking(bookingId: string): Promise<string | null>;
@@ -113,23 +117,47 @@ export async function drainExports(
 
   let done = 0;
   let errored = 0;
+  // A booking's rows are strictly ordered (the deposit row creates the
+  // invoice the balance row attaches to), and that ordering must survive
+  // OVERLAPPING drains too: once one of a booking's rows is lost to another
+  // drain or errors in this pass, its later rows wait for the next drain
+  // rather than racing ahead and minting a second invoice.
+  const blockedBookings = new Set<string>();
   for (const row of rows) {
+    if (blockedBookings.has(row.bookingId)) continue;
     // The concurrency guard: only the drain that wins this conditional
-    // flip proceeds; the loser skips the row entirely.
-    if (!(await deps.store.claim(row.id, row.status))) continue;
+    // flip proceeds; the loser skips the whole booking for this pass.
+    if (!(await deps.store.claim(row.id, row.status, row.updatedAt))) {
+      blockedBookings.add(row.bookingId);
+      continue;
+    }
     try {
       await pushOne(deps, row);
       done += 1;
     } catch (err) {
-      const attempts = row.attempts + 1;
-      await deps.store.update(row.id, {
-        // Errors keep a row pending (retried by any later drain) until
-        // MAX_ATTEMPTS, when it escalates to failed and the ops button.
-        status: attempts >= MAX_ATTEMPTS ? "failed" : "pending",
-        attempts,
-        lastError: err instanceof Error ? err.message : String(err),
-      });
       errored += 1;
+      blockedBookings.add(row.bookingId);
+      const attempts = row.attempts + 1;
+      try {
+        await deps.store.update(row.id, {
+          // Errors keep a row pending (retried by any later drain) until
+          // MAX_ATTEMPTS, when it escalates to failed and the ops button.
+          status: attempts >= MAX_ATTEMPTS ? "failed" : "pending",
+          attempts,
+          lastError: err instanceof Error ? err.message : String(err),
+        });
+      } catch (updateErr) {
+        // The store itself is down. Leave the row in pushing (the stale
+        // window reclaims it) and keep draining whatever still can be:
+        // one broken row must not block the rest, even like this.
+        console.error(
+          "Zoho export row update failed",
+          JSON.stringify({
+            rowId: row.id,
+            error: updateErr instanceof Error ? updateErr.message : String(updateErr),
+          }),
+        );
+      }
     }
   }
   return { done, errored };

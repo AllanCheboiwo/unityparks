@@ -42,12 +42,14 @@ const store: ExportStore = {
     return rows as ExportRow[];
   },
 
-  async claim(id, fromStatus) {
-    // The conditional flip that lets overlapping drains coexist: only the
-    // drain whose expected status still holds wins the row. @updatedAt
-    // restarts the stale clock for the new owner.
+  async claim(id, fromStatus, seenUpdatedAt) {
+    // The conditional flip that lets overlapping drains coexist. The
+    // updatedAt predicate is load-bearing for stale reclaims: the winner's
+    // write bumps @updatedAt, so a racing reclaimer's snapshot no longer
+    // matches and it loses, exactly like a status mismatch. @updatedAt
+    // also restarts the stale clock for the new owner.
     const result = await prisma.zohoExport.updateMany({
-      where: { id, status: fromStatus },
+      where: { id, status: fromStatus, updatedAt: seenUpdatedAt },
       data: { status: "pushing" },
     });
     return result.count === 1;
