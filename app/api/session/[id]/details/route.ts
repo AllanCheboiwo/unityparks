@@ -35,8 +35,14 @@ const DetailsBody = z.object({
   marketingSms: z.boolean().optional(),
   // The client gates submit on the checkbox; the server enforces it too.
   termsAccepted: z.literal(true),
-  // Present when the guest ticked "Create my Unity Parks account".
+  // Mandatory for a signed-out guest, forbidden for a signed-in one. The
+  // rule is conditional on identity, so it cannot live in the shape: it is
+  // enforced below, after getCurrentUser, where the refusal can say which
+  // of the two mistakes was made.
   password: z.string().min(8).optional(),
+  // "Keep me signed in" from the create-account card. Absent means unticked:
+  // consent never defaults on.
+  keepSignedIn: z.boolean().optional(),
   // The referral code field, always sent (prefilled from the session);
   // empty string means the guest cleared it. Last code standing wins.
   referralCode: z.string().trim().max(40).optional(),
@@ -97,7 +103,7 @@ export async function POST(
     const parsed = DetailsBody.safeParse(await req.json());
     if (!parsed.success) return jsonError(400, "Please check the details form.");
     // termsAccepted is validated by Zod (must be true) and not stored.
-    const { password, termsAccepted, referralCode, ...guest } = parsed.data;
+    const { password, keepSignedIn, termsAccepted, referralCode, ...guest } = parsed.data;
     void termsAccepted;
     if (!adultAtArrival(guest.dateOfBirth, session.arrival)) {
       return jsonError(400, "The lead booker must be over 18 at the time of arrival.");
@@ -108,6 +114,25 @@ export async function POST(
     // written unconditionally so a stale stamp never survives a sign-out.
     let user = await getCurrentUser();
     let accountCreated = false;
+
+    // Mandatory accounts (UNP-19): a booking cannot leave this step without
+    // an owner. Signed out, the password is what mints that owner; signed
+    // in, one is already here and a password riding along would be either a
+    // stale form or an attempt at a second account, so it is refused rather
+    // than ignored. Both messages name the mistake: this is the only door,
+    // so a guest stuck here has nowhere else to go.
+    if (!user && !password) {
+      return jsonError(
+        400,
+        "Please choose a password to create your account. Every booking needs one.",
+      );
+    }
+    if (user && password) {
+      return jsonError(
+        400,
+        "You are already signed in, so there is no password to set here.",
+      );
+    }
 
     if (!user && password) {
       try {
@@ -134,7 +159,7 @@ export async function POST(
       }
       await claimByEmail(user.id, email);
       // Signs the response: the guest reaches the pay step already signed in.
-      await createAuthSession(user.id, false);
+      await createAuthSession(user.id, keepSignedIn ?? false);
       // Fire-and-forget: the account exists whether or not the mail lands.
       void sendWelcomeEmail({ to: user.email, firstName: user.firstName }).catch(
         (err) => console.error(`[email] welcome to ${email} failed:`, err),
