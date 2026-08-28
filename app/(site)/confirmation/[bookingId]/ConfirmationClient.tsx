@@ -9,12 +9,11 @@ import { LODGES } from "@/content/lodges";
 import type { BookingConfirmation } from "@/lib/types";
 
 export function ConfirmationClient({ bookingId }: { bookingId: string }) {
-  // Proof of access rides the URL: ?session= fresh from checkout, ?email=
-  // when arriving from the find-my-booking challenge via the manage page.
+  // Proof of access rides the URL: ?session= fresh from checkout. Everyone
+  // else proves ownership with their account cookie.
   const searchParams = useSearchParams();
   const proofPairs = new URLSearchParams();
   const proofSession = searchParams.get("session");
-
   if (proofSession) proofPairs.set("session", proofSession);
 
   const proofQuery = proofPairs.size > 0 ? `?${proofPairs.toString()}` : "";

@@ -68,12 +68,11 @@ export function ManageClient({
   bookingId: string;
   extrasContent: Record<string, ExtrasContentDto>;
 }) {
-  // Proof of access rides the URL: ?session= fresh from checkout, ?email=
-  // from the find-my-booking challenge. Signed-in owners need neither.
+  // Proof of access rides the URL: ?session= fresh from checkout. Everyone
+  // else proves ownership with their account cookie.
   const searchParams = useSearchParams();
   const proofPairs = new URLSearchParams();
   const proofSession = searchParams.get("session");
-
   if (proofSession) proofPairs.set("session", proofSession);
 
   const proofQuery = proofPairs.size > 0 ? `?${proofPairs.toString()}` : "";
