@@ -187,9 +187,11 @@ export async function drainExports(
           }),
         );
       }
-      if (failed) {
+      if (failed && row.status !== "failed") {
         // failed means "a human has to look now"; a row on /ops/zoho that
-        // nobody is told about is not an escalation.
+        // nobody is told about is not an escalation. Transition-only: an
+        // ops retry of an ALREADY-failed row that fails again must not
+        // spam a duplicate alert at the person mid-triage.
         try {
           await deps.alert?.({
             kind: "zoho_export_failed",

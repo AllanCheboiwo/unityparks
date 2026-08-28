@@ -87,16 +87,17 @@ const readBooking: BookingReader = async ({ bookingId, trackingId, queuedAt }) =
       ? record.reservations
       : [{ slot: 0, apaleoReservationId: record.apaleoReservationId }];
 
-  const folios = [];
-  for (const child of children) {
-    const details = await getFolioDetails(child.apaleoReservationId);
-    folios.push({
-      slot: child.slot,
-      currency: details.currency,
-      charges: details.charges,
-      allowances: details.allowances,
-    });
-  }
+  // Per-lodge reads are independent; parallel keeps a multi-lodge drain
+  // from holding its row in pushing twice as long as it needs to.
+  const details = await Promise.all(
+    children.map((child) => getFolioDetails(child.apaleoReservationId)),
+  );
+  const folios = details.map((d, i) => ({
+    slot: children[i].slot,
+    currency: d.currency,
+    charges: d.charges,
+    allowances: d.allowances,
+  }));
 
   // The folio is the money truth, but its currency must be the booking's:
   // an agreed-on foreign currency would otherwise export its raw numbers
@@ -168,6 +169,10 @@ export async function pushZohoAfterSettle(input: {
   bookingId: string;
   orderTrackingId: string | null;
 }): Promise<void> {
+  // Simulator settles never export; skip BEFORE deps assembly, or a dev
+  // machine with no Zoho env logs a fake failure on every simulated settle
+  // (arguments evaluate before the callee's own guard can run).
+  if (!input.orderTrackingId) return;
   try {
     await queueZohoExportAfterSettle(zohoDeps(), input);
   } catch (err) {
