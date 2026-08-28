@@ -156,7 +156,7 @@ describe("details submit, signed out", () => {
   });
 
   it("passes keep-me-signed-in through to the auth session", async () => {
-    await submit(guestBody({ password: "long enough", keepSignedIn: true }));
+    await submit(guestBody({ password: "long enough", remember: true }));
     expect(auth.createAuthSession.mock.calls[0][1]).toBe(true);
   });
 
