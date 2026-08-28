@@ -40,9 +40,11 @@ const DetailsBody = z.object({
   // enforced below, after getCurrentUser, where the refusal can say which
   // of the two mistakes was made.
   password: z.string().min(8).optional(),
-  // "Keep me signed in" from the create-account card. Absent means unticked:
+  // "Keep me signed in" from the create-account card. Same wire name as the
+  // login and register routes: one vocabulary for one flag, so a change to
+  // remember semantics cannot miss this door. Absent means unticked -
   // consent never defaults on.
-  keepSignedIn: z.boolean().optional(),
+  remember: z.boolean().optional(),
   // The referral code field, always sent (prefilled from the session);
   // empty string means the guest cleared it. Last code standing wins.
   referralCode: z.string().trim().max(40).optional(),
@@ -103,7 +105,7 @@ export async function POST(
     const parsed = DetailsBody.safeParse(await req.json());
     if (!parsed.success) return jsonError(400, "Please check the details form.");
     // termsAccepted is validated by Zod (must be true) and not stored.
-    const { password, keepSignedIn, termsAccepted, referralCode, ...guest } = parsed.data;
+    const { password, remember, termsAccepted, referralCode, ...guest } = parsed.data;
     void termsAccepted;
     if (!adultAtArrival(guest.dateOfBirth, session.arrival)) {
       return jsonError(400, "The lead booker must be over 18 at the time of arrival.");
@@ -161,7 +163,7 @@ export async function POST(
       }
       await claimByEmail(user.id, email);
       // Signs the response: the guest reaches the pay step already signed in.
-      await createAuthSession(user.id, keepSignedIn ?? false);
+      await createAuthSession(user.id, remember ?? false);
       // Fire-and-forget: the account exists whether or not the mail lands.
       void sendWelcomeEmail({ to: user.email, firstName: user.firstName }).catch(
         (err) => console.error(`[email] welcome to ${email} failed:`, err),

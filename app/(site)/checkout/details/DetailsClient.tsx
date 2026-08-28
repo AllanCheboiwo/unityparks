@@ -573,7 +573,7 @@ export function DetailsClient({ initialUser }: { initialUser: KnownUser | null }
           termsAccepted,
           // Accounts are mandatory: a new email always brings its password.
           password: showCreateAccount ? newPassword : undefined,
-          keepSignedIn: showCreateAccount ? keepSignedIn : undefined,
+          remember: showCreateAccount ? keepSignedIn : undefined,
         }),
       },
     );
