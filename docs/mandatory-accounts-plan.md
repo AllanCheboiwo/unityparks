@@ -1,6 +1,6 @@
 # Mandatory accounts at checkout (UNP-19)
 
-Status: shipping
+Status: shipped
 
 Linear: UNP-19 "Make accounts mandatory at checkout (CP parity)"
 Branch: unp-19-mandatory-accounts, merged to main 28 Aug 2026 as PR #27 (254f0bd)
@@ -264,3 +264,51 @@ On the deployed environment:
    survives the restart.
 5. Confirm `/manage` with no session redirects to sign-in, and that My bookings
    lists the booking from step 2.
+
+## What actually shipped
+
+Merged 28 Aug 2026 as PR #27 (`254f0bd`); Railway auto-deploys from main, so the
+merge was the deploy. No `prisma db push` was needed: the feature added no
+columns.
+
+### Acceptance check, run against https://unityparks.up.railway.app on 28 Aug
+
+Stopped deliberately before payment (Allan: non-destructive), so no Apaleo
+reservation and no folio were created. Everything up to the pay step:
+
+| # | Check | Result |
+| --- | --- | --- |
+| 1 | `/manage` for the links already in inboxes | 307 to `/account`, then `/login?next=/account` |
+| 2 | Details submit, signed out, no password | 400, message names the password, `signedOut: true` |
+| 3 | Details submit, signed out, with password | 200, `accountCreated: true` |
+| 4 | Cookie when "keep me signed in" is unticked | no `Expires`, no `Max-Age` (session cookie), `Secure`, `HttpOnly`, `SameSite=lax` |
+| 5 | Cookie when ticked | `Expires=Fri, 26 Feb 2027` (182 days) |
+| 6 | Email-status after the account exists | `status: "active"`, so the Welcome back panel is what a returning guest meets |
+| 7 | Details submit, signed in, password riding along | 400, `alreadySignedIn: true` |
+| 8 | Details submit, signed in, no password | 200, `accountCreated: false` |
+
+The unticked-versus-ticked cookie pair is the feature's central claim and it
+holds in production: consent changes the kind of cookie, not its length.
+
+### Decisions that changed along the way
+
+- The `?email=` field stays in the `assertBookingAccess` proof type, accepted
+  and ignored, because the frozen suite pins that a passed email grants
+  nothing. Deleting it would make that test unexpressible.
+- `/manage` became a redirect rather than a deletion (grilling finding: the
+  confirmation and reminder emails already in inboxes link to it).
+- The `unknown` email-status gate collects a password like `none` does, since
+  the plain-guest fallback it used to rely on no longer exists. A genuinely
+  invalid email (`user@localhost`) now surfaces its error at the field instead
+  of becoming `unknown`.
+- The wire flag is `remember` everywhere, after a code-review finding that the
+  details route alone called it `keepSignedIn`.
+
+### Left behind on purpose
+
+- The 30 pre-existing orphan bookings (`userId` null) are unreachable from the
+  UI. Allan, 28 Aug: demo data, not live guests. Their Apaleo reservations are
+  untouched.
+- Test rows created during local verification were removed; the production
+  check left one account, `unp19-prod-check@example.com`, and two unpaid
+  booking sessions on Railway.
