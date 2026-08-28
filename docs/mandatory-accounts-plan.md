@@ -1,10 +1,12 @@
 # Mandatory accounts at checkout (UNP-19)
 
-Status: drafting
+Status: plan-approved
 
 Linear: UNP-19 "Make accounts mandatory at checkout (CP parity)"
 Branch: unp-19-mandatory-accounts (not yet created)
 Tier: full path (touches auth and the checkout details step)
+
+Plan approved: 28 Aug 2026, Allan wrote "plan approved!"
 
 ## The problem
 
@@ -128,6 +130,17 @@ the account's My bookings list, or from the `?session=` link the browser holds
 immediately after paying. `assertBookingAccess` drops to two proofs, and its
 docstring (which also still claims password reset does not exist) is rewritten.
 
+**The emailed links (grilling finding, 28 Aug).** `bookingConfirmation.ts` and
+`balanceReminder.ts` both link to `/manage`, and the reminder's copy says
+"you'll need your reference and the lead guest's email" - a description of the
+challenge flow this feature deletes, sitting in inboxes where it may be clicked
+after we ship. So `/manage` cannot 404: it becomes a redirect - signed out to
+`/login?next=/account` (or equivalent), signed in to the account's bookings.
+Both email templates drop the challenge wording and say "sign in" instead. An
+already-sent reminder then still lands somewhere sane: the guest clicks, signs
+in, and their booking is in the list because every post-ship booking is owned
+and pre-ship orphans are accepted losses (demo data).
+
 ### Server enforcement
 
 `app/api/session/[id]/details/route.ts`:
@@ -163,7 +176,8 @@ No schema change. Everything needed already exists:
 | `app/api/auth/login/route.ts`, `register/route.ts` | accept and pass `remember` |
 | `app/(site)/login/*`, `app/(site)/register/*` | remember tick |
 | `server/booking/access.ts` | drop the `?email=` proof, rewrite docstring |
-| `app/(site)/manage/page.tsx`, `FindBookingClient.tsx` | delete the challenge page |
+| `app/(site)/manage/page.tsx`, `FindBookingClient.tsx` | challenge page becomes a redirect (signed out: login, signed in: bookings) |
+| `server/email/bookingConfirmation.ts`, `balanceReminder.ts` | manage links keep working; challenge wording replaced with "sign in" |
 | `app/api/booking/[bookingId]/route.ts` | drop `?email=`, simplify `accountStatus` |
 
 ## Edge cases and failure modes
@@ -208,16 +222,19 @@ No schema change. Everything needed already exists:
 
 ## Open questions
 
-1. RESOLVED (Allan, 28 Aug): keep 30 minutes, leave the reset flow alone. See
-   edge case 1.
-2. How stale can a price snapshot get before Apaleo disagrees? The session TTL is
-   the only thing currently bounding it. If extras snapshots can go stale inside
-   30 minutes, the real fix is re-validating prices at checkout rather than
-   tuning a timer. Raised for grilling; not a blocker for this feature, which
-   does not change the TTL.
-3. Do we keep a "your booking is confirmed, here is the reference" path for
-   someone who abandons before payment but after account creation, or is the
-   account alone enough?
+None. Both questions raised during drafting were closed on 28 Aug:
+
+1. **Price staleness (closed by the code, not by a decision).** The concern was
+   that a stale `ExtraSnapshot.grossAmount` could be charged, bounded only by the
+   session TTL. It cannot. The amount charged is read live from Apaleo at
+   checkout (`checkout.ts:710`, `getFolioForReservation`, re-read after any
+   referral allowance is posted). The snapshot is display; the folio is money. A
+   stale snapshot can only produce a display that disagrees with the charge, not
+   a wrong charge. The TTL was never load-bearing for prices.
+2. **Account without a booking (closed as not a question).** Because the account
+   is created at details submit, a guest can end up with an account and no
+   booking by closing the tab at the pay step. We owe them nothing further:
+   `sendWelcomeEmail` has already fired and they can sign in. No design needed.
 
 ## Acceptance check (end to end)
 
