@@ -1,6 +1,6 @@
 # Mandatory accounts at checkout (UNP-19)
 
-Status: tests-approved
+Status: implementing
 
 Linear: UNP-19 "Make accounts mandatory at checkout (CP parity)"
 Branch: unp-19-mandatory-accounts (not yet created)
@@ -8,6 +8,7 @@ Tier: full path (touches auth and the checkout details step)
 
 Plan approved: 28 Aug 2026, Allan wrote "plan approved!"
 Tests approved: 28 Aug 2026, commit 8746ff1 (suite dd60e4a + hardening 8746ff1), Allan wrote "tests approved!"
+Test change approved: 28 Aug 2026, commit 139cac3, reason: fake declarations typed as zero-arg made tsc fail on mock.calls reads; types-only fix, no assertion changed. Allan wrote "i approve of this"
 
 ## The problem
 
