@@ -61,7 +61,12 @@ export type ZohoApi = {
 };
 
 /** Reads the booking's folios FRESH from Apaleo plus the payment being exported. */
-export type BookingReader = (input: { bookingId: string; trackingId: string }) => Promise<{
+export type BookingReader = (input: {
+  bookingId: string;
+  trackingId: string;
+  /** The outbox row's createdAt: the confirmation moment, and it never moves. */
+  queuedAt: Date;
+}) => Promise<{
   bookingReference: string;
   folios: FolioSnapshot[];
   payment: { amount: number; paidAtIso: string };
@@ -202,6 +207,7 @@ async function pushOne(deps: ExportDeps, row: ExportRow): Promise<void> {
   const booking = await deps.readBooking({
     bookingId: row.bookingId,
     trackingId: row.trackingId,
+    queuedAt: row.createdAt,
   });
   const invoiceInput = {
     customerId: deps.customerId,

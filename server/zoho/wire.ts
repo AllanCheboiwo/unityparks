@@ -68,7 +68,7 @@ const store: ExportStore = {
   },
 };
 
-const readBooking: BookingReader = async ({ bookingId, trackingId }) => {
+const readBooking: BookingReader = async ({ bookingId, trackingId, queuedAt }) => {
   const record = await prisma.bookingRecord.findUnique({
     where: { id: bookingId },
     include: { reservations: { orderBy: { slot: "asc" } } },
@@ -79,11 +79,6 @@ const readBooking: BookingReader = async ({ bookingId, trackingId }) => {
     where: { orderTrackingId: trackingId },
   });
   if (!transaction) throw new Error(`No Pesapal transaction for tracking id ${trackingId}`);
-
-  // The export row's createdAt is the confirmation moment, and unlike the
-  // transaction's updatedAt it never moves again: the payment date in the
-  // books stays stable across retries.
-  const exportRow = await prisma.zohoExport.findUnique({ where: { trackingId } });
 
   // Legacy single-lodge records carry no child rows; same synthetic shape
   // as settlePayment uses.
@@ -103,18 +98,40 @@ const readBooking: BookingReader = async ({ bookingId, trackingId }) => {
     });
   }
 
+  // The folio is the money truth, but its currency must be the booking's:
+  // an agreed-on foreign currency would otherwise export its raw numbers
+  // as KES with no error anywhere (the mapper only rejects disagreement).
+  for (const folio of folios) {
+    if (folio.currency !== record.currency) {
+      throw new Error(
+        `Folio currency ${folio.currency} does not match booking currency ${record.currency}`,
+      );
+    }
+  }
+
   return {
     bookingReference: record.apaleoBookingId,
     folios,
     payment: {
       amount: transaction.amount,
-      paidAtIso: (exportRow?.createdAt ?? transaction.updatedAt).toISOString(),
+      // The queue moment IS the confirmation moment, and unlike the
+      // transaction's updatedAt it never moves again: the payment date in
+      // the books stays stable across retries.
+      paidAtIso: queuedAt.toISOString(),
     },
   };
 };
 
-/** Throws on missing env; callers on the payment path must catch. */
+/**
+ * Throws on missing env; callers on the payment path must catch. Memoized:
+ * the access-token cache lives inside the client, so rebuilding the client
+ * per drain would mint a fresh OAuth token on every settle (the Apaleo and
+ * Pesapal caches are module-scoped for the same reason).
+ */
+let cachedDeps: ExportDeps | null = null;
+
 export function zohoDeps(): ExportDeps {
+  if (cachedDeps) return cachedDeps;
   const clientId = process.env.ZOHO_CLIENT_ID;
   const clientSecret = process.env.ZOHO_CLIENT_SECRET;
   const refreshToken = process.env.ZOHO_REFRESH_TOKEN;
@@ -129,7 +146,7 @@ export function zohoDeps(): ExportDeps {
   const zoho = createZohoBooksApi(
     createZohoClient({ clientId, clientSecret, refreshToken, orgId }),
   );
-  return {
+  cachedDeps = {
     store,
     zoho,
     readBooking,
@@ -139,6 +156,7 @@ export function zohoDeps(): ExportDeps {
     // raiseOpsAlert swallows its own failures.
     alert: raiseOpsAlert,
   };
+  return cachedDeps;
 }
 
 /**
