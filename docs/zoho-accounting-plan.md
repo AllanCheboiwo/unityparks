@@ -1,12 +1,14 @@
 # Zoho Books accounting export (UNP-5)
 
-Status: tests-approved
+Status: in-review
 
 Plan approved: 26 Aug 2026, Allan wrote "plan approved!"
 
 Tests approval withdrawn 27 Aug 2026: the morning "tests approved!" predated the adversarial-review amendments (4 high, 8 medium, 5 low findings, 26 Aug). Suite to be amended, then re-reviewed fresh for a single approval.
 
 Tests approved: 27 Aug 2026, commit 08d2c34 (suite = af06b63 + 08d2c34), Allan wrote "test is approved!"
+
+Test change approved: 27 Aug 2026, commit 0cea12c, reason: addendum pinning the nine /code-review fixes (payment idempotency, draft healing, claim exclusivity, cross-drain ordering, alert escalation), Allan wrote "test change approves"
 
 Export booking money into Zoho Books so bookkeeping is visible outside the PMS. One-way sync, folio as source of truth, Zoho Books free plan (Kenya org, KES), branch `unp-5-zoho-accounting`, Linear issue UNP-5.
 
