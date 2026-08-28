@@ -27,16 +27,20 @@ const db = vi.hoisted(() => ({
 
 const bookingSession = vi.hoisted(() => ({
   getSession: vi.fn(async (): Promise<unknown> => null),
-  setGuestDetails: vi.fn(async () => undefined),
+  setGuestDetails: vi.fn(
+    async (_id: string, _guest: unknown, _userId: string | null) => undefined,
+  ),
   setReferralOnSession: vi.fn(async () => undefined),
 }));
 
 const auth = vi.hoisted(() => ({
   getCurrentUser: vi.fn(async (): Promise<unknown> => null),
-  createAuthSession: vi.fn(async () => undefined),
+  createAuthSession: vi.fn(async (_userId: string, _remember: boolean) => undefined),
 }));
 
-const claim = vi.hoisted(() => ({ claimByEmail: vi.fn(async () => 0) }));
+const claim = vi.hoisted(() => ({
+  claimByEmail: vi.fn(async (_userId: string, _email: string) => 0),
+}));
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/server/db", () => ({ prisma: db }));
