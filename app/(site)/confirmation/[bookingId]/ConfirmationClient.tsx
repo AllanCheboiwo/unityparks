@@ -14,9 +14,9 @@ export function ConfirmationClient({ bookingId }: { bookingId: string }) {
   const searchParams = useSearchParams();
   const proofPairs = new URLSearchParams();
   const proofSession = searchParams.get("session");
-  const proofEmail = searchParams.get("email");
+
   if (proofSession) proofPairs.set("session", proofSession);
-  if (proofEmail) proofPairs.set("email", proofEmail);
+
   const proofQuery = proofPairs.size > 0 ? `?${proofPairs.toString()}` : "";
 
   const [booking, setBooking] = useState<BookingConfirmation | null>(null);
@@ -45,9 +45,6 @@ export function ConfirmationClient({ bookingId }: { bookingId: string }) {
         <div className="mt-6 flex justify-center gap-3">
           <Link href={`/login?next=/confirmation/${bookingId}`} className="btn-primary">
             Sign in
-          </Link>
-          <Link href="/manage" className="btn-dark-outline">
-            Find my booking
           </Link>
         </div>
       </div>

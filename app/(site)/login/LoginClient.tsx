@@ -90,13 +90,6 @@ export function LoginClient() {
         </Link>
       </p>
       <p className="mt-2 text-sm text-foreground">
-        No account?{" "}
-        <Link href="/manage" className="font-semibold text-navy underline underline-offset-2">
-          Find your booking
-        </Link>{" "}
-        with its reference and email instead.
-      </p>
-      <p className="mt-2 text-sm text-foreground">
         Forgotten your password?{" "}
         <Link
           href="/forgot-password"

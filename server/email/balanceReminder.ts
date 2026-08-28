@@ -91,7 +91,7 @@ export async function sendBalanceReminder(
       `Due by: ${dueDate}`,
       ``,
       action,
-      `Manage your booking: ${manageUrl} (you'll need your reference and the lead guest's email)`,
+      `Manage your booking: ${manageUrl} (sign in with your Unity Parks account)`,
       ``,
       `Unity Parks · ${VILLAGE_LOCALE_LINE}`,
       `Demo environment: no real payments were taken.`,

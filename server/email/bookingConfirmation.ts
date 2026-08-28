@@ -98,7 +98,7 @@ export async function sendBookingConfirmation(recordId: string): Promise<void> {
           ]),
       ``,
       `Manage your break (change dates, add guest names) at ${manageUrl}`,
-      `using your booking reference and this email address.`,
+      `by signing in with your Unity Parks account.`,
       ``,
       `Unity Parks · ${VILLAGE_LOCALE_LINE}`,
       `Demo environment: no real payments were taken.`,
@@ -142,8 +142,8 @@ export async function sendBookingConfirmation(recordId: string): Promise<void> {
         }
       </table>
       <p style="margin:0 0 20px;color:#4c4e4b;font-size:14px;line-height:1.5;">
-        Need to change dates or add guest names? Manage your break with your
-        booking reference and this email address.
+        Need to change dates or add guest names? Sign in with your Unity
+        Parks account to manage your break.
       </p>
       <p style="margin:0;">
         <a href="${manageUrl}" style="background:#af6408;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:10px 22px;border-radius:6px;display:inline-block;">
