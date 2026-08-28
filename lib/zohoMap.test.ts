@@ -167,6 +167,76 @@ describe("buildInvoicePayload", () => {
       }),
     ).toThrow(/discount|allowance/i);
   });
+  it("rounds half-up on the .5 boundary, Math.round style", () => {
+    const payload = buildInvoicePayload({
+      customerId: CUSTOMER_ID,
+      bookingReference: "APALEO-BK-13",
+      folios: [
+        folio({
+          charges: [{ description: "Accommodation", amount: 999.5 }],
+          allowances: [{ description: "UP-REFERRAL-D", amount: 499.5 }],
+        }),
+      ],
+    });
+    expect(payload.line_items[0].rate).toBe(1_000);
+    expect(payload.discount).toBe(500);
+  });
+
+  it("sums allowances before rounding, so a split allowance cannot lose a shilling", () => {
+    // 499.3 + 500.3 = 999.6 -> 1000. Round-then-sum would give 999.
+    const payload = buildInvoicePayload({
+      customerId: CUSTOMER_ID,
+      bookingReference: "APALEO-BK-14",
+      folios: [
+        folio({ slot: 0, allowances: [{ description: "UP-REFERRAL-E", amount: 499.3 }] }),
+        folio({ slot: 1, allowances: [{ description: "UP-REFERRAL-E", amount: 500.3 }] }),
+      ],
+    });
+    expect(payload.discount).toBe(1_000);
+  });
+
+  it("applies the discount guard to rounded values, since those are what Zoho receives", () => {
+    // 1,000.4 rounds down to the full 1,000 charge: a free stay, not an error.
+    const full = buildInvoicePayload({
+      customerId: CUSTOMER_ID,
+      bookingReference: "APALEO-BK-15",
+      folios: [
+        folio({
+          charges: [{ description: "Accommodation", amount: 1_000 }],
+          allowances: [{ description: "UP-REFERRAL-F", amount: 1_000.4 }],
+        }),
+      ],
+    });
+    expect(full.discount).toBe(1_000);
+    // 1,000.6 rounds past the charges: rejected.
+    expect(() =>
+      buildInvoicePayload({
+        customerId: CUSTOMER_ID,
+        bookingReference: "APALEO-BK-16",
+        folios: [
+          folio({
+            charges: [{ description: "Accommodation", amount: 1_000 }],
+            allowances: [{ description: "UP-REFERRAL-F", amount: 1_000.6 }],
+          }),
+        ],
+      }),
+    ).toThrow(/discount|allowance/i);
+  });
+
+  it("rejects zero and negative charge amounts instead of shipping them to Zoho", () => {
+    // Manual folio adjustments (UNP-12 territory) must fail loudly here,
+    // not as a confusing Zoho rejection at push time.
+    for (const amount of [0, -500]) {
+      expect(() =>
+        buildInvoicePayload({
+          customerId: CUSTOMER_ID,
+          bookingReference: "APALEO-BK-17",
+          folios: [folio({ charges: [{ description: "Manual adjustment", amount }] })],
+        }),
+      ).toThrow(/charge/i);
+    }
+  });
+
 });
 
 describe("buildInvoiceUpdatePayload", () => {
@@ -234,5 +304,16 @@ describe("buildPaymentPayload", () => {
         }),
       ).toThrow(/amount/i);
     }
+  });
+
+  it("dates the payment on the Nairobi (UTC+3) calendar day, not the UTC one", () => {
+    const payload = buildPaymentPayload({
+      customerId: CUSTOMER_ID,
+      invoiceId: "zoho-inv-4",
+      amount: 1_000,
+      trackingId: "pesapal-track-4",
+      paidAtIso: "2026-08-26T22:30:00.000Z", // 01:30 on the 27th in Nairobi
+    });
+    expect(payload.date).toBe("2026-08-27");
   });
 });

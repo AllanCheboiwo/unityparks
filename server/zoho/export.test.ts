@@ -6,12 +6,14 @@ import {
   isClaimable,
   queueAndPushInline,
   queueExport,
+  queueZohoExportAfterSettle,
   type BookingReader,
   type ExportDeps,
   type ExportRow,
   type ExportStore,
   type ZohoApi,
 } from "./export";
+import { buildInvoicePayload, buildPaymentPayload } from "@/lib/zohoMap";
 
 /**
  * Frozen suite for UNP-5 (docs/zoho-accounting-plan.md): the outbox and the
@@ -26,6 +28,8 @@ const NOW = new Date("2026-08-26T12:00:00.000Z");
 class FakeStore implements ExportStore {
   rows: ExportRow[] = [];
   private seq = 0;
+
+  constructor(private readonly clock: () => Date = () => new Date()) {}
 
   async insert(input: { bookingId: string; trackingId: string }) {
     if (this.rows.some((r) => r.trackingId === input.trackingId)) {
@@ -48,21 +52,24 @@ class FakeStore implements ExportStore {
   }
 
   async listOpen() {
-    return this.rows.filter((r) => r.status !== "done");
+    // Deliberately unhelpful storage: every row (done included), newest
+    // first. Filtering, ordering and claiming are the module's job, and
+    // these tests must fail if it leaves them to the store.
+    return [...this.rows].reverse();
   }
 
   async claim(id: string, fromStatus: string) {
     const row = this.rows.find((r) => r.id === id);
     if (!row || row.status !== fromStatus) return false;
     row.status = "pushing";
-    row.updatedAt = new Date();
+    row.updatedAt = this.clock();
     return true;
   }
 
   async update(id: string, fields: Partial<ExportRow>) {
     const row = this.rows.find((r) => r.id === id);
     if (!row) throw new Error(`no row ${id}`);
-    Object.assign(row, fields, { updatedAt: new Date() });
+    Object.assign(row, fields, { updatedAt: this.clock() });
   }
 
   async doneInvoiceIdForBooking(bookingId: string) {
@@ -158,7 +165,7 @@ function bookingData(overrides: Partial<BookingData> = {}): BookingData {
 }
 
 function makeDeps(overrides: Partial<ExportDeps> = {}) {
-  const store = new FakeStore();
+  const store = new FakeStore(() => NOW);
   const zoho = new FakeZoho();
   const bookings = new Map<string, BookingData>();
   const failFolioReads = { on: false };
@@ -181,12 +188,17 @@ function makeDeps(overrides: Partial<ExportDeps> = {}) {
 
 describe("queueExport", () => {
   it("queues one row per tracking id; a duplicate Pesapal confirmation is a no-op", async () => {
-    const { deps, store } = makeDeps();
+    const { deps, store, zoho, bookings } = makeDeps();
+    bookings.set("bk-1", bookingData());
     expect(await queueExport(deps, { bookingId: "bk-1", trackingId: "track-1" })).toBe("queued");
     expect(await queueExport(deps, { bookingId: "bk-1", trackingId: "track-1" })).toBe(
       "duplicate",
     );
     expect(store.rows).toHaveLength(1);
+
+    // The tail of edge case 1: drain and observe exactly one Zoho payment.
+    await drainExports(deps);
+    expect(zoho.payments()).toHaveLength(1);
   });
 });
 
@@ -205,6 +217,24 @@ describe("drainExports, happy paths", () => {
     expect(row.zohoPaymentId).toMatch(/^zoho-pay-/);
     expect(zoho.creates()).toHaveLength(1);
     expect(zoho.payments()[0].payload.reference_number).toBe("track-1");
+    // The money itself: the drain must send exactly what the mappers build
+    // from the folio and the payment, wrong amounts must fail here.
+    expect((zoho.creates()[0] as any).payload).toEqual(
+      buildInvoicePayload({
+        customerId: "zoho-cust-1",
+        bookingReference: "APALEO-BK-1",
+        folios: bookingData().folios,
+      }),
+    );
+    expect(zoho.payments()[0].payload).toEqual(
+      buildPaymentPayload({
+        customerId: "zoho-cust-1",
+        invoiceId: "zoho-inv-1",
+        amount: 13_500,
+        trackingId: "track-1",
+        paidAtIso: "2026-08-26T11:59:00.000Z",
+      }),
+    );
   });
 
   it("a second payment on a booking reuses its invoice and adds a payment, never a second invoice", async () => {
@@ -280,6 +310,24 @@ describe("drainExports, happy paths", () => {
     const update = zoho.calls.find((c) => c.kind === "update") as any;
     expect(typeof update.payload.reason).toBe("string");
     expect(update.payload.reason.length).toBeGreaterThan(0);
+  });
+
+  it("a done row is never touched again, by inline or ops drains", async () => {
+    const { deps, zoho, bookings } = makeDeps();
+    bookings.set("bk-1", bookingData());
+    await queueExport(deps, { bookingId: "bk-1", trackingId: "track-1" });
+    await drainExports(deps);
+    const callsWhenDone = zoho.calls.length;
+
+    expect(await drainExports(deps)).toEqual({ done: 0, errored: 0 });
+    expect(await drainExports(deps, { includeFailed: true })).toEqual({ done: 0, errored: 0 });
+    expect(zoho.calls.length).toBe(callsWhenDone);
+  });
+
+  it("an empty queue drains to nothing and touches nothing", async () => {
+    const { deps, zoho } = makeDeps();
+    expect(await drainExports(deps)).toEqual({ done: 0, errored: 0 });
+    expect(zoho.calls).toHaveLength(0);
   });
 });
 
@@ -376,6 +424,10 @@ describe("drainExports, crash recovery", () => {
     expect(row.status).toBe("pending");
     expect(row.zohoInvoiceId).toBe("zoho-inv-1");
 
+    // Only the stored id may prevent the duplicate: wipe Zoho's search so an
+    // implementation leaning on find-by-reference re-creates and fails here.
+    zoho.invoicesByReference.clear();
+
     await drainExports(deps);
     expect(zoho.creates()).toHaveLength(1);
     expect(store.row("row-1").status).toBe("done");
@@ -392,6 +444,70 @@ describe("drainExports, crash recovery", () => {
     expect(zoho.creates()).toHaveLength(0);
     expect(store.row("row-1").zohoInvoiceId).toBe("zoho-inv-preexisting");
     expect(store.row("row-1").status).toBe("done");
+    // The crashed push that left this invoice behind may have half-written
+    // it: adoption must sync it to the current folio before paying.
+    const update = zoho.calls.find((c) => c.kind === "update") as any;
+    expect(update.invoiceId).toBe("zoho-inv-preexisting");
+    const { reason, ...rest } = update.payload;
+    expect(typeof reason).toBe("string");
+    expect(reason.length).toBeGreaterThan(0);
+    expect(rest).toEqual(
+      buildInvoicePayload({
+        customerId: "zoho-cust-1",
+        bookingReference: "APALEO-BK-1",
+        folios: bookingData().folios,
+      }),
+    );
+  });
+
+  it("reclaims a row stuck in pushing past the stale timeout and completes it without a duplicate invoice", async () => {
+    const { deps, store, zoho, bookings } = makeDeps();
+    bookings.set("bk-1", bookingData());
+    // A pusher crashed mid-flight elsewhere: row claimed, invoice created
+    // and its id saved, then silence for longer than the stale window.
+    store.rows.push({
+      id: "row-stuck",
+      bookingId: "bk-1",
+      trackingId: "track-stuck",
+      status: "pushing",
+      attempts: 1,
+      lastError: null,
+      zohoInvoiceId: "zoho-inv-crashed",
+      zohoPaymentId: null,
+      createdAt: new Date(NOW.getTime() - STALE_PUSHING_MS - 60_000),
+      updatedAt: new Date(NOW.getTime() - STALE_PUSHING_MS - 1),
+    });
+
+    const result = await drainExports(deps);
+
+    expect(result).toEqual({ done: 1, errored: 0 });
+    expect(store.row("row-stuck").status).toBe("done");
+    expect(zoho.creates()).toHaveLength(0);
+    expect(zoho.payments()).toHaveLength(1);
+    expect(zoho.payments()[0].payload.invoices[0].invoice_id).toBe("zoho-inv-crashed");
+  });
+
+  it("leaves a freshly pushing row to the drain that owns it", async () => {
+    const { deps, store, zoho, bookings } = makeDeps();
+    bookings.set("bk-1", bookingData());
+    store.rows.push({
+      id: "row-live",
+      bookingId: "bk-1",
+      trackingId: "track-live",
+      status: "pushing",
+      attempts: 1,
+      lastError: null,
+      zohoInvoiceId: null,
+      zohoPaymentId: null,
+      createdAt: NOW,
+      updatedAt: NOW,
+    });
+
+    const result = await drainExports(deps);
+
+    expect(result).toEqual({ done: 0, errored: 0 });
+    expect(store.row("row-live").status).toBe("pushing");
+    expect(zoho.calls).toHaveLength(0);
   });
 });
 
@@ -478,5 +594,39 @@ describe("queueAndPushInline", () => {
 
     expect(store.row("row-1").status).toBe("done");
     expect(store.row("row-2").status).toBe("done");
+  });
+});
+
+describe("queueZohoExportAfterSettle", () => {
+  it("queues the settled payment by its Pesapal tracking id and drains inline", async () => {
+    const { deps, store, zoho, bookings } = makeDeps();
+    bookings.set("bk-1", bookingData());
+
+    await queueZohoExportAfterSettle(deps, { bookingId: "bk-1", orderTrackingId: "track-1" });
+
+    expect(store.rows).toHaveLength(1);
+    expect(store.rows[0].trackingId).toBe("track-1");
+    expect(store.rows[0].status).toBe("done");
+    expect(zoho.payments()).toHaveLength(1);
+  });
+
+  it("ignores simulator settles, which carry no Pesapal tracking id", async () => {
+    const { deps, store, zoho } = makeDeps();
+
+    await queueZohoExportAfterSettle(deps, { bookingId: "bk-1", orderTrackingId: null });
+
+    expect(store.rows).toHaveLength(0);
+    expect(zoho.calls).toHaveLength(0);
+  });
+
+  it("never throws into the settle path, even when the store itself is broken", async () => {
+    const { deps } = makeDeps();
+    deps.store.insert = async () => {
+      throw new Error("db down");
+    };
+
+    await expect(
+      queueZohoExportAfterSettle(deps, { bookingId: "bk-1", orderTrackingId: "track-1" }),
+    ).resolves.toBeUndefined();
   });
 });
