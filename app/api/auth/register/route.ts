@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
     }
 
     await claimByEmail(user.id, email);
-    await createAuthSession(user.id);
+    await createAuthSession(user.id, false);
     // Fire-and-forget: the account exists whether or not the mail lands.
     void sendWelcomeEmail({ to: user.email, firstName: user.firstName }).catch(
       (err) => console.error(`[email] welcome to ${email} failed:`, err),

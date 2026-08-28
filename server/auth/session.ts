@@ -13,14 +13,30 @@ import { PublicError } from "../api-helpers";
  */
 
 const COOKIE_NAME = "up_session";
-// Fixed 30 days, no sliding refresh, so reads never write.
-const AUTH_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+// No sliding refresh either way, so reads never write.
+//
+// "Keep me signed in" chooses the KIND of cookie, not its length. Unticked
+// means a session cookie: no expiry attribute, so the browser drops it when
+// it closes. Shortening a persistent cookie instead would still keep a guest
+// signed in after they declined to be, which is the thing the tick asks
+// about. The DB row needs a value in both cases, but for the unticked case
+// it is only a server-side cap on a token the browser has already thrown
+// away - garbage collection, not a promise to the guest.
+const REMEMBERED_TTL_MS = 182 * 24 * 60 * 60 * 1000; // about six months
+const SESSION_ONLY_TTL_MS = 24 * 60 * 60 * 1000;
 
 /** Creates the DB session and sets the cookie. Route handlers only - Next
- * rejects cookie writes anywhere else. */
-export async function createAuthSession(userId: string): Promise<void> {
+ * rejects cookie writes anywhere else. `remember` is the guest's answer to
+ * "Keep me signed in"; see the TTL note above for why it changes the cookie's
+ * kind rather than its length. */
+export async function createAuthSession(
+  userId: string,
+  remember: boolean,
+): Promise<void> {
   const token = randomBytes(32).toString("base64url");
-  const expiresAt = new Date(Date.now() + AUTH_TTL_MS);
+  const expiresAt = new Date(
+    Date.now() + (remember ? REMEMBERED_TTL_MS : SESSION_ONLY_TTL_MS),
+  );
   await prisma.authSession.create({ data: { id: token, userId, expiresAt } });
   const store = await cookies();
   store.set(COOKIE_NAME, token, {
@@ -28,7 +44,8 @@ export async function createAuthSession(userId: string): Promise<void> {
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     path: "/",
-    expires: expiresAt,
+    // Omitted entirely when unticked: that is what makes it a session cookie.
+    ...(remember ? { expires: expiresAt } : {}),
   });
 }
 

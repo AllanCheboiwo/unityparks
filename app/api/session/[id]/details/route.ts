@@ -134,7 +134,7 @@ export async function POST(
       }
       await claimByEmail(user.id, email);
       // Signs the response: the guest reaches the pay step already signed in.
-      await createAuthSession(user.id);
+      await createAuthSession(user.id, false);
       // Fire-and-forget: the account exists whether or not the mail lands.
       void sendWelcomeEmail({ to: user.email, firstName: user.firstName }).catch(
         (err) => console.error(`[email] welcome to ${email} failed:`, err),

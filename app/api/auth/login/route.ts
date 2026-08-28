@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
       where: { userId: user.id, expiresAt: { lt: new Date() } },
     });
     await claimByEmail(user.id, email);
-    await createAuthSession(user.id);
+    await createAuthSession(user.id, false);
 
     if (parsed.data.sessionId) {
       await stampSessionUser(parsed.data.sessionId, user.id);
