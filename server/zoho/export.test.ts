@@ -53,14 +53,18 @@ class FakeStore implements ExportStore {
 
   async listOpen() {
     // Deliberately unhelpful storage: every row (done included), newest
-    // first. Filtering, ordering and claiming are the module's job, and
-    // these tests must fail if it leaves them to the store.
-    return [...this.rows].reverse();
+    // first, as SNAPSHOTS (a DB read is never a live reference). Filtering,
+    // ordering and claiming are the module's job, and these tests must
+    // fail if it leaves them to the store.
+    return this.rows.map((r) => ({ ...r })).reverse();
   }
 
-  async claim(id: string, fromStatus: string) {
+  async claim(id: string, fromStatus: string, seenUpdatedAt: Date) {
     const row = this.rows.find((r) => r.id === id);
     if (!row || row.status !== fromStatus) return false;
+    // The updatedAt predicate is what makes a stale reclaim exclusive:
+    // the winner's bump invalidates every rival's snapshot.
+    if (row.updatedAt.getTime() !== seenUpdatedAt.getTime()) return false;
     row.status = "pushing";
     row.updatedAt = this.clock();
     return true;
@@ -90,11 +94,16 @@ type ZohoCall =
   | { kind: "find"; reference: string }
   | { kind: "create"; payload: any }
   | { kind: "update"; invoiceId: string; payload: any }
+  | { kind: "sent"; invoiceId: string }
   | { kind: "payment"; payload: any };
 
 class FakeZoho implements ZohoApi {
   calls: ZohoCall[] = [];
   invoicesByReference = new Map<string, string>();
+  // Zoho's real contracts, enforced: payments only apply to SENT invoices,
+  // and a recorded payment is findable by its reference forever.
+  sentInvoices = new Set<string>();
+  paymentsByReference = new Map<string, string>();
   failNextCreate = false;
   failNextPayment = false;
   down = false;
@@ -116,6 +125,8 @@ class FakeZoho implements ZohoApi {
     this.seq += 1;
     const id = `zoho-inv-${this.seq}`;
     this.invoicesByReference.set(payload.reference_number, id);
+    // The books adapter's createInvoice is create-then-mark-sent.
+    this.sentInvoices.add(id);
     return id;
   }
 
@@ -124,15 +135,32 @@ class FakeZoho implements ZohoApi {
     this.calls.push({ kind: "update", invoiceId, payload });
   }
 
+  async markSent(invoiceId: string) {
+    if (this.down) throw new Error("Zoho is unreachable");
+    this.calls.push({ kind: "sent", invoiceId });
+    this.sentInvoices.add(invoiceId);
+  }
+
+  async findPaymentByReference(reference: string) {
+    if (this.down) throw new Error("Zoho is unreachable");
+    return this.paymentsByReference.get(reference) ?? null;
+  }
+
   async recordPayment(payload: any) {
     if (this.down) throw new Error("Zoho is unreachable");
     if (this.failNextPayment) {
       this.failNextPayment = false;
       throw new Error("Zoho rejected the payment");
     }
+    const invoiceId = payload.invoices?.[0]?.invoice_id;
+    if (invoiceId && !this.sentInvoices.has(invoiceId)) {
+      throw new Error("Payments cannot be applied to a draft invoice");
+    }
     this.calls.push({ kind: "payment", payload });
     this.seq += 1;
-    return `zoho-pay-${this.seq}`;
+    const id = `zoho-pay-${this.seq}`;
+    this.paymentsByReference.set(payload.reference_number, id);
+    return id;
   }
 
   creates() {
@@ -508,6 +536,141 @@ describe("drainExports, crash recovery", () => {
     expect(result).toEqual({ done: 0, errored: 0 });
     expect(store.row("row-live").status).toBe("pushing");
     expect(zoho.calls).toHaveLength(0);
+  });
+});
+
+describe("drainExports, payment idempotency", () => {
+  it("adopts a payment Zoho already holds for the tracking id instead of posting it again", async () => {
+    const { deps, store, zoho, bookings } = makeDeps();
+    bookings.set("bk-1", bookingData());
+    await queueExport(deps, { bookingId: "bk-1", trackingId: "track-1" });
+    // A crashed earlier push: invoice created and saved, payment recorded
+    // in Zoho, process died before the row update.
+    store.rows[0].zohoInvoiceId = "zoho-inv-1";
+    zoho.invoicesByReference.set("APALEO-BK-1", "zoho-inv-1");
+    zoho.paymentsByReference.set("track-1", "zoho-pay-preexisting");
+
+    const result = await drainExports(deps);
+
+    expect(result).toEqual({ done: 1, errored: 0 });
+    expect(store.row("row-1").status).toBe("done");
+    expect(store.row("row-1").zohoPaymentId).toBe("zoho-pay-preexisting");
+    expect(zoho.payments()).toHaveLength(0);
+  });
+
+  it("marks an adopted draft invoice sent before applying money", async () => {
+    const { deps, store, zoho, bookings } = makeDeps();
+    bookings.set("bk-1", bookingData());
+    // A push died between create and mark-sent: the invoice exists in Zoho
+    // as a DRAFT (not in sentInvoices) and no id was saved locally.
+    zoho.invoicesByReference.set("APALEO-BK-1", "zoho-inv-draft");
+    await queueExport(deps, { bookingId: "bk-1", trackingId: "track-1" });
+
+    const result = await drainExports(deps);
+
+    expect(result).toEqual({ done: 1, errored: 0 });
+    expect(store.row("row-1").status).toBe("done");
+    expect(zoho.calls.some((c) => c.kind === "sent" && c.invoiceId === "zoho-inv-draft")).toBe(
+      true,
+    );
+    expect(zoho.payments()).toHaveLength(1);
+  });
+});
+
+describe("drainExports, cross-drain ordering", () => {
+  it("exactly one of two overlapping drains reclaims a stale row; Zoho sees one payment", async () => {
+    const { deps, store, zoho, bookings } = makeDeps();
+    bookings.set("bk-1", bookingData());
+    zoho.invoicesByReference.set("APALEO-BK-1", "zoho-inv-crashed");
+    store.rows.push({
+      id: "row-stuck",
+      bookingId: "bk-1",
+      trackingId: "track-stuck",
+      status: "pushing",
+      attempts: 1,
+      lastError: null,
+      zohoInvoiceId: "zoho-inv-crashed",
+      zohoPaymentId: null,
+      createdAt: new Date(NOW.getTime() - STALE_PUSHING_MS - 60_000),
+      updatedAt: new Date(NOW.getTime() - STALE_PUSHING_MS - 1),
+    });
+
+    const [a, b] = await Promise.all([drainExports(deps), drainExports(deps)]);
+
+    expect(a.done + b.done).toBe(1);
+    expect(zoho.payments()).toHaveLength(1);
+  });
+
+  it("holds a booking's later row back while an earlier row is on another drain", async () => {
+    const { deps, store, zoho, bookings } = makeDeps();
+    bookings.set("bk-1", bookingData());
+    // Another drain claimed the deposit row moments ago (fresh pushing);
+    // its invoice does not exist yet. The balance row must wait.
+    store.rows.push(
+      {
+        id: "row-deposit",
+        bookingId: "bk-1",
+        trackingId: "track-deposit",
+        status: "pushing",
+        attempts: 0,
+        lastError: null,
+        zohoInvoiceId: null,
+        zohoPaymentId: null,
+        createdAt: new Date(NOW.getTime() - 2000),
+        updatedAt: NOW,
+      },
+      {
+        id: "row-balance",
+        bookingId: "bk-1",
+        trackingId: "track-balance",
+        status: "pending",
+        attempts: 0,
+        lastError: null,
+        zohoInvoiceId: null,
+        zohoPaymentId: null,
+        createdAt: new Date(NOW.getTime() - 1000),
+        updatedAt: new Date(NOW.getTime() - 1000),
+      },
+    );
+
+    const result = await drainExports(deps);
+
+    expect(result).toEqual({ done: 0, errored: 0 });
+    expect(store.row("row-balance").status).toBe("pending");
+    expect(zoho.calls).toHaveLength(0);
+  });
+});
+
+describe("alert escalation", () => {
+  it("raises one durable alert when a row exhausts its retries", async () => {
+    const alerts: Array<{ kind: string }> = [];
+    const base = makeDeps();
+    const deps = { ...base.deps, alert: async (a: { kind: string }) => void alerts.push(a) };
+    base.bookings.set("bk-1", bookingData());
+    await queueExport(deps, { bookingId: "bk-1", trackingId: "track-1" });
+
+    base.failFolioReads.on = true;
+    for (let i = 0; i < MAX_ATTEMPTS; i += 1) {
+      await drainExports(deps);
+    }
+
+    expect(base.store.row("row-1").status).toBe("failed");
+    expect(alerts.map((a) => a.kind)).toEqual(["zoho_export_failed"]);
+  });
+
+  it("raises an alert for a lost insert and still never throws into the settle", async () => {
+    const alerts: Array<{ kind: string }> = [];
+    const base = makeDeps();
+    const deps = { ...base.deps, alert: async (a: { kind: string }) => void alerts.push(a) };
+    deps.store.insert = async () => {
+      throw new Error("db down");
+    };
+
+    await expect(
+      queueZohoExportAfterSettle(deps, { bookingId: "bk-1", orderTrackingId: "track-1" }),
+    ).resolves.toBeUndefined();
+
+    expect(alerts.map((a) => a.kind)).toEqual(["zoho_export_lost"]);
   });
 });
 

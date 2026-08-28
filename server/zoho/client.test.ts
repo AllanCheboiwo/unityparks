@@ -219,6 +219,45 @@ describe("createZohoBooksApi", () => {
     expect(JSON.parse(String(call.init.body))).toEqual({ reason: "Folio update" });
   });
 
+  it("finds a payment only on an exact reference match, and null when none exists", async () => {
+    const { api } = makeApi([
+      () =>
+        jsonResponse(200, {
+          code: 0,
+          customerpayments: [{ payment_id: "pay-10", reference_number: "track-10" }],
+        }),
+      () => jsonResponse(200, { code: 0, customerpayments: [] }),
+    ]);
+
+    // Contains-based search returns track-10 for track-1: not a match.
+    expect(await api.findPaymentByReference("track-1")).toBeNull();
+    expect(await api.findPaymentByReference("track-1")).toBeNull();
+  });
+
+  it("returns the exact payment match when Zoho holds one", async () => {
+    const { api } = makeApi([
+      () =>
+        jsonResponse(200, {
+          code: 0,
+          customerpayments: [
+            { payment_id: "pay-10", reference_number: "track-10" },
+            { payment_id: "pay-1", reference_number: "track-1" },
+          ],
+        }),
+    ]);
+
+    expect(await api.findPaymentByReference("track-1")).toBe("pay-1");
+  });
+
+  it("markSent swallows the already-sent rejection instead of failing the push", async () => {
+    const { api, fetch } = makeApi([
+      () => jsonResponse(200, { code: 36006, message: "Invoice is already in sent status" }),
+    ]);
+
+    await expect(api.markSent("inv-1")).resolves.toBeUndefined();
+    expect(fetch.apiCalls()[0].url).toContain("/invoices/inv-1/status/sent");
+  });
+
   it("records a customer payment and returns its id", async () => {
     const { api, fetch } = makeApi([
       () => jsonResponse(200, { code: 0, payment: { payment_id: "pay-7" } }),
