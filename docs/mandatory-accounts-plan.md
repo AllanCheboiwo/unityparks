@@ -1,9 +1,9 @@
 # Mandatory accounts at checkout (UNP-19)
 
-Status: in-review
+Status: shipping
 
 Linear: UNP-19 "Make accounts mandatory at checkout (CP parity)"
-Branch: unp-19-mandatory-accounts (not yet created)
+Branch: unp-19-mandatory-accounts, merged to main 28 Aug 2026 as PR #27 (254f0bd)
 Tier: full path (touches auth and the checkout details step)
 
 Plan approved: 28 Aug 2026, Allan wrote "plan approved!"
