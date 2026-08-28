@@ -54,6 +54,10 @@ export type ZohoApi = {
   createInvoice(payload: unknown): Promise<string>;
   updateInvoice(invoiceId: string, payload: unknown): Promise<void>;
   recordPayment(payload: unknown): Promise<string>;
+  /** Optional idempotent sent transition, for invoices adopted mid-crash. */
+  markSent?: (invoiceId: string) => Promise<void>;
+  /** Optional payment memory on the Zoho side; absence means no lookup. */
+  findPaymentByReference?: (reference: string) => Promise<string | null>;
 };
 
 /** Reads the booking's folios FRESH from Apaleo plus the payment being exported. */
@@ -193,11 +197,28 @@ async function pushOne(deps: ExportDeps, row: ExportRow): Promise<void> {
       invoiceId,
       buildInvoiceUpdatePayload(invoiceInput, `Folio update for payment ${row.trackingId}`),
     );
+    // An adopted invoice can be a draft (crash between create and mark
+    // sent); payments cannot be applied to drafts, and without this the
+    // row would wedge deterministically through every retry.
+    await deps.zoho.markSent?.(invoiceId);
   } else {
     invoiceId = await deps.zoho.createInvoice(buildInvoicePayload(invoiceInput));
     // Saved eagerly, BEFORE the payment: a crash between these two steps
     // must leave the id behind so the retry cannot create a duplicate.
     await deps.store.update(row.id, { zohoInvoiceId: invoiceId });
+  }
+
+  // Invariant 4's last line of defense: a crash after recordPayment but
+  // before the row update below leaves the payment in Zoho with no local
+  // trace. The retry must adopt it, never post it twice.
+  const existingPaymentId = (await deps.zoho.findPaymentByReference?.(row.trackingId)) ?? null;
+  if (existingPaymentId) {
+    await deps.store.update(row.id, {
+      status: "done",
+      zohoPaymentId: existingPaymentId,
+      lastError: null,
+    });
+    return;
   }
 
   const paymentId = await deps.zoho.recordPayment(

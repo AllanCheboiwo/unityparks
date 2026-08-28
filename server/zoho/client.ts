@@ -139,6 +139,36 @@ export function createZohoBooksApi(client: ZohoClient) {
       return id;
     },
 
+    /**
+     * Idempotent sent transition, for invoices ADOPTED after a crash: a
+     * push that died between create and mark-sent leaves a draft behind,
+     * and payments cannot be applied to drafts. Marking an already-sent
+     * invoice sent is rejected by Zoho, so that rejection is swallowed;
+     * if the invoice is somehow still unpayable, the payment step fails
+     * loudly right after.
+     */
+    async markSent(invoiceId: string): Promise<void> {
+      try {
+        await client.request("POST", `/invoices/${invoiceId}/status/sent`);
+      } catch {
+        // Already sent: the common case for every healthy adoption.
+      }
+    },
+
+    /**
+     * Exact-match payment lookup by Pesapal tracking id (it rides on the
+     * payment as reference_number). This is invariant 4's memory on the
+     * Zoho side: a crash after recordPayment but before our row update
+     * must find the payment instead of posting it again.
+     */
+    async findPaymentByReference(reference: string): Promise<string | null> {
+      const data = await client.request<{
+        customerpayments?: Array<{ payment_id: string; reference_number: string }>;
+      }>("GET", `/customerpayments?reference_number=${encodeURIComponent(reference)}`);
+      const exact = data.customerpayments?.find((p) => p.reference_number === reference);
+      return exact?.payment_id ?? null;
+    },
+
     async updateInvoice(invoiceId: string, payload: unknown): Promise<void> {
       await client.request("PUT", `/invoices/${invoiceId}`, payload);
     },
