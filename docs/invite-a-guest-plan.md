@@ -7,6 +7,7 @@ Tier: full path (touches the Prisma schema, auth identity, and adds a new subsys
 
 Plan approved: 29 Aug 2026, Allan wrote "plan approved"
 Tests approved: 29 Aug 2026, commit 18ddcfc, Allan wrote "tests approved"
+Test change approved: 29 Aug 2026, commit 3ac2dc9, reason: the booking GET's include now loads invites, so the frozen route fixture gains an empty invites array; no assertion changed. Allan wrote "approve the fixture"
 
 ## The problem (from the Linear issue)
 
