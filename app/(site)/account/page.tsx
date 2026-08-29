@@ -23,31 +23,29 @@ export default async function AccountPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login?next=/account");
 
-  const records = await prisma.bookingRecord.findMany({
-    where: { userId: user.id },
-    include: { session: { include: { lodges: { orderBy: { slot: "asc" } } } } },
-    orderBy: { createdAt: "desc" },
-  });
-
-  // Breaks this account was invited to (UNP-20): live accepted invites on
-  // uncancelled bookings. Listed with a badge and no money; the manage page
-  // shows these viewers the read-only itinerary.
-  const invitedRecords = await prisma.bookingRecord.findMany({
-    where: {
-      cancelledAt: null,
-      invites: {
-        some: { acceptedByUserId: user.id, revokedAt: null },
+  // Three independent reads, one round trip wait. invitedRecords are the
+  // breaks this account was invited to (UNP-20): live accepted invites on
+  // uncancelled bookings, listed with a badge and no money.
+  const [records, invitedRecords, participant] = await Promise.all([
+    prisma.bookingRecord.findMany({
+      where: { userId: user.id },
+      include: { session: { include: { lodges: { orderBy: { slot: "asc" } } } } },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.bookingRecord.findMany({
+      where: {
+        cancelledAt: null,
+        invites: {
+          some: { acceptedByUserId: user.id, revokedAt: null },
+        },
       },
-    },
-    include: { session: { include: { lodges: { orderBy: { slot: "asc" } } } } },
-    orderBy: { createdAt: "desc" },
-  });
-
-  // The referral card's numbers, derived at read like every referral figure
-  // (no stored balances anywhere). Null participant renders the claim card.
-  const participant = await prisma.referralParticipant.findUnique({
-    where: { userId: user.id },
-  });
+      include: { session: { include: { lodges: { orderBy: { slot: "asc" } } } } },
+      orderBy: { createdAt: "desc" },
+    }),
+    // The referral card's numbers, derived at read like every referral
+    // figure. Null participant renders the claim card.
+    prisma.referralParticipant.findUnique({ where: { userId: user.id } }),
+  ]);
   const referral =
     participant && !participant.revokedAt
       ? {

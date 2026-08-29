@@ -356,11 +356,12 @@ export function GuestsClient() {
                             invitation to see the booking under their own
                             account.
                           </span>
-                          {duplicateNote(row) && (
-                            <span className="mt-1 block text-xs text-bronze">
-                              {duplicateNote(row)}
-                            </span>
-                          )}
+                          {(() => {
+                            const note = duplicateNote(row);
+                            return note ? (
+                              <span className="mt-1 block text-xs text-bronze">{note}</span>
+                            ) : null;
+                          })()}
                           <FieldError message={fieldErrors[`${row.slot}-${row.position}-email`]} />
                         </label>
                       )}

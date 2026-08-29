@@ -133,9 +133,15 @@ export async function sendBookingCancellation(recordId: string): Promise<void> {
         departure: session.departure,
       });
       for (const invite of record.invites) {
-        const inviteeResult = await sendEmail({ to: invite.email, ...notice });
-        if (!inviteeResult.sent) {
-          console.error(`[email] invitee cancellation for ${reference} to ${invite.email} not sent`);
+        // One bad address or a network throw must not strand the rest of
+        // the list; each send stands alone.
+        try {
+          const inviteeResult = await sendEmail({ to: invite.email, ...notice });
+          if (!inviteeResult.sent) {
+            console.error(`[email] invitee cancellation for ${reference} to ${invite.email} not sent`);
+          }
+        } catch (err) {
+          console.error(`[email] invitee cancellation for ${reference} to ${invite.email} threw`, err);
         }
       }
       return;
@@ -171,7 +177,7 @@ export function composeInviteeCancellation(facts: InviteeCancellationFacts): {
 } {
   const lead = facts.leadFirstName || "The lead guest";
   const subject = `A Unity Parks break you were invited to has been cancelled`;
-  const when = `${inviteeLongDate(facts.arrival)} to ${inviteeLongDate(facts.departure)}`;
+  const when = `${longDate(facts.arrival)} to ${longDate(facts.departure)}`;
   const text = [
     `${lead} has cancelled the break at Unity Parks ${facts.village} that you were invited to.`,
     ``,
@@ -179,21 +185,19 @@ export function composeInviteeCancellation(facts: InviteeCancellationFacts): {
     ``,
     `You do not need to do anything.`,
   ].join("\n");
+  // Cross-user mail: the lead's name is their own typed text, escaped.
   const html = [
-    `<p>${lead} has cancelled the break at Unity Parks ${facts.village} that you were invited to.</p>`,
+    `<p>${escapeInviteeHtml(lead)} has cancelled the break at Unity Parks ${escapeInviteeHtml(facts.village)} that you were invited to.</p>`,
     `<p>${when}</p>`,
     `<p>You do not need to do anything.</p>`,
   ].join("\n");
   return { subject, html, text };
 }
 
-/** "Monday, 30 November 2026" */
-function inviteeLongDate(iso: string): string {
-  return new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-    timeZone: "UTC",
-  });
+function escapeInviteeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
 }

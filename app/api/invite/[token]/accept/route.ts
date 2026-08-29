@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/server/auth/session";
-import { acceptInvite, decideAccept, loadInviteForAccept } from "@/server/booking/invites";
+import {
+  acceptInvite,
+  bookingCancelled,
+  decideAccept,
+  loadInviteForAccept,
+  maskEmail,
+} from "@/server/booking/invites";
 import { handleRoute, jsonError } from "@/server/api-helpers";
 import { createRateLimiter } from "@/lib/rateLimit";
 
@@ -45,9 +51,7 @@ export async function POST(
         outcome: decideAccept(invite, {
           userId: user.id,
           userEmail: user.email,
-          bookingCancelled:
-            invite !== null &&
-            (invite.record.cancelledAt !== null || invite.record.status === "cancelled"),
+          bookingCancelled: invite !== null && bookingCancelled(invite.record),
         }),
       };
     };
@@ -78,10 +82,4 @@ export async function POST(
     limiter.recordFailure(clientAddress(req), Date.now());
     return jsonError(404, UNAVAILABLE);
   });
-}
-
-/** "a***@example.com": enough to recognise your own address, no more. */
-function maskEmail(email: string): string {
-  const [local, domain] = email.split("@");
-  return `${local?.[0] ?? ""}***@${domain ?? ""}`;
 }

@@ -1,7 +1,13 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getCurrentUser } from "@/server/auth/session";
-import { decideAccept, loadInviteForAccept } from "@/server/booking/invites";
+import {
+  bookingCancelled,
+  decideAccept,
+  loadInviteForAccept,
+  maskEmail,
+} from "@/server/booking/invites";
+import { formatDate } from "@/lib/format";
 import { AcceptClient } from "./AcceptClient";
 
 /**
@@ -33,12 +39,6 @@ function Unavailable() {
   );
 }
 
-/** "a***@example.com" */
-function maskEmail(email: string): string {
-  const [local, domain] = email.split("@");
-  return `${local?.[0] ?? ""}***@${domain ?? ""}`;
-}
-
 export default async function InvitePage({
   params,
 }: {
@@ -46,9 +46,7 @@ export default async function InvitePage({
 }) {
   const { token } = await params;
   const invite = await loadInviteForAccept(token);
-  const cancelled =
-    invite !== null &&
-    (invite.record.cancelledAt !== null || invite.record.status === "cancelled");
+  const cancelled = invite !== null && bookingCancelled(invite.record);
   const user = await getCurrentUser();
 
   if (!user) {
@@ -62,7 +60,8 @@ export default async function InvitePage({
         </h1>
         <p className="mt-4 text-sm text-foreground">
           {lead} has added you to their party at Unity Parks Mount Kenya,{" "}
-          {invite.record.session.arrival} to {invite.record.session.departure}.
+          {formatDate(invite.record.session.arrival)} to{" "}
+          {formatDate(invite.record.session.departure)}.
           Sign in or create an account with this email address to see the
           booking.
         </p>
@@ -113,9 +112,9 @@ export default async function InvitePage({
       </h1>
       <p className="mt-4 text-sm text-foreground">
         {invite!.record.session.guestFirstName ?? "The lead guest"} has added
-        you to their party, {invite!.record.session.arrival} to{" "}
-        {invite!.record.session.departure}. Accepting links this booking to
-        your account so you can see the shared itinerary.
+        you to their party, {formatDate(invite!.record.session.arrival)} to{" "}
+        {formatDate(invite!.record.session.departure)}. Accepting links this
+        booking to your account so you can see the shared itinerary.
       </p>
       <AcceptClient token={token} />
     </Shell>

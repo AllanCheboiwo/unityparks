@@ -107,6 +107,22 @@ export function planReconcile(input: ReconcileInput): ReconcilePlan {
   return { revoke, create };
 }
 
+/** The one spelling of "is this booking dead": a cancelled status or a
+ * cancellation stamp. Every surface (accept page, accept route, redaction)
+ * asks this instead of re-deriving it. */
+export function bookingCancelled(record: {
+  status: string;
+  cancelledAt: Date | string | null;
+}): boolean {
+  return record.status === "cancelled" || record.cancelledAt !== null;
+}
+
+/** "a***@example.com": enough to recognise your own address, no more. */
+export function maskEmail(email: string): string {
+  const [local, domain] = email.split("@");
+  return `${local?.[0] ?? ""}***@${domain ?? ""}`;
+}
+
 export type AcceptDecision = "accept" | "already" | "wrong-email" | "unavailable";
 
 /**
@@ -163,8 +179,7 @@ export function redactBookingForInvitee(dto: OwnerView, viewerEmail: string) {
   return {
     bookingId: dto.bookingId,
     reservationId: dto.reservationId,
-    status:
-      dto.status === "cancelled" || dto.cancelledAt ? "cancelled" : "confirmed",
+    status: bookingCancelled(dto) ? "cancelled" : "confirmed",
     stay: {
       arrival: dto.stay.arrival,
       departure: dto.stay.departure,
@@ -222,65 +237,77 @@ function appBaseUrl(): string {
  */
 export async function reconcileInvites(recordId: string): Promise<void> {
   try {
-    const record = await prisma.bookingRecord.findUnique({
-      where: { id: recordId },
-      include: {
-        session: { include: { lodges: true, guests: true } },
-        invites: true,
-      },
-    });
-    if (!record) return;
+    // The whole read-plan-apply runs inside one Serializable transaction:
+    // the read set is what gives a concurrent reconcile (callback vs IPN)
+    // a conflict to abort on. Planning from a read taken outside the
+    // transaction would let two insert-only racers both commit a live
+    // invite for the same seat.
+    await prisma.$transaction(
+      async (tx) => {
+        const record = await tx.bookingRecord.findUnique({
+          where: { id: recordId },
+          include: {
+            session: { include: { lodges: true, guests: true } },
+            invites: true,
+          },
+        });
+        if (!record) return;
+        // Invites exist only for bookings money has moved on (the spec's
+        // deposit_paid-or-paid trigger). This also keeps a cancelled
+        // booking's leftover unsent invites from ever being mailed: the
+        // sender below never runs for it.
+        if (record.status !== "deposit_paid" && record.status !== "paid") return;
 
-    const bandsBySlot: Record<number, string[]> = {};
-    for (const lodge of record.session.lodges) {
-      bandsBySlot[lodge.slot] = partyBands(lodge);
-    }
-    const plan = planReconcile({
-      cancelled: record.status === "cancelled" || record.cancelledAt !== null,
-      leadEmail: record.session.guestEmail?.toLowerCase() ?? null,
-      bandsBySlot,
-      seats: record.session.guests.map((g) => ({
-        guestId: g.id,
-        slot: g.slot,
-        position: g.position,
-        isLead: g.isLead,
-        email: g.email,
-      })),
-      invites: record.invites,
-    });
+        const bandsBySlot: Record<number, string[]> = {};
+        for (const lodge of record.session.lodges) {
+          bandsBySlot[lodge.slot] = partyBands(lodge);
+        }
+        const plan = planReconcile({
+          cancelled: record.cancelledAt !== null,
+          leadEmail: record.session.guestEmail?.toLowerCase() ?? null,
+          bandsBySlot,
+          seats: record.session.guests.map((g) => ({
+            guestId: g.id,
+            slot: g.slot,
+            position: g.position,
+            isLead: g.isLead,
+            email: g.email,
+          })),
+          invites: record.invites,
+        });
+        if (plan.revoke.length === 0 && plan.create.length === 0) return;
 
-    if (plan.revoke.length > 0 || plan.create.length > 0) {
-      const now = new Date();
-      const revokedSeatIds = record.invites
-        .filter((i) => plan.revoke.includes(i.id))
-        .map((i) => i.guestId);
-      await prisma.$transaction(
-        async (tx) => {
-          if (plan.revoke.length > 0) {
-            await tx.bookingInvite.updateMany({
-              where: { id: { in: plan.revoke } },
-              data: { revokedAt: now },
-            });
-            // The mirror follows the live invite: cleared on revoke.
-            await tx.sessionGuest.updateMany({
-              where: { id: { in: revokedSeatIds } },
-              data: { invitedUserId: null },
-            });
-          }
-          for (const create of plan.create) {
-            await tx.bookingInvite.create({
-              data: {
-                id: randomBytes(32).toString("base64url"),
-                recordId,
-                guestId: create.guestId,
-                email: create.email,
+        const now = new Date();
+        if (plan.revoke.length > 0) {
+          await tx.bookingInvite.updateMany({
+            where: { id: { in: plan.revoke } },
+            data: { revokedAt: now },
+          });
+          // The mirror follows the live invite: cleared on revoke.
+          await tx.sessionGuest.updateMany({
+            where: {
+              id: {
+                in: record.invites
+                  .filter((i) => plan.revoke.includes(i.id))
+                  .map((i) => i.guestId),
               },
-            });
-          }
-        },
-        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-      );
-    }
+            },
+            data: { invitedUserId: null },
+          });
+        }
+        for (const create of plan.create) {
+          await tx.bookingInvite.create({
+            data: {
+              id: randomBytes(32).toString("base64url"),
+              recordId,
+              guestId: create.guestId,
+              email: create.email,
+            },
+          });
+        }
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
 
     await sendPartyInvites(prismaInviteStore(recordId), sendEmail);
   } catch (err) {
@@ -303,7 +330,11 @@ function prismaInviteStore(recordId: string): PartyInviteStore {
           },
         },
       });
-      if (!record) return [];
+      // The status gate again, for the sender's own callers: a released
+      // claim must never be mailed once the booking stops being live.
+      if (!record || (record.status !== "deposit_paid" && record.status !== "paid")) {
+        return [];
+      }
       return record.invites.map((invite) => {
         // The invited seat's own lodge names the tier in the email.
         const lodge = record.session.lodges.find(
@@ -347,10 +378,8 @@ function prismaInviteStore(recordId: string): PartyInviteStore {
 export async function loadInviteForAccept(token: string) {
   return prisma.bookingInvite.findUnique({
     where: { id: token },
-    include: {
-      record: { include: { session: { include: { lodges: true } } } },
-      guest: true,
-    },
+    // Only what the page and route read: the record and its session facts.
+    include: { record: { include: { session: true } } },
   });
 }
 
@@ -360,18 +389,28 @@ export async function loadInviteForAccept(token: string) {
  * state and lets decideAccept name what happened.
  */
 export async function acceptInvite(token: string, userId: string): Promise<boolean> {
-  return prisma.$transaction(async (tx) => {
-    const won = await tx.bookingInvite.updateMany({
-      where: { id: token, acceptedAt: null, revokedAt: null },
-      data: { acceptedAt: new Date(), acceptedByUserId: userId },
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const won = await tx.bookingInvite.updateMany({
+        where: { id: token, acceptedAt: null, revokedAt: null },
+        data: { acceptedAt: new Date(), acceptedByUserId: userId },
+      });
+      if (won.count !== 1) return false;
+      const invite = await tx.bookingInvite.findUniqueOrThrow({ where: { id: token } });
+      // The mirror follows the live invite: set on accept.
+      await tx.sessionGuest.update({
+        where: { id: invite.guestId },
+        data: { invitedUserId: userId },
+      });
+      return true;
     });
-    if (won.count !== 1) return false;
-    const invite = await tx.bookingInvite.findUniqueOrThrow({ where: { id: token } });
-    // The mirror follows the live invite: set on accept.
-    await tx.sessionGuest.update({
-      where: { id: invite.guestId },
-      data: { invitedUserId: userId },
-    });
-    return true;
-  });
+  } catch (err) {
+    // A seat deletion can cascade the invite away between the claim and
+    // the mirror write (P2025). That is a lost race, not a server error:
+    // the caller re-reads and answers the uniform unavailable copy.
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2025") {
+      return false;
+    }
+    throw err;
+  }
 }

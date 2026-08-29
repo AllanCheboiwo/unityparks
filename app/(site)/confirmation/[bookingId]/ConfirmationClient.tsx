@@ -28,6 +28,13 @@ export function ConfirmationClient({ bookingId }: { bookingId: string }) {
         if (result.status === 401) return setNeedsProof(true);
         return setError(result.error);
       }
+      // An invitee's payload is the redacted shape this page cannot
+      // render (no money, no account); their home is the shared
+      // itinerary on the manage page.
+      if (result.data.role === "invitee") {
+        window.location.replace(`/manage/${bookingId}`);
+        return;
+      }
       setBooking(result.data);
     })();
   }, [bookingId, proofQuery]);

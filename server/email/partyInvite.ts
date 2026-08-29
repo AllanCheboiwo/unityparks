@@ -21,6 +21,17 @@ export type PartyInviteFacts = {
   inviteUrl: string;
 };
 
+/** These emails carry one user's free text (names typed at checkout) to a
+ * DIFFERENT person, so everything interpolated into the HTML is escaped.
+ * The plain-text body needs nothing: mail clients render it inert. */
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
 /** "Monday, 30 November 2026" */
 function longDate(iso: string): string {
   return new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", {
@@ -55,8 +66,8 @@ export function composePartyInvite(facts: PartyInviteFacts): {
   ].join("\n");
 
   const html = [
-    `<p>${leadName} has added you to their party for a break at Unity Parks ${facts.village}.</p>`,
-    `<p><strong>${facts.lodgeName}</strong><br>${when}</p>`,
+    `<p>${escapeHtml(leadName)} has added you to their party for a break at Unity Parks ${escapeHtml(facts.village)}.</p>`,
+    `<p><strong>${escapeHtml(facts.lodgeName)}</strong><br>${when}</p>`,
     `<p>Create an account or sign in with this email address to see the booking:</p>`,
     `<p><a href="${facts.inviteUrl}">${facts.inviteUrl}</a></p>`,
     `<p>If you were not expecting this, you can ignore this email.</p>`,
