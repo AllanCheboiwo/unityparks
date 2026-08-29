@@ -2,11 +2,15 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 
 export function RegisterClient() {
   const router = useRouter();
+  const params = useSearchParams();
+  // Only ever redirect within the site - a full URL in ?next= is ignored.
+  const rawNext = params.get("next");
+  const next = rawNext?.startsWith("/") && !rawNext.startsWith("//") ? rawNext : "/account";
   const [remember, setRemember] = useState(false);
   const [form, setForm] = useState({
     firstName: "",
@@ -41,7 +45,7 @@ export function RegisterClient() {
       setBusy(false);
       return;
     }
-    router.push("/account");
+    router.push(next);
     // Re-render the server-side header so the account chip appears.
     router.refresh();
   }
