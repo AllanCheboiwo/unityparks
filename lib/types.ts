@@ -161,6 +161,9 @@ export type BookingConfirmation = {
   /** Who is looking (UNP-20). Invitees receive the redacted shape in
    * InviteeBooking instead; owner-only fields below are absent for them. */
   role?: "owner" | "invitee";
+  /** True once the booking's 20-row invite lifetime cap is burned: email
+   * edits still save but no further invitations are ever sent. */
+  inviteCapReached?: boolean;
   bookingId: string;
   reservationId: string;
   status: string;

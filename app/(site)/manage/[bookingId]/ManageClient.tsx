@@ -144,9 +144,13 @@ export function ManageClient({
   if (needsProof) {
     return (
       <div className="mx-auto max-w-lg text-center py-20 px-5">
-        <p className="font-display text-2xl font-bold text-ink">This booking is private</p>
+        <p className="font-display text-2xl font-bold text-ink">
+          This booking isn&apos;t available on this account
+        </p>
         <p className="mt-2 text-sm text-foreground">
-          Sign in to the account that made this booking to manage it.
+          If it&apos;s yours, sign in with the account that made it. If you were
+          invited, the invitation may have been withdrawn or the break
+          cancelled.
         </p>
         <div className="mt-6 flex justify-center gap-3">
           <Link href={`/login?next=/manage/${bookingId}`} className="btn-primary">
@@ -611,9 +615,9 @@ export function ManageClient({
                       className={guestInputClass}
                     />
                     <p className="mt-1 text-xs text-foreground/50">
-                      Saving emails this guest an invitation to see the booking
-                      under their own account. Changing it moves the invitation
-                      to the new address.
+                      {booking.inviteCapReached
+                        ? "This booking has reached its invitation limit. Email changes still save, but no new invitations can be sent."
+                        : "Saving emails this guest an invitation to see the booking under their own account. Changing it moves the invitation to the new address."}
                     </p>
                   </div>
                 )}

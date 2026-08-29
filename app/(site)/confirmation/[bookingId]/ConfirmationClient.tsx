@@ -42,9 +42,13 @@ export function ConfirmationClient({ bookingId }: { bookingId: string }) {
   if (needsProof) {
     return (
       <div className="mx-auto max-w-lg text-center py-20 px-5">
-        <p className="font-display text-2xl font-bold text-ink">This booking is private</p>
+        <p className="font-display text-2xl font-bold text-ink">
+          This booking isn&apos;t available on this account
+        </p>
         <p className="mt-2 text-sm text-foreground">
-          Sign in to the account that made this booking to view it.
+          If it&apos;s yours, sign in with the account that made it. If you were
+          invited, the invitation may have been withdrawn or the break
+          cancelled.
         </p>
         <div className="mt-6 flex justify-center gap-3">
           <Link href={`/login?next=/confirmation/${bookingId}`} className="btn-primary">

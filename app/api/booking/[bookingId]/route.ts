@@ -5,7 +5,7 @@ import { parseChildrenAges, parseExtras, parseVehiclePlates } from "@/server/boo
 import { partyLabel } from "@/server/booking/party";
 import { guestRowDto, loadGuests, partyBands } from "@/server/booking/guests";
 import { resolveBookingAccess } from "@/server/booking/access";
-import { redactBookingForInvitee } from "@/server/booking/invites";
+import { INVITE_LIFETIME_CAP, redactBookingForInvitee } from "@/server/booking/invites";
 import { getCurrentUser } from "@/server/auth/session";
 import { handleRoute, jsonError } from "@/server/api-helpers";
 
@@ -108,6 +108,10 @@ export async function GET(
 
     const dto = {
       role,
+      // The invite lifetime cap (spam bound): once this booking has burned
+      // its 20 rows, email edits stop sending invitations and the manage
+      // card must say so instead of promising one.
+      inviteCapReached: record.invites.length >= INVITE_LIFETIME_CAP,
       bookingId: record.apaleoBookingId,
       reservationId: record.apaleoReservationId,
       status: record.status,
