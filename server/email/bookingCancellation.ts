@@ -132,3 +132,49 @@ export async function sendBookingCancellation(recordId: string): Promise<void> {
     console.error("[email] cancellation crashed", err);
   }
 }
+
+/**
+ * The invitee's cancellation notice (UNP-20, finding C): dates, village and
+ * the lead guest's name, never money. The owner's email above carries the
+ * refund amount; this facts type cannot, by construction.
+ */
+export type InviteeCancellationFacts = {
+  leadFirstName: string | null;
+  village: string;
+  arrival: string; // ISO YYYY-MM-DD
+  departure: string; // ISO YYYY-MM-DD
+};
+
+export function composeInviteeCancellation(facts: InviteeCancellationFacts): {
+  subject: string;
+  html: string;
+  text: string;
+} {
+  const lead = facts.leadFirstName || "The lead guest";
+  const subject = `A Unity Parks break you were invited to has been cancelled`;
+  const when = `${inviteeLongDate(facts.arrival)} to ${inviteeLongDate(facts.departure)}`;
+  const text = [
+    `${lead} has cancelled the break at Unity Parks ${facts.village} that you were invited to.`,
+    ``,
+    `${when}.`,
+    ``,
+    `You do not need to do anything.`,
+  ].join("\n");
+  const html = [
+    `<p>${lead} has cancelled the break at Unity Parks ${facts.village} that you were invited to.</p>`,
+    `<p>${when}</p>`,
+    `<p>You do not need to do anything.</p>`,
+  ].join("\n");
+  return { subject, html, text };
+}
+
+/** "Monday, 30 November 2026" */
+function inviteeLongDate(iso: string): string {
+  return new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
