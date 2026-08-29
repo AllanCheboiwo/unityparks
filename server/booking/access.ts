@@ -1,5 +1,5 @@
 import "server-only";
-import type { BookingRecord, BookingSession, User } from "@prisma/client";
+import type { BookingInvite, BookingRecord, BookingSession, User } from "@prisma/client";
 import { PublicError } from "../api-helpers";
 
 /**
@@ -29,6 +29,41 @@ export function assertBookingAccess(
   if (proof.user && record.userId === proof.user.id) return;
   if (proof.sessionId) {
     if (record.sessionId === proof.sessionId) return;
+    throw new PublicError(404, "Booking not found.");
+  }
+  throw new PublicError(401, "Please sign in to view your booking.");
+}
+
+/**
+ * Like assertBookingAccess, but answers WHO is looking: the owner (account
+ * or paying browser), or an accepted invitee (UNP-20). The invitee role is
+ * derived from the invite rows alone - accepted by this user, not revoked,
+ * booking not cancelled - never from the invitedUserId mirror. Read-only
+ * callers (the booking GET, the manage page) ask for the role; every
+ * mutating route keeps calling assertBookingAccess above, which does not
+ * know invitees exist, so writing stays owner-only by construction.
+ */
+export function resolveBookingAccess(
+  record: BookingRecord & {
+    session: BookingSession;
+    invites: Array<Pick<BookingInvite, "acceptedByUserId" | "revokedAt">>;
+  },
+  proof: { user: User | null; sessionId: string | null },
+): { role: "owner" | "invitee" } {
+  if (proof.user && record.userId === proof.user.id) return { role: "owner" };
+  if (
+    proof.user &&
+    record.cancelledAt === null &&
+    record.invites.some(
+      (invite) =>
+        invite.revokedAt === null &&
+        invite.acceptedByUserId === proof.user!.id,
+    )
+  ) {
+    return { role: "invitee" };
+  }
+  if (proof.sessionId) {
+    if (record.sessionId === proof.sessionId) return { role: "owner" };
     throw new PublicError(404, "Booking not found.");
   }
   throw new PublicError(401, "Please sign in to view your booking.");
