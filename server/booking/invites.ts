@@ -133,10 +133,10 @@ type OwnerView = {
   reservationId: string;
   status: string;
   cancelledAt: string | Date | null;
-  stay: { arrival: string; departure: string; adults: number; unitGroupCode: string };
+  stay: { arrival: string; departure: string; adults: number; unitGroupCode: string | null };
   lodges: Array<{
     slot: number;
-    unitGroupCode: string;
+    unitGroupCode: string | null;
     partyLabel: string;
     bands: string[];
     assignedUnitName: string | null;
