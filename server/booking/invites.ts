@@ -194,3 +194,184 @@ export function redactBookingForInvitee(dto: OwnerView, viewerEmail: string) {
     guest: { firstName: dto.guest.firstName },
   };
 }
+
+// ---------------------------------------------------------------------------
+// Prisma executors. Thin by design: every decision above is frozen under
+// test; these load state, apply plans and mint tokens, nothing more.
+// ---------------------------------------------------------------------------
+
+import { randomBytes } from "node:crypto";
+import { Prisma } from "@prisma/client";
+import { prisma } from "../db";
+import { partyBands } from "./guests";
+import { sendPartyInvites, type PartyInviteStore } from "../email/partyInvite";
+import { sendEmail } from "../email/resend";
+import { VILLAGE_NAME } from "@/content/village";
+import { LODGES } from "@/content/lodges";
+
+function appBaseUrl(): string {
+  return process.env.APP_BASE_URL ?? "http://localhost:3000";
+}
+
+/**
+ * Bring one booking's invites in line with its guest manifest, then mail
+ * whatever is pending. Never throws: a booking must never fail because an
+ * invite could not be written. Serializable so the callback/IPN
+ * double-settle cannot create two live invites for one seat; the losing
+ * racer's conflict is swallowed because the winner did the same work.
+ */
+export async function reconcileInvites(recordId: string): Promise<void> {
+  try {
+    const record = await prisma.bookingRecord.findUnique({
+      where: { id: recordId },
+      include: {
+        session: { include: { lodges: true, guests: true } },
+        invites: true,
+      },
+    });
+    if (!record) return;
+
+    const bandsBySlot: Record<number, string[]> = {};
+    for (const lodge of record.session.lodges) {
+      bandsBySlot[lodge.slot] = partyBands(lodge);
+    }
+    const plan = planReconcile({
+      cancelled: record.status === "cancelled" || record.cancelledAt !== null,
+      leadEmail: record.session.guestEmail?.toLowerCase() ?? null,
+      bandsBySlot,
+      seats: record.session.guests.map((g) => ({
+        guestId: g.id,
+        slot: g.slot,
+        position: g.position,
+        isLead: g.isLead,
+        email: g.email,
+      })),
+      invites: record.invites,
+    });
+
+    if (plan.revoke.length > 0 || plan.create.length > 0) {
+      const now = new Date();
+      const revokedSeatIds = record.invites
+        .filter((i) => plan.revoke.includes(i.id))
+        .map((i) => i.guestId);
+      await prisma.$transaction(
+        async (tx) => {
+          if (plan.revoke.length > 0) {
+            await tx.bookingInvite.updateMany({
+              where: { id: { in: plan.revoke } },
+              data: { revokedAt: now },
+            });
+            // The mirror follows the live invite: cleared on revoke.
+            await tx.sessionGuest.updateMany({
+              where: { id: { in: revokedSeatIds } },
+              data: { invitedUserId: null },
+            });
+          }
+          for (const create of plan.create) {
+            await tx.bookingInvite.create({
+              data: {
+                id: randomBytes(32).toString("base64url"),
+                recordId,
+                guestId: create.guestId,
+                email: create.email,
+              },
+            });
+          }
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+    }
+
+    await sendPartyInvites(prismaInviteStore(recordId), sendEmail);
+  } catch (err) {
+    console.error(`[invites] reconcile for record ${recordId} failed`, err);
+  }
+}
+
+/** The sender's storage, over prisma. Pending means live and unsent; the
+ * claim is the same atomic conditional update every email stamp uses. */
+function prismaInviteStore(recordId: string): PartyInviteStore {
+  return {
+    async loadPending() {
+      const record = await prisma.bookingRecord.findUnique({
+        where: { id: recordId },
+        include: {
+          session: { include: { lodges: true } },
+          invites: {
+            where: { revokedAt: null, sentAt: null },
+            include: { guest: true },
+          },
+        },
+      });
+      if (!record) return [];
+      return record.invites.map((invite) => {
+        // The invited seat's own lodge names the tier in the email.
+        const lodge = record.session.lodges.find(
+          (l) => l.slot === invite.guest.slot,
+        );
+        return {
+          inviteId: invite.id,
+          email: invite.email,
+          facts: {
+            leadFirstName: record.session.guestFirstName,
+            leadLastName: record.session.guestLastName,
+            village: VILLAGE_NAME,
+            arrival: record.session.arrival,
+            departure: record.session.departure,
+            lodgeName:
+              LODGES[lodge?.unitGroupCode ?? ""]?.name ??
+              lodge?.unitGroupCode ??
+              "your lodge",
+            inviteUrl: `${appBaseUrl()}/invite/${invite.id}`,
+          },
+        };
+      });
+    },
+    async claim(inviteId) {
+      const claimed = await prisma.bookingInvite.updateMany({
+        where: { id: inviteId, sentAt: null },
+        data: { sentAt: new Date() },
+      });
+      return claimed.count === 1;
+    },
+    async release(inviteId) {
+      await prisma.bookingInvite.updateMany({
+        where: { id: inviteId },
+        data: { sentAt: null },
+      });
+    },
+  };
+}
+
+/** One invite with what the accept page needs to decide. */
+export async function loadInviteForAccept(token: string) {
+  return prisma.bookingInvite.findUnique({
+    where: { id: token },
+    include: {
+      record: { include: { session: { include: { lodges: true } } } },
+      guest: true,
+    },
+  });
+}
+
+/**
+ * The accept executor: one conditional update, so an accept racing a revoke
+ * resolves in the database. Returns whether this call won; a loser re-reads
+ * state and lets decideAccept name what happened.
+ */
+export async function acceptInvite(token: string, userId: string): Promise<boolean> {
+  return prisma.$transaction(async (tx) => {
+    const won = await tx.bookingInvite.updateMany({
+      where: { id: token, acceptedAt: null, revokedAt: null },
+      data: { acceptedAt: new Date(), acceptedByUserId: userId },
+    });
+    if (won.count !== 1) return false;
+    const invite = await tx.bookingInvite.findUniqueOrThrow({ where: { id: token } });
+    // The mirror follows the live invite: set on accept.
+    await tx.sessionGuest.update({
+      where: { id: invite.guestId },
+      data: { invitedUserId: userId },
+    });
+    return true;
+  });
+}
