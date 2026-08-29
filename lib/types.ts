@@ -158,6 +158,12 @@ export type GuestRowDto = {
 };
 
 export type BookingConfirmation = {
+  /** Who is looking (UNP-20). Invitees receive the redacted shape in
+   * InviteeBooking instead; owner-only fields below are absent for them. */
+  role?: "owner" | "invitee";
+  /** True once the booking's 20-row invite lifetime cap is burned: email
+   * edits still save but no further invitations are ever sent. */
+  inviteCapReached?: boolean;
   bookingId: string;
   reservationId: string;
   status: string;
@@ -214,4 +220,24 @@ export type BookingConfirmation = {
     /** One entry per car; "" for a car the guest didn't know the plate of. */
     vehiclePlates: string[];
   };
+};
+
+/** The allow-listed booking view an accepted invitee receives (UNP-20):
+ * dates, lodge tier, party first names, their own row in full. No money
+ * anywhere; the server enforces this, the type just describes it. */
+export type InviteeBooking = {
+  role: "invitee";
+  bookingId: string;
+  reservationId: string;
+  status: "confirmed" | "cancelled";
+  stay: { arrival: string; departure: string; adults: number; unitGroupCode: string | null };
+  lodges: {
+    slot: number;
+    unitGroupCode: string | null;
+    partyLabel: string;
+    bands: string[];
+    assignedUnitName: string | null;
+    guests: GuestRowDto[];
+  }[];
+  guest: { firstName: string | null };
 };

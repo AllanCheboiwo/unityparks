@@ -4,7 +4,8 @@ import { getFolioForReservation } from "@/server/apaleo/bookings";
 import { parseChildrenAges, parseExtras, parseVehiclePlates } from "@/server/booking/session";
 import { partyLabel } from "@/server/booking/party";
 import { guestRowDto, loadGuests, partyBands } from "@/server/booking/guests";
-import { assertBookingAccess } from "@/server/booking/access";
+import { resolveBookingAccess } from "@/server/booking/access";
+import { INVITE_LIFETIME_CAP, redactBookingForInvitee } from "@/server/booking/invites";
 import { getCurrentUser } from "@/server/auth/session";
 import { handleRoute, jsonError } from "@/server/api-helpers";
 
@@ -38,12 +39,13 @@ export async function GET(
         session: { include: { lodges: { orderBy: { slot: "asc" } } } },
         reservations: { orderBy: { slot: "asc" } },
         referralAttribution: { include: { participant: { select: { code: true } } } },
+        invites: true,
       },
     });
     if (!record) return jsonError(404, "Booking not found.");
 
     const user = await getCurrentUser();
-    assertBookingAccess(record, {
+    const { role } = resolveBookingAccess(record, {
       user,
       sessionId: req.nextUrl.searchParams.get("session"),
     });
@@ -74,9 +76,11 @@ export async function GET(
         ? record.reservations.map((r) => r.apaleoReservationId)
         : [record.apaleoReservationId];
     let folioBalance = 0;
-    for (const reservationId of reservationIds) {
-      const folio = await getFolioForReservation(reservationId);
-      folioBalance += folio.balance;
+    if (role === "owner") {
+      for (const reservationId of reservationIds) {
+        const folio = await getFolioForReservation(reservationId);
+        folioBalance += folio.balance;
+      }
     }
 
     const guestRows = (await loadGuests(record.sessionId)).map(guestRowDto);
@@ -102,7 +106,12 @@ export async function GET(
       };
     });
 
-    return NextResponse.json({
+    const dto = {
+      role,
+      // The invite lifetime cap (spam bound): once this booking has burned
+      // its 20 rows, email edits stop sending invitations and the manage
+      // card must say so instead of promising one.
+      inviteCapReached: record.invites.length >= INVITE_LIFETIME_CAP,
       bookingId: record.apaleoBookingId,
       reservationId: record.apaleoReservationId,
       status: record.status,
@@ -150,6 +159,15 @@ export async function GET(
         email: record.session.guestEmail,
         vehiclePlates: parseVehiclePlates(record.session),
       },
-    });
+    };
+    // An invitee gets the allow-listed view and nothing else; the frozen
+    // suite pins what survives this call.
+    if (role === "invitee") {
+      return NextResponse.json({
+        role,
+        ...redactBookingForInvitee(dto, user!.email),
+      });
+    }
+    return NextResponse.json(dto);
   });
 }

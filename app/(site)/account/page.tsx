@@ -23,17 +23,29 @@ export default async function AccountPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login?next=/account");
 
-  const records = await prisma.bookingRecord.findMany({
-    where: { userId: user.id },
-    include: { session: { include: { lodges: { orderBy: { slot: "asc" } } } } },
-    orderBy: { createdAt: "desc" },
-  });
-
-  // The referral card's numbers, derived at read like every referral figure
-  // (no stored balances anywhere). Null participant renders the claim card.
-  const participant = await prisma.referralParticipant.findUnique({
-    where: { userId: user.id },
-  });
+  // Three independent reads, one round trip wait. invitedRecords are the
+  // breaks this account was invited to (UNP-20): live accepted invites on
+  // uncancelled bookings, listed with a badge and no money.
+  const [records, invitedRecords, participant] = await Promise.all([
+    prisma.bookingRecord.findMany({
+      where: { userId: user.id },
+      include: { session: { include: { lodges: { orderBy: { slot: "asc" } } } } },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.bookingRecord.findMany({
+      where: {
+        cancelledAt: null,
+        invites: {
+          some: { acceptedByUserId: user.id, revokedAt: null },
+        },
+      },
+      include: { session: { include: { lodges: { orderBy: { slot: "asc" } } } } },
+      orderBy: { createdAt: "desc" },
+    }),
+    // The referral card's numbers, derived at read like every referral
+    // figure. Null participant renders the claim card.
+    prisma.referralParticipant.findUnique({ where: { userId: user.id } }),
+  ]);
   const referral =
     participant && !participant.revokedAt
       ? {
@@ -61,6 +73,44 @@ export default async function AccountPage() {
       </p>
 
       <ReferralCard participant={referral} shareBase={shareBase} />
+
+      {invitedRecords.length > 0 && (
+        <div className="mt-6 grid gap-4">
+          {invitedRecords.map((record) => {
+            const s = record.session;
+            const lodgeNames = s.lodges
+              .map((l) => (l.unitGroupCode ? LODGES[l.unitGroupCode]?.name : null))
+              .filter(Boolean)
+              .join(", ");
+            return (
+              <div key={record.id} className="rounded-lg border border-line bg-white p-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="font-display text-lg font-bold text-navy">
+                      {lodgeNames || "Lodge"}
+                    </p>
+                    <p className="mt-1 text-sm text-foreground">
+                      {formatDate(s.arrival)} to {formatDate(s.departure)} ·{" "}
+                      {nightsLabel(nightsBetween(s.arrival, s.departure))}
+                    </p>
+                    <p className="mt-0.5 text-sm text-foreground">
+                      {s.guestFirstName ? `${s.guestFirstName}'s booking` : "Shared booking"}
+                    </p>
+                  </div>
+                  <span className="shrink-0 rounded-full border border-navy px-3 py-1 text-xs font-semibold text-navy">
+                    Invited
+                  </span>
+                </div>
+                <div className="mt-4 border-t border-line pt-4">
+                  <Link href={`/manage/${record.apaleoBookingId}`} className="btn-outline text-sm">
+                    View itinerary
+                  </Link>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {records.length === 0 && (
         <div className="mt-8 rounded-lg border border-line contour-bg p-8 text-center">

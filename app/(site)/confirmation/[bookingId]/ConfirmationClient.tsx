@@ -28,6 +28,13 @@ export function ConfirmationClient({ bookingId }: { bookingId: string }) {
         if (result.status === 401) return setNeedsProof(true);
         return setError(result.error);
       }
+      // An invitee's payload is the redacted shape this page cannot
+      // render (no money, no account); their home is the shared
+      // itinerary on the manage page.
+      if (result.data.role === "invitee") {
+        window.location.replace(`/manage/${bookingId}`);
+        return;
+      }
       setBooking(result.data);
     })();
   }, [bookingId, proofQuery]);
@@ -35,9 +42,13 @@ export function ConfirmationClient({ bookingId }: { bookingId: string }) {
   if (needsProof) {
     return (
       <div className="mx-auto max-w-lg text-center py-20 px-5">
-        <p className="font-display text-2xl font-bold text-ink">This booking is private</p>
+        <p className="font-display text-2xl font-bold text-ink">
+          This booking isn&apos;t available on this account
+        </p>
         <p className="mt-2 text-sm text-foreground">
-          Sign in to the account that made this booking to view it.
+          If it&apos;s yours, sign in with the account that made it. If you were
+          invited, the invitation may have been withdrawn or the break
+          cancelled.
         </p>
         <div className="mt-6 flex justify-center gap-3">
           <Link href={`/login?next=/confirmation/${bookingId}`} className="btn-primary">

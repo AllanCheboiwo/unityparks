@@ -70,6 +70,7 @@ export function GuestsClient() {
   const router = useRouter();
   const sessionId = useSearchParams().get("session");
   const [rows, setRows] = useState<Row[] | null>(null);
+  const [leadEmail, setLeadEmail] = useState<string | null>(null);
   const [cars, setCars] = useState<Car[]>([]);
   const [lodgeSlots, setLodgeSlots] = useState<number[]>([]);
   const [summary, setSummary] = useState<SessionSummary | null>(null);
@@ -90,6 +91,7 @@ export function GuestsClient() {
       if (s.ok) setSummary(s.data);
 
       setLodgeSlots(g.data.lodges.map((l) => l.slot));
+      setLeadEmail(g.data.lead.email);
       setRows(
         g.data.lodges.flatMap((lodge) => {
           const saved = new Map(lodge.guests.map((row) => [row.position, row]));
@@ -117,6 +119,27 @@ export function GuestsClient() {
   }, [sessionId]);
 
   if (!sessionId || expired) return <ExpiredNotice />;
+  /** A note, not an error: duplicates are collapsed server-side and the
+   * save still goes through; this just says which seat wins the invite. */
+  function duplicateNote(row: Row): string | null {
+    const email = row.email.trim().toLowerCase();
+    if (!email) return null;
+    if (leadEmail && email === leadEmail.toLowerCase()) {
+      return "This is the lead guest's address, so no separate invitation is sent.";
+    }
+    const earlier = rows!.find(
+      (other) =>
+        (other.slot < row.slot ||
+          (other.slot === row.slot && other.position < row.position)) &&
+        other.band === "adult" &&
+        other.email.trim().toLowerCase() === email,
+    );
+    if (earlier) {
+      return "Already used for another guest, so only they get the invitation.";
+    }
+    return null;
+  }
+
   if (error && !rows) {
     return (
       <p className="mx-auto max-w-2xl px-5 py-20 text-center text-[#b3261e]">{error}</p>
@@ -329,8 +352,16 @@ export function GuestsClient() {
                             placeholder="them@example.com"
                           />
                           <span className="mt-1 block text-xs text-foreground/50">
-                            We&apos;ll send them useful updates about the stay.
+                            Once the break is booked we&apos;ll email them an
+                            invitation to see the booking under their own
+                            account.
                           </span>
+                          {(() => {
+                            const note = duplicateNote(row);
+                            return note ? (
+                              <span className="mt-1 block text-xs text-bronze">{note}</span>
+                            ) : null;
+                          })()}
                           <FieldError message={fieldErrors[`${row.slot}-${row.position}-email`]} />
                         </label>
                       )}

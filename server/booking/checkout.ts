@@ -25,6 +25,7 @@ import { paymentsProvider } from "./provider";
 import { getSession, parseChildrenAges, parseExtras, parseVehiclePlates } from "./session";
 import { loadGuests, partyBands } from "./guests";
 import { sendBookingConfirmation } from "../email/bookingConfirmation";
+import { reconcileInvites } from "./invites";
 import { raiseOpsAlert } from "../ops/alerts";
 import { sendBalanceReceipt } from "../email/balanceReceipt";
 import { applyReferralAtCheckout, reconcileCreditFlags } from "../referral/checkout";
@@ -1424,6 +1425,10 @@ async function settlePayment(
     // Confirmation email, once per booking (the module owns the once-only
     // claim and swallows every failure - email never disturbs a payment).
     await sendBookingConfirmation(paid.id);
+    // Party invites (UNP-20): materialise rows for the manifest's adult
+    // emails and mail them. Never throws; a booking must never fail
+    // because an invite could not be written.
+    await reconcileInvites(paid.id);
   } else {
     await sendBalanceReceipt(transaction.id);
   }

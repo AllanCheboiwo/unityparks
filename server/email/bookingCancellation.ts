@@ -35,7 +35,11 @@ export async function sendBookingCancellation(recordId: string): Promise<void> {
 
     const record = await prisma.bookingRecord.findUniqueOrThrow({
       where: { id: recordId },
-      include: { session: true },
+      include: {
+        session: true,
+        // Accepted invitees get their own money-free notice below.
+        invites: { where: { acceptedAt: { not: null }, revokedAt: null } },
+      },
     });
     const session = record.session;
     if (!session.guestEmail) {
@@ -119,6 +123,27 @@ export async function sendBookingCancellation(recordId: string): Promise<void> {
 
     if (result.sent) {
       console.log(`[email] cancellation for ${reference} sent to ${session.guestEmail} (${result.id})`);
+      // The invitee notices ride the same once-per-booking claim and are
+      // best effort: a failed one is logged, never re-claimed, so the
+      // owner's email can never be sent twice on its account.
+      const notice = composeInviteeCancellation({
+        leadFirstName: session.guestFirstName,
+        village: VILLAGE_NAME,
+        arrival: session.arrival,
+        departure: session.departure,
+      });
+      for (const invite of record.invites) {
+        // One bad address or a network throw must not strand the rest of
+        // the list; each send stands alone.
+        try {
+          const inviteeResult = await sendEmail({ to: invite.email, ...notice });
+          if (!inviteeResult.sent) {
+            console.error(`[email] invitee cancellation for ${reference} to ${invite.email} not sent`);
+          }
+        } catch (err) {
+          console.error(`[email] invitee cancellation for ${reference} to ${invite.email} threw`, err);
+        }
+      }
       return;
     }
     if ("error" in result) {
@@ -131,4 +156,48 @@ export async function sendBookingCancellation(recordId: string): Promise<void> {
   } catch (err) {
     console.error("[email] cancellation crashed", err);
   }
+}
+
+/**
+ * The invitee's cancellation notice (UNP-20, finding C): dates, village and
+ * the lead guest's name, never money. The owner's email above carries the
+ * refund amount; this facts type cannot, by construction.
+ */
+export type InviteeCancellationFacts = {
+  leadFirstName: string | null;
+  village: string;
+  arrival: string; // ISO YYYY-MM-DD
+  departure: string; // ISO YYYY-MM-DD
+};
+
+export function composeInviteeCancellation(facts: InviteeCancellationFacts): {
+  subject: string;
+  html: string;
+  text: string;
+} {
+  const lead = facts.leadFirstName || "The lead guest";
+  const subject = `A Unity Parks break you were invited to has been cancelled`;
+  const when = `${longDate(facts.arrival)} to ${longDate(facts.departure)}`;
+  const text = [
+    `${lead} has cancelled the break at Unity Parks ${facts.village} that you were invited to.`,
+    ``,
+    `${when}.`,
+    ``,
+    `You do not need to do anything.`,
+  ].join("\n");
+  // Cross-user mail: the lead's name is their own typed text, escaped.
+  const html = [
+    `<p>${escapeInviteeHtml(lead)} has cancelled the break at Unity Parks ${escapeInviteeHtml(facts.village)} that you were invited to.</p>`,
+    `<p>${when}</p>`,
+    `<p>You do not need to do anything.</p>`,
+  ].join("\n");
+  return { subject, html, text };
+}
+
+function escapeInviteeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
 }

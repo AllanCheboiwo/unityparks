@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/server/db";
 import { saveGuests } from "@/server/booking/guests";
+import { reconcileInvites } from "@/server/booking/invites";
 import { assertBookingAccess } from "@/server/booking/access";
 import { getCurrentUser } from "@/server/auth/session";
 import { handleRoute, jsonError } from "@/server/api-helpers";
@@ -47,6 +48,9 @@ export async function PUT(
     if (!lodge) return jsonError(400, "That lodge slot is not part of this break.");
 
     await saveGuests(lodge, parsed.data.guests);
+    // Follow the manifest: revoke invites whose email changed or vanished,
+    // issue and mail new ones. Never throws.
+    await reconcileInvites(record.id);
     return NextResponse.json({ ok: true });
   });
 }

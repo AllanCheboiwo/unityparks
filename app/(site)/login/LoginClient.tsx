@@ -11,7 +11,12 @@ export function LoginClient() {
   const params = useSearchParams();
   // Only ever redirect within the site - a full URL in ?next= is ignored.
   const rawNext = params.get("next");
-  const next = rawNext?.startsWith("/") && !rawNext.startsWith("//") ? rawNext : "/account";
+  // Backslashes are slashes to URL parsers, so "/\\evil.com" would resolve
+  // cross-origin; refuse them along with protocol-relative paths.
+  const next =
+    rawNext?.startsWith("/") && !rawNext.startsWith("//") && !rawNext.includes("\\")
+      ? rawNext
+      : "/account";
   const [form, setForm] = useState({ email: params.get("email") ?? "", password: "" });
   const [remember, setRemember] = useState(false);
   const [error, setError] = useState<string | null>(null);

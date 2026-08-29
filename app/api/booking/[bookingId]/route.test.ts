@@ -28,6 +28,9 @@ const RECORD = {
   userId: "u-owner",
   referralAttribution: null,
   reservations: [],
+  // The route's include now loads invites (UNP-20); a faithful prisma
+  // result always carries the array. Empty here: no invites on this booking.
+  invites: [],
   session: {
     id: "sess-1",
     arrival: "2026-12-18",
