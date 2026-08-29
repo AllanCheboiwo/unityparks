@@ -1,6 +1,6 @@
 # Invite a guest to a booking (UNP-20)
 
-Status: tests-approved
+Status: implementing
 
 Linear: UNP-20 "Invite guests to a booking (party accounts, shared itinerary seam)"
 Tier: full path (touches the Prisma schema, auth identity, and adds a new subsystem)
