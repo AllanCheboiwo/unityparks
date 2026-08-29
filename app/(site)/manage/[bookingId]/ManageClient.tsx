@@ -592,6 +592,31 @@ export function ManageClient({
                     className={`mt-3 ${guestInputClass}`}
                   />
                 )}
+                {row.band === "adult" && !(row.slot === 0 && row.position === 0) && (
+                  <div className="mt-3">
+                    <input
+                      aria-label="Email"
+                      type="email"
+                      placeholder="Email (optional)"
+                      value={row.email}
+                      onChange={(e) =>
+                        setGuestRows((prev) =>
+                          prev!.map((r) =>
+                            r.slot === row.slot && r.position === row.position
+                              ? { ...r, email: e.target.value }
+                              : r,
+                          ),
+                        )
+                      }
+                      className={guestInputClass}
+                    />
+                    <p className="mt-1 text-xs text-foreground/50">
+                      Saving emails this guest an invitation to see the booking
+                      under their own account. Changing it moves the invitation
+                      to the new address.
+                    </p>
+                  </div>
+                )}
               </div>
             ))}
           </div>
