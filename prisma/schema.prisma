@@ -48,6 +48,7 @@ model User {
   passwordResetTokens PasswordResetToken[]
   bookingSessions BookingSession[]
   bookingRecords  BookingRecord[]
+  acceptedInvites BookingInvite[]
   referralParticipant ReferralParticipant?
 }
 
@@ -215,10 +216,43 @@ model SessionGuest {
   firstName   String?
   lastName    String?
   dateOfBirth String? // ISO YYYY-MM-DD, expected for non-adults
-  email       String? // lowercase; the invite-a-guest seam, unused today
-  invitedUserId String? // always null today; filled when invites ship
+  email       String? // lowercase; feeds the invite reconcile after booking
+  // Mirror of the live accepted BookingInvite for this seat: set on accept,
+  // cleared on revoke, in the invite's own transaction. BookingInvite is
+  // authoritative; this column is the cheap party-membership read for the
+  // repeat-guest offer (UNP-7). Access checks never consult it.
+  invitedUserId String?
+
+  invites BookingInvite[]
 
   @@unique([sessionId, slot, position])
+}
+
+// An invitation to one seat of a booked break (UNP-20). The row id IS the
+// bearer token in the emailed link, like AuthSession and PasswordResetToken.
+// A seat accumulates rows over its life (revoke and reissue on each email
+// change); at most one is live, enforced by the reconcile transaction. No
+// expiry: validity is derived - not revoked, booking not cancelled.
+model BookingInvite {
+  id        String   @id
+  createdAt DateTime @default(now())
+
+  recordId String
+  record   BookingRecord @relation(fields: [recordId], references: [id])
+
+  // Cascade: an amend that deletes the seat takes its invites (and the
+  // access they granted) with it.
+  guestId String
+  guest   SessionGuest @relation(fields: [guestId], references: [id], onDelete: Cascade)
+
+  email String // normalized snapshot of the invited address
+
+  sentAt     DateTime? // claimed before composing, released on failure
+  acceptedAt DateTime?
+  revokedAt  DateTime?
+
+  acceptedByUserId String?
+  acceptedBy       User?   @relation(fields: [acceptedByUserId], references: [id])
 }
 
 // Written once the booking exists in Apaleo. `status` flips to paid only
@@ -286,6 +320,7 @@ model BookingRecord {
   pesapalTransactions PesapalTransaction[]
   referralAttribution ReferralAttribution?
   extrasOrders        ExtrasOrder[]
+  invites BookingInvite[]
 }
 
 // One "add extras after booking" operation for one lodge, created BEFORE any
