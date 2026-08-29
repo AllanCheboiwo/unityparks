@@ -7,7 +7,7 @@ import { apiFetch } from "@/lib/api";
 import { BAND_LABELS, formatDate, formatKes, nightsLabel } from "@/lib/format";
 import { isValidPartPayment, MIN_PART_PAYMENT } from "@/lib/paymentPlan";
 import { LODGES } from "@/content/lodges";
-import type { BookingConfirmation, ExtrasContentDto } from "@/lib/types";
+import type { BookingConfirmation, InviteeBooking, ExtrasContentDto } from "@/lib/types";
 import { TurnoverCalendar } from "@/components/TurnoverCalendar";
 import { AddExtrasCard } from "./AddExtrasCard";
 
@@ -165,6 +165,13 @@ export function ManageClient({
         Fetching your booking…
       </p>
     );
+  }
+
+  // An invitee's payload is the redacted shape: no money, no controls.
+  // Server redaction is the real wall; this early return just renders the
+  // view that shape supports.
+  if (booking.role === "invitee") {
+    return <InviteeView booking={booking as unknown as InviteeBooking} />;
   }
 
   const nights = Math.round(
@@ -743,6 +750,58 @@ export function ManageClient({
           View confirmation
         </Link>
       </div>
+    </div>
+  );
+}
+
+/** The shared itinerary an accepted invitee sees: dates, lodges, party
+ * first names. No prices, no buttons that change anything. */
+function InviteeView({ booking }: { booking: InviteeBooking }) {
+  const cancelled = booking.status === "cancelled";
+  return (
+    <div className="mx-auto max-w-2xl px-5 py-10">
+      <h1 className="font-display text-3xl font-bold text-ink">
+        {cancelled ? "This break was cancelled" : "Your shared itinerary"}
+      </h1>
+      <p className="mt-2 text-sm text-foreground">
+        {booking.guest.firstName ?? "The lead guest"}&apos;s booking at Unity
+        Parks Mount Kenya. {formatDate(booking.stay.arrival)} to{" "}
+        {formatDate(booking.stay.departure)}.
+      </p>
+      {cancelled && (
+        <p className="mt-4 rounded-md border border-line bg-white p-4 text-sm text-foreground">
+          The lead guest has cancelled this break.
+        </p>
+      )}
+      <div className="mt-6 grid gap-4">
+        {booking.lodges.map((lodge) => {
+          const content = lodge.unitGroupCode ? LODGES[lodge.unitGroupCode] : null;
+          return (
+            <div key={lodge.slot} className="rounded-lg border border-line bg-white p-5">
+              <p className="font-display text-xl font-bold text-ink">
+                {content?.name ?? lodge.unitGroupCode ?? "Lodge"}
+              </p>
+              <p className="mt-1 text-sm text-foreground">{lodge.partyLabel}</p>
+              {lodge.assignedUnitName && (
+                <p className="mt-1 text-sm text-foreground">Lodge {lodge.assignedUnitName}</p>
+              )}
+              <ul className="mt-3 grid gap-1 text-sm text-foreground">
+                {lodge.guests.map((guest) => (
+                  <li key={`${guest.slot}-${guest.position}`}>
+                    {guest.firstName ?? "Guest"}
+                    {guest.lastName ? ` ${guest.lastName}` : ""}
+                    {guest.isLead ? " (lead guest)" : ""}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
+        })}
+      </div>
+      <p className="mt-6 text-sm text-foreground/70">
+        Only the lead guest can change the booking. Activities and dining will
+        appear here when they open.
+      </p>
     </div>
   );
 }
