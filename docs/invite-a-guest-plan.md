@@ -1,11 +1,12 @@
 # Invite a guest to a booking (UNP-20)
 
-Status: writing-tests
+Status: tests-approved
 
 Linear: UNP-20 "Invite guests to a booking (party accounts, shared itinerary seam)"
 Tier: full path (touches the Prisma schema, auth identity, and adds a new subsystem)
 
 Plan approved: 29 Aug 2026, Allan wrote "plan approved"
+Tests approved: 29 Aug 2026, commit 18ddcfc, Allan wrote "tests approved"
 
 ## The problem (from the Linear issue)
 
