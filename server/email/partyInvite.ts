@@ -55,7 +55,7 @@ export function composePartyInvite(facts: PartyInviteFacts): {
   const when = `${longDate(facts.arrival)} to ${longDate(facts.departure)}`;
 
   const text = [
-    `${leadName} has added you to their party for a break at Unity Parks ${facts.village}.`,
+    `${leadName} has added you to their party for a break at ${facts.village}.`,
     ``,
     `${facts.lodgeName}, ${when}.`,
     ``,
@@ -66,7 +66,7 @@ export function composePartyInvite(facts: PartyInviteFacts): {
   ].join("\n");
 
   const html = [
-    `<p>${escapeHtml(leadName)} has added you to their party for a break at Unity Parks ${escapeHtml(facts.village)}.</p>`,
+    `<p>${escapeHtml(leadName)} has added you to their party for a break at ${escapeHtml(facts.village)}.</p>`,
     `<p><strong>${escapeHtml(facts.lodgeName)}</strong><br>${when}</p>`,
     `<p>Create an account or sign in with this email address to see the booking:</p>`,
     `<p><a href="${facts.inviteUrl}">${facts.inviteUrl}</a></p>`,

@@ -225,7 +225,9 @@ import { VILLAGE_NAME } from "@/content/village";
 import { LODGES } from "@/content/lodges";
 
 function appBaseUrl(): string {
-  return process.env.APP_BASE_URL ?? "http://localhost:3000";
+  // Trailing slash stripped: Railway's APP_BASE_URL carries one, and the
+  // invite link must not read "https://host//invite/...".
+  return (process.env.APP_BASE_URL ?? "http://localhost:3000").replace(/\/+$/, "");
 }
 
 /**

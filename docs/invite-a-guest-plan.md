@@ -1,6 +1,6 @@
 # Invite a guest to a booking (UNP-20)
 
-Status: in-review
+Status: shipped
 
 Linear: UNP-20 "Invite guests to a booking (party accounts, shared itinerary seam)"
 Tier: full path (touches the Prisma schema, auth identity, and adds a new subsystem)
@@ -394,3 +394,45 @@ None open.
    account's access both die; the new address receives a fresh invite.
 7. Cancel the booking. The accepted invitee's access dies and they receive
    the money-free cancellation notice, not the owner's refund email.
+
+### Acceptance check, run against https://unityparks.up.railway.app on 29 Aug 2026
+
+Booking JWUHFRLC: Cedar Lodge 2 bedroom, 18 to 21 Dec 2026, two adults, lead
+kiplongeiallan+unp20lead@gmail.com, KES 37,800 deposit (30% of 126,000) paid
+through the Pesapal card sim (test card 4761 7390 0101 0010; the sim hangs
+forever on non-listed numbers, noted in memory).
+
+1. Invite email arrived at the second adult's address from
+   bookings@unityparks.com: lead name, lodge tier, dates, link, and no money
+   anywhere in the body. PASS
+2. Link signed out showed the inviter, village and dates, no price, with
+   sign-in and register returns. PASS
+3. Registered the invited address, accepted, booking linked: GET answered
+   role invitee with the allow-listed view only (no totals, no folio, lead's
+   surname/DOB/email null, own row whole, status collapsed to confirmed).
+   Account page listed it with the Invited badge. PASS
+4. All five mutations as the invitee (cancel, pay, amend, guests, extras)
+   answered 401. PASS
+5. Lead changed the seat's email: the accepted account's access died at once
+   (401), the old link showed the neutral unavailable page, the account list
+   emptied, and the new address received a fresh invite with a new token,
+   which was accepted and restored access. PASS
+6. Lead cancelled. The invitee's access died, the dead link stayed neutral,
+   and the invitee received the money-free cancellation notice ("You do not
+   need to do anything", no refund figure). PASS
+
+Two cosmetic finds fixed after the check: the invite and notice templates
+doubled "Unity Parks" (VILLAGE_NAME already carries it) and the invite URL
+carried a double slash from Railway's trailing-slash APP_BASE_URL.
+
+## What shipped vs the plan
+
+As specced, plus the review round: the reconcile gained a payment-status
+gate (deposit_paid or paid) and now plans inside its Serializable
+transaction; accepted invitees get their own money-free cancellation
+template; the confirmation page redirects invitees to the manage view; the
+manage card reports the invite cap; the 401 walls stopped assuming the
+viewer is signed out; register and login ?next= guards refuse backslash
+paths; owner-typed names are HTML-escaped in cross-user emails. Deferred to
+Backlog: email verification (UNP-21), the forgeable rate-limiter key
+(UNP-22).

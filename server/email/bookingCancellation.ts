@@ -179,7 +179,7 @@ export function composeInviteeCancellation(facts: InviteeCancellationFacts): {
   const subject = `A Unity Parks break you were invited to has been cancelled`;
   const when = `${longDate(facts.arrival)} to ${longDate(facts.departure)}`;
   const text = [
-    `${lead} has cancelled the break at Unity Parks ${facts.village} that you were invited to.`,
+    `${lead} has cancelled the break at ${facts.village} that you were invited to.`,
     ``,
     `${when}.`,
     ``,
@@ -187,7 +187,7 @@ export function composeInviteeCancellation(facts: InviteeCancellationFacts): {
   ].join("\n");
   // Cross-user mail: the lead's name is their own typed text, escaped.
   const html = [
-    `<p>${escapeInviteeHtml(lead)} has cancelled the break at Unity Parks ${escapeInviteeHtml(facts.village)} that you were invited to.</p>`,
+    `<p>${escapeInviteeHtml(lead)} has cancelled the break at ${escapeInviteeHtml(facts.village)} that you were invited to.</p>`,
     `<p>${when}</p>`,
     `<p>You do not need to do anything.</p>`,
   ].join("\n");
