@@ -11,6 +11,7 @@ import { payFolio } from "@/server/apaleo/payments";
 import { ApaleoError } from "@/server/apaleo/client";
 import { nightsBetween, validateStay } from "@/server/booking/rules";
 import { assertBookingAccess } from "@/server/booking/access";
+import { reconcileInvites } from "@/server/booking/invites";
 import { recoverStaleExtrasOrder } from "@/server/booking/extras";
 import { getCurrentUser } from "@/server/auth/session";
 import { handleRoute, jsonError, PublicError } from "@/server/api-helpers";
@@ -232,6 +233,11 @@ export async function POST(
       where: { recordId: record.id },
       data: { assignedUnitId: null, assignedUnitName: null },
     });
+
+    // Amends move dates today, but the invite rules include the party-shape
+    // guard; running the reconcile here keeps invites honest if amends ever
+    // learn to resize. Never throws.
+    await reconcileInvites(record.id);
 
     return NextResponse.json({
       ok: true,
