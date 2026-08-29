@@ -35,7 +35,11 @@ export async function sendBookingCancellation(recordId: string): Promise<void> {
 
     const record = await prisma.bookingRecord.findUniqueOrThrow({
       where: { id: recordId },
-      include: { session: true },
+      include: {
+        session: true,
+        // Accepted invitees get their own money-free notice below.
+        invites: { where: { acceptedAt: { not: null }, revokedAt: null } },
+      },
     });
     const session = record.session;
     if (!session.guestEmail) {
@@ -119,6 +123,21 @@ export async function sendBookingCancellation(recordId: string): Promise<void> {
 
     if (result.sent) {
       console.log(`[email] cancellation for ${reference} sent to ${session.guestEmail} (${result.id})`);
+      // The invitee notices ride the same once-per-booking claim and are
+      // best effort: a failed one is logged, never re-claimed, so the
+      // owner's email can never be sent twice on its account.
+      const notice = composeInviteeCancellation({
+        leadFirstName: session.guestFirstName,
+        village: VILLAGE_NAME,
+        arrival: session.arrival,
+        departure: session.departure,
+      });
+      for (const invite of record.invites) {
+        const inviteeResult = await sendEmail({ to: invite.email, ...notice });
+        if (!inviteeResult.sent) {
+          console.error(`[email] invitee cancellation for ${reference} to ${invite.email} not sent`);
+        }
+      }
       return;
     }
     if ("error" in result) {
