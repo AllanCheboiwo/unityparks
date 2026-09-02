@@ -64,6 +64,20 @@ describe("planInstrumentAllowances", () => {
     }
   });
 
+  it("an awkward split loses no shilling: pro-rata rounding, last lodge takes the remainder", () => {
+    const posts = plan({
+      amount: 5000,
+      bases: [30_000, 30_000, 30_000],
+      folios: [
+        { folioId: "folio-a", currency: "KES" },
+        { folioId: "folio-b", currency: "KES" },
+        { folioId: "folio-c", currency: "KES" },
+      ],
+    });
+    expect(posts.map((p) => p.amount)).toEqual([1667, 1667, 1666]);
+    expect(posts.reduce((sum, p) => sum + p.amount, 0)).toBe(5000);
+  });
+
   it("skips folios whose share rounds to zero rather than posting a zero allowance", () => {
     const posts = plan({ amount: 5000, bases: [96_000, 0] });
     expect(posts).toHaveLength(1);

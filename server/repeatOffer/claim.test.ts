@@ -116,6 +116,16 @@ describe("decideClaim: replay adopts, never re-litigates", () => {
     ).toEqual({ action: "adopt", redemptionId: "red-1", amount: 5000 });
   });
 
+  it("adopts even when the snapshot was cleared before the replay", () => {
+    // An honest-path cleanup can wipe the session snapshot after the crash;
+    // the PENDING row alone is the money truth.
+    expect(decideClaim(ctx({ pending, snapshot: null }))).toEqual({
+      action: "adopt",
+      redemptionId: "red-1",
+      amount: 5000,
+    });
+  });
+
   it("refuses a PENDING row claimed by a different account", () => {
     // Shared machine: user A applied and crashed, user B signed in and
     // retried. B must never finish a booking carrying A's discount.
