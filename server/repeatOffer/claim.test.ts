@@ -34,7 +34,8 @@ function stay(overrides: Partial<StayFacts> = {}): StayFacts {
 
 function ctx(overrides: Partial<ClaimContext> = {}): ClaimContext {
   return {
-    sessionUserId: overrides.sessionUserId ?? "user-lead",
+    sessionUserId:
+      overrides.sessionUserId !== undefined ? overrides.sessionUserId : "user-lead",
     snapshot:
       overrides.snapshot !== undefined
         ? overrides.snapshot

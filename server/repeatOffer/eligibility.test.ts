@@ -26,7 +26,8 @@ import {
 
 function invite(overrides: Partial<StayInvite> = {}): StayInvite {
   return {
-    acceptedByUserId: overrides.acceptedByUserId ?? "user-guest",
+    acceptedByUserId:
+      overrides.acceptedByUserId !== undefined ? overrides.acceptedByUserId : "user-guest",
     revokedAt: overrides.revokedAt ?? null,
     createdAtIso: overrides.createdAtIso ?? "2026-08-20T10:00:00Z",
   };
@@ -35,7 +36,7 @@ function invite(overrides: Partial<StayInvite> = {}): StayInvite {
 function stay(overrides: Partial<StayFacts> = {}): StayFacts {
   return {
     recordId: overrides.recordId ?? "rec-1",
-    ownerUserId: overrides.ownerUserId ?? "user-lead",
+    ownerUserId: overrides.ownerUserId !== undefined ? overrides.ownerUserId : "user-lead",
     status: overrides.status ?? "paid",
     departure: overrides.departure ?? "2026-09-01",
     invites: overrides.invites ?? [],
