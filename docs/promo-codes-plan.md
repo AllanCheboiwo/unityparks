@@ -1,24 +1,20 @@
 # The repeat-guest offer (UNP-7)
 
-Status: grilling
+Status: writing-tests
 
-**PARKED 28 Aug 2026, mid-grill, by Allan's decision.** Build order is now
-UNP-19 (mandatory accounts), then UNP-20 (invite guests), then this. Do not
-resume from this status and write tests: sections 3.4, 3.5, 3.10 and 10
-(claiming, identity, surfaces) assume neither prerequisite exists and must
-be revised against what actually ships. The CP research in section 2, the
-terms wording in section 4, and the money seam in section 6 stand
-regardless. Rationale: with accounts and party membership real, the offer
-becomes account state rather than a typed secret, which deletes the revoke
-switch, the alert threshold, the oracle-proof endpoint and the leaked
-reference exposure.
+Plan approved: 2 Sep 2026, Allan wrote "plan-approved"
 
-Spec redrafted 28 Aug 2026 after Allan walked Center Parcs' real checkout
-and we pivoted to their mechanic: no minted codes, the guest's previous
-booking reference IS the claim, usable by the whole party inside a short
-window. The 27 Aug minted-code draft is superseded; its money-seam
-sections survive because that part is proven and unchanged. Required
-reading: `docs/referral-system-plan.md` section 5 (the money path).
+**Revised 2 Sep 2026** after UNP-19 (mandatory accounts) and UNP-20
+(invite-a-guest) shipped. The 28 Aug typed-reference draft is superseded:
+Allan chose the account-state design on 2 Sep ("yes lets use this
+version!"). The offer is no longer a typed secret; it is state on the
+signed-in account, derived from verified party membership. This deletes
+the reference input, the advisory oracle endpoint, its rate limiting, the
+alert threshold, the OpsAlert, and the per-stay revoke switch. The CP
+research in section 2, the money seam in section 6 and the burn-timing
+design in section 9 stand unchanged from the previous draft. Required
+reading: `docs/referral-system-plan.md` section 5 (the money path) and
+`docs/invite-a-guest-plan.md` (the membership seam this consumes).
 
 ---
 
@@ -26,16 +22,15 @@ reading: `docs/referral-system-plan.md` section 5 (the money path).
 
 The checkout's "Keeping in touch" step promises opted-in guests an
 exclusive repeat-guest offer. Nothing behind that promise exists. This
-feature makes it real, copying Center Parcs faithfully: after a completed
-stay, anyone who was on that break gets a fixed discount on a new booking
-made within 31 days, claimed by typing the booking reference of the stay
-they just finished. Marketing consent buys the email that tells them about
-it; it never gates the discount itself.
+feature makes it real: after a completed stay, everyone who was a
+registered member of that party gets a fixed discount on a new booking
+made within 31 days, applied automatically when they book signed in.
+Marketing consent buys the email that reminds them about it; it never
+gates the discount itself.
 
 ## 2. How Center Parcs actually does it (verified 27-28 Aug 2026)
 
-- Accounts are mandatory at checkout (filed as UNP-19 for us; this spec
-  works either way).
+- Accounts are mandatory at checkout (ours now too, UNP-19).
 - The consent checkbox names the carrot: news and information "including
   our Repeat Guest offer with a GBP 50 discount off your next break".
   Consent delivers the offer; it does not create it.
@@ -49,43 +44,62 @@ it; it never gates the discount itself.
   visit" (help centre).
 - **The reference is not single-use**: "Anyone in your previous party can
   use this offer code for a new booking made within 31 days of departure"
-  (offer terms). The earning stay behaves as a short-lived shared claim,
-  and the 31-day window, not a use counter, is the cost limiter. This is
-  why the window is so short: the two choices are a package.
-- **Party membership is checkable for CP because of invite-a-guest**: the
-  booker enters party members' email addresses, they are prompted to
-  create accounts, and the booking links to them with a shared itinerary.
-  Our equivalent seam is dormant (`SessionGuest.email`, `invitedUserId`),
-  which is now UNP-20.
+  (offer terms). The 31-day window, not a use counter, is the cost
+  limiter.
 - CP publishes no per-reference use cap. Their controls are the window,
   the per-booking cap, and terms they can enforce against abuse.
 - Their richer Come Back Soon perks (10% deposit, free amendments, day
   passes) are our UNP-18, out of scope.
 
-## 3. Decisions (Allan, 27-28 Aug interviews)
+### Where we deviate from CP, and why (Allan, 2 Sep 2026)
 
-1. **Mechanic**: CP-faithful booking-reference claim. No code minting, no
-   code table, no entitlement email.
+CP checks possession of a typed booking reference; we check verified
+party membership on the signed-in account. Reasoning recorded from the
+2 Sep discussion:
+
+- CP's typed box likely predates their party-account system, and at
+  their scale refusing an unregistered party member is a contact-centre
+  cost. We have no such legacy and no support desk; the tighter check
+  costs us nothing.
+- The person who rebooks is almost always the lead booker. For them,
+  account state is strictly better UX than digging a reference out of an
+  old email: sign in and the discount is there.
+- The typed-secret design needed an alert threshold, a revoke switch and
+  an oracle-proofed advisory endpoint, machinery that assumes someone is
+  watching a dashboard. Account state deletes all of it.
+- The offer becomes the incentive that drives invite adoption: "everyone
+  you invite gets KSh 5,000 off their next break too."
+
+Accepted cost: a party member who physically stayed but was never
+invited (or never accepted) gets nothing, and there is no override. The
+lead guest, who always has the offer, can book for the group instead.
+
+## 3. Decisions (Allan, 27-28 Aug interviews; revised 2 Sep)
+
+1. **Mechanic**: account-state claim. A signed-in user who was a
+   verified member of a qualifying stay sees the offer at the pay step
+   and on their account page, and applies it with one click. No code
+   minting, no code table, no typed reference, no entitlement email.
 2. **Value**: KSh 5,000 off per lodge of the NEW booking, capped at 3
    lodges, so 5,000 to 15,000. Confirmed 28 Aug.
-3. **Uses and window**: unlimited uses of an earning stay's reference
-   within **31 days of its departure**, exactly as CP. No per-stay use
-   counter. The window is the cost limiter.
-4. **The token is possession of the reference.** That is what CP checks at
-   the redemption box. The "you must have been a member of the party" rule
-   lives in our terms, enforceable against abuse, not in checkout logic we
-   cannot yet support.
-5. **Party verification deferred to UNP-20, deliberately.** Party guest
-   email is optional today, so gating redemption on a captured contact
-   would refuse most legitimate party members and break the CP behaviour
-   chosen here. Identity is used for notification and surfacing only, never
-   as a redemption gate. When UNP-20 ships, tightening is one check added
-   at the claim: the redemption row already records who claimed.
-6. **No hard use cap; alert instead of block** (28 Aug). CP publishes no
-   cap, and a hard stop would refuse a legitimate eleventh party member.
-   So: an `OpsAlert` fires when one stay passes 10 redemptions, and a
-   manual per-stay kill switch exists for a reference being farmed. Loud,
-   reversible, and faithful.
+3. **Uses and window**: unlimited redemptions of one earning stay within
+   **31 days of its departure**, exactly as CP. No per-stay use counter.
+   The window plus the membership check are the cost limiters.
+4. **The token is verified party membership**: the signed-in user either
+   owns the earning stay's `BookingRecord` (`userId`), or holds a live
+   accepted `BookingInvite` on it. Possession of the booking reference
+   grants nothing.
+5. **The manifest-at-departure rule** (2 Sep): an invite confers the
+   offer only if the invite row was **created before the earning stay's
+   departure**. Late acceptance is fine (invited before the trip,
+   registered after); post-departure invites confer booking access only,
+   never the offer. The party is whoever was on the manifest when the
+   stay happened. Consequence: post-departure email churn can only
+   destroy offers (revoking the old invitee), never mint new ones.
+6. **No use cap, no alert, no revoke switch** (2 Sep, superseding the
+   28 Aug alert design). The membership check bounds claimants
+   structurally: at most the lead plus one live accepted invitee per
+   adult seat. There is no leaked-reference exposure left to watch for.
 7. **No stacking**: one discount instrument per booking. A repeat guest
    cannot use a referral code anyway (`not_first_stay` in
    `server/referral/validate.ts`), so the clash is structural, not UI.
@@ -95,63 +109,71 @@ it; it never gates the discount itself.
    no new entitlement and restores nothing; its redemption row stays as
    history and the refund math already absorbs the discount. The earning
    stay's window keeps running for everyone else regardless.
-9. **Consent is notification only.** The post-stay email goes to opted-in
-   lead guests with linked accounts. No consent check at redemption.
-   Eligibility for the send is `marketingEmail = true` only:
-   `marketingSms` is captured but unusable (no SMS sender exists; the
-   schema comment at `prisma/schema.prisma:419` records that neither flag
-   has ever been consumed). This feature is the first consumer of
-   `marketingEmail`. A guest who ticked SMS only keeps the offer and simply
-   hears nothing.
-10. **Anonymous guests can redeem**: possession of the reference is the
-   claim, account or not. Moot once UNP-19 lands.
+9. **Consent is notification only.** The post-stay reminder email goes to
+   opted-in lead guests (`marketingEmail = true`); this feature is the
+   first consumer of that flag. `marketingSms` stays captured and unused
+   (no SMS sender exists; schema comment at `prisma/schema.prisma:419`).
+   A guest who ticked SMS only keeps the offer and simply hears nothing.
+   No consent check anywhere near redemption.
+10. **The confirmation email names the offer and nudges invites** (2 Sep,
+   closing the old open question): the pre-stay confirmation tells the
+   lead guest the offer exists and that inviting party members before
+   departure extends it to them, because under decision 5 that is the
+   only time inviting still counts. Sent to everyone, not just consented
+   guests, since eligibility is universal; consent gates only the
+   post-stay reminder.
+11. **The pay step names the amount** (2 Sep): "KSh 5,000 per lodge off",
+   not a silently discounted total. CP names the figure at the consent
+   checkbox already.
 
 ### Decisions made for you (flag list)
 
 - **The window bounds when the NEW booking is made** (31 days from the
   earning stay's departure), not when the new stay happens; the new break
   can be any date the calendar sells.
-- **The reference is `apaleoBookingId`**, the string the confirmation
-  email already prints as "Booking reference". No new identifier.
 - **Eligibility of the earning stay**: departed, fully paid, not
-  cancelled, departure within 31 days. Checked advisorily when typed and
-  again at the claim. Deliberately absent from that list: "not already
-  redeemed".
-- **Every redemption records its claimant** (userId when signed in, lead
-  guest contact always), though claimant identity gates nothing in v1.
-  This is what makes the UNP-20 tightening a one-line check and what makes
-  abuse legible in ops today.
-- **The reference travels, and that is accepted.** It is printed in every
-  confirmation email, so a forwarded email is a usable claim. It is CP's
-  own exposure; the window is short, the value is capped per booking, and
-  every redemption is still a real paid break.
+  cancelled, departure within 31 days. Deliberately absent from that
+  list: "not already redeemed".
+- **Eligibility reads `BookingInvite` directly, never
+  `SessionGuest.invitedUserId`.** The offer needs the invite's
+  `createdAt` for the manifest rule and its `revokedAt` for liveness;
+  the mirror column carries neither. This follows UNP-20's own rule that
+  access decisions consult the invite table only.
+- **Multiple qualifying stays**: if a user has more than one earning
+  stay in-window, the most recently departed one is used. The discount
+  is identical either way; only the `earnedByRecordId` bookkeeping
+  differs.
+- **Apply is a click, not automatic.** The pay step shows the offer card
+  with an Apply button; applying snapshots the discount onto the
+  session, and it can be removed before payment. One instrument per
+  booking stays a visible choice, not a silent default.
 - **Discount floor**: after discount plus any referral credit, at least
   KSh 500 of the booking stays collectable (`lib/paymentPlan.ts`). A cap
   that bites is surfaced and re-confirmed, never silent.
+- **Every redemption records its claimant** (`claimantUserId`, now
+  always present since checkout requires sign-in).
 
-## 4. Terms wording (guest-facing, CP-shaped)
+## 4. Terms wording (guest-facing)
 
 To sit on the terms page and be linked from the offer email and the pay
-step. Adapted from CP's own phrasing:
+step:
 
 > **Repeat Guest offer.** Book a new break within 31 days of departing
 > your last break and save KSh 5,000 per lodge, up to a maximum of three
-> lodges, when booked under the same booking reference. Anyone who was a
-> registered member of your previous party can use the offer, provided
-> they have that break's booking reference and book within 31 days of
-> departure. The offer is applied at the point of booking and cannot be
-> added to an existing booking. It cannot be used in conjunction with any
-> other offer. Unity Parks may withdraw an offer where a booking reference
-> is shared outside the party it belongs to.
-
-That last sentence is ours, not CP's: it is what makes decision 6's kill
-switch legitimate rather than arbitrary.
+> lodges. The offer is available to the account that made the previous
+> booking and to any party member who accepted an invitation to that
+> break before its departure date. Sign in when booking and the offer is
+> applied automatically at the point of booking. It cannot be added to an
+> existing booking and cannot be used in conjunction with any other
+> offer.
 
 ## 5. Out of scope
 
 - Minted or shared promo code strings, campaigns, any code table.
-- Come Back Soon perks (UNP-18). Mandatory accounts (UNP-19).
-  Invite-a-guest (UNP-20). Sign-up prize draw (CP runs one; not filed).
+- A typed booking-reference fallback for uninvited party members
+  (deliberate deviation from CP, section 2).
+- Come Back Soon perks (UNP-18). Sign-up prize draw (CP runs one; not
+  filed).
 - Account credit, campaign dashboards, extras-targeted discounts,
   schedulers, marketing email broadcasting.
 
@@ -162,7 +184,7 @@ switch legitimate rather than arbitrary.
   (referral or repeat-guest). Strictly after `assignUnits`, strictly
   before the folio re-read, as a Finance API allowance per folio.
 - Idempotency key `up-repeat-<sessionId>-<slot>`, reason
-  `UP-REPEAT-<reference>`, riding Apaleo's 24h dedup window.
+  `UP-REPEAT-<earning record id>`, riding Apaleo's 24h dedup window.
 - Split across N lodges pro-rata on the session's per-lodge snapshots,
   never live balances; last folio takes the exact remainder; whole-KES
   Math.round.
@@ -180,22 +202,22 @@ switch legitimate rather than arbitrary.
 **RepeatGuestRedemption**: `earnedByRecordId` (the earning stay; NOT
 unique, many redemptions per stay by design), `sessionId`,
 `bookingRecordId` (nullable until confirm, then **unique**: this is what
-makes confirm idempotent under crash replay), `claimantUserId` (nullable),
-`claimantEmail`, `amount` (frozen KES granted), `status` (`PENDING` |
-`CONFIRMED` | `RELEASED`), timestamps.
+makes confirm idempotent under crash replay), `claimantUserId` (required),
+`amount` (frozen KES granted), `status` (`PENDING` | `CONFIRMED` |
+`RELEASED`), timestamps.
 
-The uniqueness moved: one redemption per NEW booking, not one per earning
-stay. A stay may be claimed many times; a booking carries at most one
-claim.
+One redemption per NEW booking; an earning stay may be claimed many
+times; a booking carries at most one claim.
 
-**BookingRecord**: `offerEmailSentAt` (notification stamp) and
-`offerRevokedAt` (decision 6's kill switch). Nothing else changes.
+**BookingRecord**: `offerEmailSentAt` (notification stamp). The 28 Aug
+`offerRevokedAt` kill switch is deleted with the rest of the
+typed-secret machinery.
 
 **BookingSession**: repeat-offer snapshot fields alongside the referral
-ones (earning reference, computed discount), frozen with the rest.
+ones (earning record id, computed discount), frozen with the rest.
 
-No campaign or code tables. Value, lodge cap, window and alert threshold
-are constants in `lib/repeatOffer.ts` until a second offer type exists.
+No campaign or code tables. Value, lodge cap and window are constants in
+`lib/repeatOffer.ts` until a second offer type exists.
 
 ## 8. Invariants
 
@@ -204,44 +226,68 @@ are constants in `lib/repeatOffer.ts` until a second offer type exists.
 2. One NEW booking carries at most one redemption, ever, under any
    concurrency. An earning stay may be claimed many times inside its
    window.
-3. At least KSh 500 of every booking remains collectable after discount
+3. Only a verified party member of the earning stay can hold or claim
+   its offer: the record's owner, or a user with an accepted, unrevoked
+   invite on it created before departure. Checked when surfaced and
+   re-checked inside the claim.
+4. At least KSh 500 of every booking remains collectable after discount
    plus credit.
-4. Session offer fields never change after the BookingRecord exists.
-5. A replayed or crashed checkout converges to the same totals as a clean
+5. Session offer fields never change after the BookingRecord exists.
+6. A replayed or crashed checkout converges to the same totals as a clean
    one.
-6. Consent state never affects redemption, only notification.
-7. No downstream money code (deposit, balance, refund, Zoho export) reads
+7. Consent state never affects redemption, only notification.
+8. No downstream money code (deposit, balance, refund, Zoho export) reads
    the redemption table.
 
 ## 9. Failure modes and how they are survived
 
-**Concurrent claims on the same reference**: expected and allowed, so
+**Concurrent claims on the same earning stay**: expected and allowed, so
 there is no race to lose in the normal case. The atomic work is narrow: a
 conditional insert keyed on the NEW booking. Refusals come only from an
-expired window, a revoked offer, or an ineligible earning stay, and take
-the honest path: snapshot cleared, totals re-render, guest re-reads before
-paying. Silently proceeding undiscounted is forbidden.
+expired window or an eligibility check that stopped holding (stay
+cancelled or membership revoked between surfacing and claim), and take
+the honest path: snapshot cleared, totals re-render, guest re-reads
+before paying. Silently proceeding undiscounted is forbidden.
 
-**Burn timing**: nothing durable at typing. PENDING at checkout, CONFIRMED
+**Burn timing**: nothing durable at apply. PENDING at checkout, CONFIRMED
 in the same local step that records the booking. Dead checkouts leave
 PENDING rows, swept by the ops route after 24h (Apaleo's dedup boundary).
 Crash between claim and confirm replays through ensureRecord's recovery;
 unique `bookingRecordId` plus the idempotency key make replay converge.
 
-**Window expires mid-funnel**: checked at typing and re-checked at the
-claim, property-local time (+02:00 discipline). Honest cleanup path.
+**Replay adopts, never re-litigates** (adversarial find, 2 Sep): a replay
+that discovers a live PENDING redemption for this session adopts it as
+the money truth, the same rule as referral's crashed-claim adoption in
+`server/referral/checkout.ts`. Eligibility (window, membership, stay
+state) is checked when the claim is FIRST created, never re-run against a
+claim whose allowance may already sit on the folios. Without this, a
+crash on day 31 replayed on day 32 would refuse the re-check while the
+crashed allowance stays on the folio: a record born discounted with no
+redemption row, violating invariant 1. The mid-funnel re-checks in this
+section all describe the first claim, not replays.
 
-**A reference posted publicly**: no hard block (decision 6). The
-redemption count per stay is watched; passing 10 raises an `OpsAlert`, and
-a human can set `offerRevokedAt` on that stay, which refuses further
-claims with a clear message. The advisory endpoint is rate-limited per
-session and returns one generic "not valid" for unknown, expired and
-revoked references alike, so it cannot be walked as a reference oracle.
-UNP-20 closes the underlying gap properly.
+**Window expires mid-funnel**: eligibility computed when the pay step
+renders and re-checked at the claim, property-local time (+02:00
+discipline). Honest cleanup path.
 
-**Cancel-the-first-stay gaming** (the contractor's worry): structurally
-impossible. Only a departed, fully-paid, uncancelled stay qualifies, so
-cancelling the first holiday leaves nothing to redeem.
+**Membership revoked mid-funnel**: the lead guest changes the invitee's
+seat email while the invitee is mid-checkout with the offer applied. The
+claim re-check catches it; same honest cleanup path as an expired
+window.
+
+**Identity changes mid-funnel**: user A applies their offer, signs out,
+user B signs in and finishes the booking. The details route already
+releases referral credit on an identity change; the offer snapshot is
+cleared in the same place, so a discount never outlives the account that
+earned it. The claim's own membership re-check is the backstop.
+
+**Cancel-the-first-stay gaming**: structurally impossible. Only a
+departed, fully-paid, uncancelled stay qualifies, so cancelling the
+first holiday leaves nothing to redeem.
+
+**Post-departure invite churn**: covered by decision 5. New invites
+after departure carry no offer; revoking an old one strips it. Churn
+monotonically shrinks the eligible set.
 
 **Notification failures are low-stakes by design**: entitlement does not
 depend on the email. The send claims `offerEmailSentAt` first, then calls
@@ -254,76 +300,91 @@ Safe to run twice, reminders-style.
 ### Earn
 
 Nothing to do. A stay that departs fully paid and uncancelled IS the
-offer, for everyone who was on it.
+offer, for its verified party members.
 
 ### Notify
 
-Ops (or later a scheduler) hits `POST /api/ops/repeat-offers/run`: finds
-records departed inside the window, lead guest linked to a user with
-`marketingEmail = true`, no send stamp; sends "You have KSh 5,000 per
-lodge off your next break, book by <date>, your reference is <ref>" via
-`server/email/repeatOffer.ts`. Stamp-first, run-twice-safe.
+Two touches:
+
+- **Pre-stay**: the booking confirmation email names the offer and tells
+  the lead guest that party members invited before departure share it
+  (decision 10). No new send; a section in the existing template.
+- **Post-stay**: ops (or later a scheduler) hits
+  `POST /api/ops/repeat-offers/run`: finds records departed inside the
+  window, lead guest with `marketingEmail = true`, no send stamp; sends
+  "You have KSh 5,000 per lodge off your next break, book by <date>,
+  just sign in" via `server/email/repeatOffer.ts`. Stamp-first,
+  run-twice-safe. No booking reference in the body; it is not the token
+  any more.
 
 ### Spend
 
-At the pay step, "Been with us before?" accepts a booking reference (the
-existing referral box grows a second accepted format, routed by shape).
-Advisory line shows the discount. Checkout claims, re-checks window,
-eligibility and revocation, posts the allowance, freezes totals; the
-deposit is 30% of the discounted amount. A later cancellation refunds
-correctly with zero offer-aware code, and leaves the earning stay's window
-untouched for the rest of the party.
+At the pay step, a signed-in eligible user sees the offer card: "KSh
+5,000 per lodge off your next break, book by <date>", with an Apply
+button. Applying snapshots the earning record id and computed discount
+onto the session. Checkout re-checks eligibility inside the claim, posts
+the allowance, freezes totals; the deposit is 30% of the discounted
+amount. A later cancellation refunds correctly with zero offer-aware
+code, and leaves the earning stay's window untouched for the rest of the
+party. Signed-out or ineligible users see nothing; there is no input to
+probe.
 
 ### Manage
 
 Account page: an "Offer available" card while the signed-in user has a
-stay inside its 31-day window (value, deadline, the reference), shown
-whether or not others have already claimed it. Ops:
-`/ops/repeat-offers` overview (in-window stays, notified, redemption
-counts, alerts, revoke button), admin-gated like `/ops/referrals`.
+qualifying stay inside its 31-day window (value, deadline), shown to
+owners and accepted invitees alike, whether or not others have already
+claimed. Ops: `/ops/repeat-offers` overview (in-window stays, notified,
+redemption counts), admin-gated like `/ops/referrals`. No revoke button,
+no alerts; the page is a read-out, not a control panel.
 
 ## 11. Files touched (expected)
 
-- `prisma/schema.prisma`: RepeatGuestRedemption, two BookingRecord stamps,
+- `prisma/schema.prisma`: RepeatGuestRedemption, `offerEmailSentAt`,
   session snapshot fields.
-- `lib/repeatOffer.ts`: constants, eligibility and discount math (pure,
+- `lib/repeatOffer.ts`: constants, window and discount math (pure,
   unit-tested).
-- `server/repeatOffer/`: validate, claim, notify job, ops queries.
+- `server/repeatOffer/`: eligibility query (membership + stay checks),
+  claim, notify job, ops queries.
 - `server/booking/checkout.ts` + `server/referral/checkout.ts`: the
   instrument extraction; repeat-guest wired as the second instrument.
 - `app/api/ops/repeat-offers/run/route.ts`, `app/ops/repeat-offers/page.tsx`.
-- Pay step client + session route: snapshot set/clear, freeze guard,
-  reference input routing.
-- Account page: offer card. `server/email/repeatOffer.ts` (template 8).
+- Pay step client + session route: eligibility surface, snapshot
+  set/clear, freeze guard.
+- Account page: offer card. `server/email/repeatOffer.ts` (template) and
+  the offer section in `server/email/bookingConfirmation.ts`.
 - Terms page: section 4 wording.
 
 ## 12. Acceptance check (end to end, deployed)
 
-1. Complete and settle a booking with marketing ticked and an account;
-   force departure state.
-2. Ops run: one offer email recorded (or listed unsent without a key); the
-   account page shows the offer card. A second run changes nothing.
-3. Book again typing the old reference: discount line at pay, deposit =
-   30% of the discounted total, folio shows the allowance, totals agree
-   everywhere.
-4. Type the same reference in a second, unrelated booking: also
-   discounted, two redemption rows against one stay, each recording its
-   claimant.
-5. A reference from a cancelled or unpaid stay, or outside the 31-day
-   window: generic "not valid" advisory, refusal at the claim.
-6. Drive one stay past the alert threshold: an OpsAlert exists, claims
-   still succeed; then revoke that stay and confirm the next claim refuses
-   honestly.
+1. Complete and settle a booking with marketing ticked, a second adult
+   invited (invite created pre-departure) who accepts; force departure
+   state. Confirm the confirmation email carried the offer section.
+2. Ops run: one offer email recorded for the lead (or listed unsent
+   without a key); a second run changes nothing. The account pages of
+   BOTH the lead and the accepted invitee show the offer card.
+3. Lead books again signed in: offer card at pay names the amount,
+   Apply produces the discount line, deposit = 30% of the discounted
+   total, folio shows the allowance, totals agree everywhere.
+4. Invitee signs in and makes their own separate booking: also
+   discounted; two redemption rows against one earning stay, each
+   recording its claimant.
+5. An unrelated account sees no card anywhere; a stay outside the
+   31-day window, cancelled, or unpaid produces no card; a forged
+   direct API apply for a non-member is refused.
+6. Invite a third address AFTER departure; that account, once accepted,
+   can read the booking but gets no offer card and a direct apply is
+   refused (manifest rule).
 7. Cancel a discounted booking: refund math correct; the earning stay's
    window still works for another party member.
 8. Replay test: kill checkout between claim and confirm, replay, totals
    identical, exactly one CONFIRMED redemption for that booking.
-9. Consent off: redemption still works; no email sent.
+9. Consent off: offer card still shows and redemption still works; no
+   reminder email sent.
 
 ## 13. Open questions
 
-- Should the booking confirmation email mention the offer when consent is
-  ticked, or keep it a post-stay surprise?
-- The alert threshold (proposed 10 redemptions on one stay).
-- Whether the pay-step copy names the amount, now that the checkout carrot
-  does.
+None. The three 28 Aug questions closed on 2 Sep: confirmation email
+mentions the offer (decision 10), pay step names the amount (decision
+11), and the alert threshold died with the typed-secret design
+(decision 6).
