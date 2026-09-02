@@ -123,12 +123,16 @@ describe("qualifyingStay", () => {
 
   it("finds the owner's paid, departed, in-window stay", () => {
     const s = stay();
-    expect(qualifyingStay({ userId: "user-lead", stays: [s], todayIso: today })).toBe(s);
+    expect(qualifyingStay({ userId: "user-lead", stays: [s], todayIso: today })?.recordId).toBe(
+      s.recordId,
+    );
   });
 
   it("finds a stay through an accepted pre-departure invite", () => {
     const s = stay({ ownerUserId: "user-lead", invites: [invite()] });
-    expect(qualifyingStay({ userId: "user-guest", stays: [s], todayIso: today })).toBe(s);
+    expect(qualifyingStay({ userId: "user-guest", stays: [s], todayIso: today })?.recordId).toBe(
+      s.recordId,
+    );
   });
 
   it("a stay that is not fully paid earns nothing (deposit_paid, created)", () => {
@@ -165,12 +169,14 @@ describe("qualifyingStay", () => {
     const older = stay({ recordId: "rec-old", departure: "2026-08-20" });
     const newer = stay({ recordId: "rec-new", departure: "2026-08-28" });
     expect(
-      qualifyingStay({ userId: "user-lead", stays: [older, newer], todayIso: "2026-09-05" }),
-    ).toBe(newer);
+      qualifyingStay({ userId: "user-lead", stays: [older, newer], todayIso: "2026-09-05" })
+        ?.recordId,
+    ).toBe("rec-new");
     // Order of the input list must not matter.
     expect(
-      qualifyingStay({ userId: "user-lead", stays: [newer, older], todayIso: "2026-09-05" }),
-    ).toBe(newer);
+      qualifyingStay({ userId: "user-lead", stays: [newer, older], todayIso: "2026-09-05" })
+        ?.recordId,
+    ).toBe("rec-new");
   });
 
   it("membership is per stay: an invitee of one stay gets nothing from another", () => {
@@ -185,8 +191,8 @@ describe("qualifyingStay", () => {
         userId: "user-guest",
         stays: [invited, notInvited],
         todayIso: today,
-      }),
-    ).toBe(invited);
+      })?.recordId,
+    ).toBe("rec-a");
   });
 
   it("no stays, no offer", () => {

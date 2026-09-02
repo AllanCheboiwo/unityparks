@@ -9,6 +9,7 @@ import {
   offerDiscountFor,
 } from "./repeatOffer";
 import { MIN_PART_PAYMENT } from "./paymentPlan";
+import { capApplicableCredit } from "./referral";
 
 /**
  * Frozen suite for UNP-7 (docs/promo-codes-plan.md): the pure offer math.
@@ -94,5 +95,17 @@ describe("capOfferDiscount", () => {
 
   it("never goes negative on a booking cheaper than the floor", () => {
     expect(capOfferDiscount({ bookingTotal: 400, discount: 5000 })).toBe(0);
+  });
+
+  it("composes with referral credit: one shared 500 floor arbitrates the pair (invariant 4, decision 7)", () => {
+    // Credit is capped against what the offer discount leaves, so the two
+    // instruments together can never eat past the floor. Capping each
+    // independently against the full total would leave zero collectable.
+    const bookingTotal = 10_000;
+    const discount = capOfferDiscount({ bookingTotal, discount: 5000 });
+    const credit = capApplicableCredit({ bookingTotal, discount, vestedBalance: 5000 });
+    expect(discount).toBe(5000);
+    expect(credit).toBe(4500);
+    expect(bookingTotal - discount - credit).toBe(MIN_PART_PAYMENT);
   });
 });

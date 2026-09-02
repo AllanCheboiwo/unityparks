@@ -17,9 +17,11 @@ import {
  * The composer is pure and its facts type carries no booking reference,
  * which is the design that keeps the retired typed-secret out of inboxes:
  * the email says sign in, because the account IS the claim. The sender
- * follows the codebase's once-only pattern (claim before composing,
- * release on failure), the same semantics the offerEmailSentAt stamp gives
- * the real module.
+ * claims the offerEmailSentAt stamp before composing and the stamp STAYS
+ * on failure (spec section 9): this is a marketing email, a double send is
+ * worse than a missed one, and the ops overview lists
+ * stamped-but-possibly-unsent records for a manual decision. Deliberately
+ * NOT the partyInvite release-on-failure pattern.
  */
 
 function facts(overrides: Partial<RepeatOfferFacts> = {}): RepeatOfferFacts {
@@ -117,21 +119,26 @@ describe("sendRepeatOfferNotices", () => {
     expect(sent).toHaveLength(1);
   });
 
-  it("releases the claim when the send fails, so a later run retries", async () => {
+  it("a failed send leaves the stamp: no automatic retry, the ops overview owns the decision", async () => {
+    // Spec section 9: "a failure leaves the stamp". A double marketing email
+    // is worse than a missed one, so recovery is a human reading the
+    // stamped-but-possibly-unsent list, never a blind re-send.
     const store = new FakeStore([pendingNotice()]);
     const failing = vi.fn(async () => ({ sent: false as const }));
     await sendRepeatOfferNotices(store, failing);
     await sendRepeatOfferNotices(store, mailerOk);
-    expect(sent).toHaveLength(1);
+    expect(sent).toHaveLength(0);
+    expect(store.claimed.has("rec-1")).toBe(true);
   });
 
-  it("a mailer that throws never breaks the caller, and the row stays retryable", async () => {
+  it("a mailer that throws never breaks the caller, and the stamp stays", async () => {
     const store = new FakeStore([pendingNotice()]);
     const exploding = vi.fn(async (): Promise<{ sent: boolean }> => {
       throw new Error("resend down");
     });
     await expect(sendRepeatOfferNotices(store, exploding)).resolves.not.toThrow();
     await sendRepeatOfferNotices(store, mailerOk);
-    expect(sent).toHaveLength(1);
+    expect(sent).toHaveLength(0);
+    expect(store.claimed.has("rec-1")).toBe(true);
   });
 });

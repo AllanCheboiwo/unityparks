@@ -84,6 +84,19 @@ describe("planInstrumentAllowances", () => {
     expect(posts[0]).toMatchObject({ folioId: "folio-a", amount: 5000 });
   });
 
+  it("never pushes a share above its base, carrying overflow to the next lodge", () => {
+    // A folio allowance above the folio's own charges would be refused or
+    // leave a credit; the split must clamp, exactly as the referral seam does.
+    const posts = plan({ amount: 5900, bases: [5000, 1000] });
+    expect(posts[0].amount).toBeLessThanOrEqual(5000);
+    expect(posts[1].amount).toBeLessThanOrEqual(1000);
+    expect(posts.reduce((sum, p) => sum + p.amount, 0)).toBe(5900);
+  });
+
+  it("refuses an amount above the sum of bases rather than posting nonsense", () => {
+    expect(() => plan({ amount: 7000, bases: [5000, 1000] })).toThrow();
+  });
+
   it("stamps the reason with the earning reference so every allowance is attributable in Apaleo", () => {
     for (const post of plan()) {
       expect(post.reason).toContain("rec-earn");

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
-import { decideClaim, type ClaimContext } from "./claim";
+import { decideClaim, isSweepablePending, type ClaimContext } from "./claim";
 import { type StayFacts } from "./eligibility";
 
 /**
@@ -116,6 +116,15 @@ describe("decideClaim: replay adopts, never re-litigates", () => {
     ).toEqual({ action: "adopt", redemptionId: "red-1", amount: 5000 });
   });
 
+  it("adopts the PENDING row's own amount, never the recomputed one", () => {
+    // The basket can change between crash and replay, but the crashed
+    // allowance on the folios matches the PENDING amount. Recording anything
+    // else would break invariants 1 and 6.
+    expect(
+      decideClaim(ctx({ pending, recomputedDiscount: 10_000 })),
+    ).toEqual({ action: "adopt", redemptionId: "red-1", amount: 5000 });
+  });
+
   it("adopts even when the snapshot was cleared before the replay", () => {
     // An honest-path cleanup can wipe the session snapshot after the crash;
     // the PENDING row alone is the money truth.
@@ -181,19 +190,48 @@ describe("decideClaim: first-claim refusals take the honest path", () => {
     });
   });
 
-  it("refuses when the recomputed discount shrank below what was promised", () => {
-    // The basket changed and the capped discount no longer covers the number
-    // the guest accepted. Same discipline as referral: re-render, never
-    // silently charge against a smaller discount than every screen showed.
+  it("refuses when the recomputed discount differs from what was promised, in either direction", () => {
+    // Snapshot 5,000, basket changed. The honest-path discipline (spec
+    // section 9) applies to every mismatch: re-render, guest re-reads,
+    // never a silently different number than the screens showed. Growth is
+    // not silently claimed either; the re-render simply offers the bigger
+    // number and the guest re-applies.
+    expect(decideClaim(ctx({ recomputedDiscount: 4000 }))).toMatchObject({
+      action: "refuse",
+      reason: "discount_changed",
+    });
+    expect(decideClaim(ctx({ recomputedDiscount: 10_000 }))).toMatchObject({
+      action: "refuse",
+      reason: "discount_changed",
+    });
+  });
+});
+
+describe("isSweepablePending: the 24h dead-checkout sweep", () => {
+  const now = "2026-09-10T12:00:00Z";
+
+  it("sweeps a PENDING row strictly older than 24 hours", () => {
     expect(
-      decideClaim(ctx({ recomputedDiscount: 4000 })),
-    ).toMatchObject({ action: "refuse", reason: "discount_shrunk" });
+      isSweepablePending({ status: "PENDING", createdAtIso: "2026-09-09T11:00:00Z" }, now),
+    ).toBe(true);
   });
 
-  it("claims the recomputed amount when it grew (a lodge was added)", () => {
-    expect(decideClaim(ctx({ recomputedDiscount: 10_000 }))).toMatchObject({
-      action: "claim",
-      amount: 10_000,
-    });
+  it("never sweeps inside the 24h Apaleo dedup window: a replay may still need to adopt this row", () => {
+    expect(
+      isSweepablePending({ status: "PENDING", createdAtIso: "2026-09-09T13:00:00Z" }, now),
+    ).toBe(false);
+    // Exactly 24h is still inside the boundary.
+    expect(
+      isSweepablePending({ status: "PENDING", createdAtIso: "2026-09-09T12:00:00Z" }, now),
+    ).toBe(false);
+  });
+
+  it("never touches CONFIRMED or RELEASED rows, however old", () => {
+    expect(
+      isSweepablePending({ status: "CONFIRMED", createdAtIso: "2026-09-01T00:00:00Z" }, now),
+    ).toBe(false);
+    expect(
+      isSweepablePending({ status: "RELEASED", createdAtIso: "2026-09-01T00:00:00Z" }, now),
+    ).toBe(false);
   });
 });

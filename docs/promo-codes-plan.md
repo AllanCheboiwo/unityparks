@@ -147,6 +147,12 @@ lead guest, who always has the offer, can book for the group instead.
   with an Apply button; applying snapshots the discount onto the
   session, and it can be removed before payment. One instrument per
   booking stays a visible choice, not a silent default.
+- **Any snapshot mismatch refuses, growth included** (2 Sep, test
+  review): when the recomputed discount differs from the number the guest
+  accepted, in either direction, the claim refuses and the totals
+  re-render. A grown discount is offered again, never silently claimed;
+  decision 11 promises the pay step names the amount, so the amount
+  charged against must be the amount shown.
 - **Discount floor**: after discount plus any referral credit, at least
   KSh 500 of the booking stays collectable (`lib/paymentPlan.ts`). A cap
   that bites is surfaced and re-confirmed, never silent.
@@ -381,6 +387,12 @@ no alerts; the page is a read-out, not a control panel.
    identical, exactly one CONFIRMED redemption for that booking.
 9. Consent off: offer card still shows and redemption still works; no
    reminder email sent.
+10. Freeze guard: after the discounted booking's record exists, an apply
+   or remove of the offer on that session answers 409 and the snapshot
+   is unchanged (invariant 5).
+11. Both instruments on one booking: a repeat discount plus referral
+   credit on a cheap booking leaves exactly the KSh 500 floor
+   collectable, never less (invariant 4, decision 7).
 
 ## 13. Open questions
 
