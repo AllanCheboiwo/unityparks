@@ -14,15 +14,17 @@ import { splitAcrossLodges } from "@/lib/referral";
  * not change: in-flight bookings ride their keys.
  */
 
-export type InstrumentKind = "referral" | "repeat";
+export type InstrumentKind = "referral" | "credit" | "repeat";
 
 const KEY_PREFIX: Record<InstrumentKind, string> = {
   referral: "up-allow", // shipped with the referral engine; frozen
+  credit: "up-credit", // shipped with the referral engine; frozen
   repeat: "up-repeat",
 };
 
 const REASON_PREFIX: Record<InstrumentKind, string> = {
   referral: "UP-REFERRAL",
+  credit: "UP-CREDIT",
   repeat: "UP-REPEAT",
 };
 

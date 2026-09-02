@@ -4,6 +4,7 @@ import { prisma } from "../db";
 import { PublicError } from "../api-helpers";
 import { postAllowance } from "../apaleo/payments";
 import { parseExtras, setReferralOnSession, type SessionWithLodges } from "../booking/session";
+import { planInstrumentAllowances } from "../booking/instrument";
 import { validateReferralCode, refusalMessage } from "./validate";
 import { vestedCreditBalance } from "./derive";
 import { findClaim, isLiveClaim, markClaimPosting, releaseClaim } from "./claim";
@@ -125,7 +126,7 @@ export async function applyReferralAtCheckout(input: {
   // --- The referral code, re-validated authoritatively ---------------------
   let attribution: Prisma.ReferralAttributionUncheckedCreateWithoutRecordInput | null = null;
   let discount = 0;
-  let discountReason = "";
+  let discountRef = "";
   if (session.referralCode) {
     const check = await validateReferralCode({
       code: session.referralCode,
@@ -156,7 +157,7 @@ export async function applyReferralAtCheckout(input: {
         "Your referral discount is larger than this booking can take, so it has been reduced. Please review your total and press Buy now again.",
       );
     }
-    discountReason = `UP-REFERRAL-${check.participant.code}`;
+    discountRef = check.participant.code;
 
     // Velocity check: a hot code is reviewed by a human, never auto-frozen
     // (self-referral economics are already unattractive, plan section 9).
@@ -202,7 +203,7 @@ export async function applyReferralAtCheckout(input: {
 
   // --- Applied credit ------------------------------------------------------
   let credit = 0;
-  let creditReason = "";
+  let creditRef = "";
   let creditClaim: ReferralLedgerEntry | null = null;
 
   if (liveClaim) {
@@ -240,7 +241,7 @@ export async function applyReferralAtCheckout(input: {
     } else {
       creditClaim = liveClaim;
       credit = Math.round(Math.abs(liveClaim.amount));
-      creditReason = `UP-CREDIT-${participant.code}`;
+      creditRef = participant.code;
       await prisma.bookingSession.updateMany({
         where: { id: session.id, booking: null },
         data: { applyCredit: true, creditAmount: credit },
@@ -267,7 +268,7 @@ export async function applyReferralAtCheckout(input: {
         "Your referral credit is not available. It has been removed - please review your total and press Buy now again.",
       );
     }
-    creditReason = `UP-CREDIT-${participant.code}`;
+    creditRef = participant.code;
     const stamped = session.creditAmount;
     let outcome: { kind: "ok" | "none" | "short"; amount: number; claimId?: string };
     try {
@@ -371,35 +372,48 @@ export async function applyReferralAtCheckout(input: {
     }
   }
 
-  // --- Post the allowances, deterministic split, own key per family --------
+  // --- Post the allowances through the shared instrument seam --------------
+  // The planner owns the deterministic split and the per-family keys
+  // (server/booking/instrument.ts); the prefixes and amounts are identical
+  // to the pre-seam code, so in-flight bookings replay onto the same keys.
   const discountShares = discount > 0 ? splitAcrossLodges(discount, bases) : bases.map(() => 0);
   // Credit splits over what the discount left, so no folio can be pushed
   // into credit even when both ride one booking.
   const remaining = bases.map((base, slot) => base - discountShares[slot]);
-  const creditShares = credit > 0 ? splitAcrossLodges(credit, remaining) : bases.map(() => 0);
+
+  const planned = [
+    ...(discount > 0
+      ? planInstrumentAllowances({
+          instrument: "referral",
+          sessionId: session.id,
+          amount: discount,
+          bases,
+          folios,
+          reasonRef: discountRef,
+        })
+      : []),
+    ...(credit > 0
+      ? planInstrumentAllowances({
+          instrument: "credit",
+          sessionId: session.id,
+          amount: credit,
+          bases: remaining,
+          folios,
+          reasonRef: creditRef,
+        })
+      : []),
+  ];
 
   const allowanceRefs: string[] = [];
-  for (const [slot, folio] of folios.entries()) {
-    if (discountShares[slot] > 0) {
-      const posted = await postAllowance({
-        folioId: folio.folioId,
-        amount: discountShares[slot],
-        currency: folio.currency,
-        reason: discountReason,
-        idempotencyKey: `up-allow-${session.id}-${slot}`,
-      });
-      allowanceRefs.push(posted.allowanceId);
-    }
-    if (creditShares[slot] > 0) {
-      const posted = await postAllowance({
-        folioId: folio.folioId,
-        amount: creditShares[slot],
-        currency: folio.currency,
-        reason: creditReason,
-        idempotencyKey: `up-credit-${session.id}-${slot}`,
-      });
-      allowanceRefs.push(posted.allowanceId);
-    }
+  for (const post of planned) {
+    const posted = await postAllowance({
+      folioId: post.folioId,
+      amount: post.amount,
+      currency: post.currency,
+      reason: post.reason,
+      idempotencyKey: post.idempotencyKey,
+    });
+    allowanceRefs.push(posted.allowanceId);
   }
 
   if (attribution) attribution.allowanceRefs = JSON.stringify(allowanceRefs);
