@@ -1,8 +1,9 @@
 # The repeat-guest offer (UNP-7)
 
-Status: writing-tests
+Status: tests-approved
 
 Plan approved: 2 Sep 2026, Allan wrote "plan-approved"
+Tests approved: 2 Sep 2026, commit f55e876 (suite commits a1443b0, eb5f98c, f55e876, all test-and-spec-only), Allan wrote "tests approved"
 
 **Revised 2 Sep 2026** after UNP-19 (mandatory accounts) and UNP-20
 (invite-a-guest) shipped. The 28 Aug typed-reference draft is superseded:
