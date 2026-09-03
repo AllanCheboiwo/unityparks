@@ -9,6 +9,11 @@ import { prisma } from "../db";
 import { pushZohoAfterSettle } from "../zoho/wire";
 import { createBooking, getFolioForReservation, type FolioSummary } from "../apaleo/bookings";
 import {
+  applyRepeatOfferAtCheckout,
+  confirmRedemption,
+  reconcileOfferFlags,
+} from "../repeatOffer/checkout";
+import {
   assignSpecificUnit,
   autoAssignUnit,
   getAvailableUnits,
@@ -606,8 +611,10 @@ async function ensureRecord(sessionId: string): Promise<{
     // flags agree with the ledger before the pay page renders again: a
     // credit toggled on while this record was mid-flight would otherwise
     // show a discount the frozen total never absorbed (and vice versa
-    // after a refused attempt).
+    // after a refused attempt). The offer reconcile also heals a crash
+    // that landed between the record create and the redemption confirm.
     await reconcileCreditFlags(session.id);
+    await reconcileOfferFlags(session.id);
     return { record: existing, session };
   }
 
@@ -702,7 +709,17 @@ async function ensureRecord(sessionId: string): Promise<{
     feeDroppedBySlot: assignments.map((a) => a.locationFeeDropped),
     folios,
   });
-  if (referral.postedAllowances) {
+  // The second instrument on the same seam: the repeat-guest offer
+  // (docs/promo-codes-plan.md section 6). Same window in the booking's
+  // life, its own idempotency keys, PENDING row confirmed with the record
+  // create below.
+  const repeatOffer = await applyRepeatOfferAtCheckout({
+    session,
+    feeDroppedBySlot: assignments.map((a) => a.locationFeeDropped),
+    folios,
+    referralDiscountApplied: referral.attribution != null,
+  });
+  if (referral.postedAllowances || repeatOffer.postedAllowances) {
     folios = [];
     for (const reservationId of reservationIds) {
       folios.push(await getFolioForReservation(reservationId));
@@ -764,6 +781,13 @@ async function ensureRecord(sessionId: string): Promise<{
         : null;
     if (!raced) throw err;
     record = raced;
+  }
+
+  // Confirm in the same local step that records the booking: conditional
+  // on PENDING plus the unique bookingRecordId, so replay and the racing
+  // tab converge on exactly one CONFIRMED row for this record.
+  if (repeatOffer.redemptionId) {
+    await confirmRedemption(repeatOffer.redemptionId, record.id);
   }
 
   // Stamp each lodge with its reservation, for manage and amend later. When

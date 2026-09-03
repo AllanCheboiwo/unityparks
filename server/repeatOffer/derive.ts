@@ -17,26 +17,26 @@ export function propertyTodayIso(now = new Date()): string {
 /** Candidate stays for a user: paid records they own or hold a live
  * accepted invite on. Window, manifest and membership fine-print run in
  * qualifyingStay, not in SQL. */
-export async function stayFactsForUser(userId: string): Promise<StayFacts[]> {
-  const records = await prisma.bookingRecord.findMany({
-    where: {
-      status: "paid",
-      OR: [
-        { userId },
-        { invites: { some: { acceptedByUserId: userId, revokedAt: null } } },
-      ],
-    },
-    select: {
-      id: true,
-      userId: true,
-      status: true,
-      session: { select: { departure: true } },
-      invites: {
-        select: { acceptedByUserId: true, revokedAt: true, createdAt: true },
-      },
-    },
-  });
-  return records.map((record) => ({
+const STAY_SELECT = {
+  id: true,
+  userId: true,
+  status: true,
+  session: { select: { departure: true } },
+  invites: {
+    select: { acceptedByUserId: true, revokedAt: true, createdAt: true },
+  },
+} as const;
+
+type StayRow = {
+  id: string;
+  userId: string | null;
+  status: string;
+  session: { departure: string };
+  invites: Array<{ acceptedByUserId: string | null; revokedAt: Date | null; createdAt: Date }>;
+};
+
+function toStayFacts(record: StayRow): StayFacts {
+  return {
     recordId: record.id,
     ownerUserId: record.userId,
     status: record.status,
@@ -46,7 +46,30 @@ export async function stayFactsForUser(userId: string): Promise<StayFacts[]> {
       revokedAt: invite.revokedAt ? invite.revokedAt.toISOString() : null,
       createdAtIso: invite.createdAt.toISOString(),
     })),
-  }));
+  };
+}
+
+export async function stayFactsForUser(userId: string): Promise<StayFacts[]> {
+  const records = await prisma.bookingRecord.findMany({
+    where: {
+      status: "paid",
+      OR: [
+        { userId },
+        { invites: { some: { acceptedByUserId: userId, revokedAt: null } } },
+      ],
+    },
+    select: STAY_SELECT,
+  });
+  return records.map(toStayFacts);
+}
+
+/** Fresh facts for one earning stay, for the claim's re-check. */
+export async function stayFactsById(recordId: string): Promise<StayFacts | null> {
+  const record = await prisma.bookingRecord.findUnique({
+    where: { id: recordId },
+    select: STAY_SELECT,
+  });
+  return record ? toStayFacts(record) : null;
 }
 
 /** This session's redemption row while it is still PENDING, else null.
