@@ -3,8 +3,8 @@ import { Prisma, type ReferralLedgerEntry } from "@prisma/client";
 import { prisma } from "../db";
 import { PublicError } from "../api-helpers";
 import { postAllowance } from "../apaleo/payments";
-import { parseExtras, setReferralOnSession, type SessionWithLodges } from "../booking/session";
-import { planInstrumentAllowances } from "../booking/instrument";
+import { setReferralOnSession, type SessionWithLodges } from "../booking/session";
+import { planInstrumentAllowances, snapshotBases } from "../booking/instrument";
 import { validateReferralCode, refusalMessage } from "./validate";
 import { vestedCreditBalance } from "./derive";
 import { findClaim, isLiveClaim, markClaimPosting, releaseClaim } from "./claim";
@@ -108,15 +108,9 @@ export async function applyReferralAtCheckout(input: {
     return NOTHING;
   }
 
-  // Deterministic per-lodge bases: the same snapshots every totals surface
-  // sums, minus any fee the unit-assignment fallback just dropped. Live
-  // folio balances are deliberately NOT the basis: a crash between two
-  // allowance posts would change them on replay (settle's own warning).
-  const bases = session.lodges.map((lodge, slot) => {
-    const extras = parseExtras(lodge).reduce((sum, e) => sum + e.grossAmount, 0);
-    const fee = input.feeDroppedBySlot[slot] ? 0 : (lodge.locationFee ?? 0);
-    return Math.round((lodge.stayGrossAmount ?? 0) + extras + fee);
-  });
+  // Deterministic per-lodge bases (see snapshotBases): session snapshots,
+  // never live folio balances, so replays split identically.
+  const bases = snapshotBases(session, input.feeDroppedBySlot);
   const totalBase = bases.reduce((sum, b) => sum + b, 0);
   const lodgingGross = session.lodges.reduce(
     (sum, lodge) => sum + (lodge.stayGrossAmount ?? 0),

@@ -1,5 +1,6 @@
 import "server-only";
 import { splitAcrossLodges } from "@/lib/referral";
+import { parseExtras, type SessionWithLodges } from "./session";
 
 /**
  * The discount-instrument seam (docs/promo-codes-plan.md, section 6): one
@@ -27,6 +28,24 @@ const REASON_PREFIX: Record<InstrumentKind, string> = {
   credit: "UP-CREDIT",
   repeat: "UP-REPEAT",
 };
+
+/**
+ * Deterministic per-lodge bases for splitting an instrument: the same
+ * session snapshots every totals surface sums, minus any fee the
+ * unit-assignment fallback just dropped. Live folio balances are
+ * deliberately NOT the basis: a crash between two allowance posts would
+ * change them on replay.
+ */
+export function snapshotBases(
+  session: SessionWithLodges,
+  feeDroppedBySlot: boolean[],
+): number[] {
+  return session.lodges.map((lodge, slot) => {
+    const extras = parseExtras(lodge).reduce((sum, e) => sum + e.grossAmount, 0);
+    const fee = feeDroppedBySlot[slot] ? 0 : (lodge.locationFee ?? 0);
+    return Math.round((lodge.stayGrossAmount ?? 0) + extras + fee);
+  });
+}
 
 export type PlannedAllowance = {
   folioId: string;
