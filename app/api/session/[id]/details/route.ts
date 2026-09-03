@@ -5,6 +5,7 @@ import { prisma } from "@/server/db";
 import { getSession, setGuestDetails, setReferralOnSession } from "@/server/booking/session";
 import { validateReferralCode } from "@/server/referral/validate";
 import { findClaim, isLiveClaim, releaseClaim } from "@/server/referral/claim";
+import { pendingRedemptionForSession } from "@/server/repeatOffer/derive";
 import { normalizeReferralCode } from "@/lib/referral";
 import { adultAtArrival } from "@/lib/guestRules";
 import { getCurrentUser, createAuthSession } from "@/server/auth/session";
@@ -209,9 +210,24 @@ export async function POST(
           );
         }
       }
+      // The repeat-guest offer is account state too: it must not outlive
+      // the account that earned it. A PENDING redemption is the same wall
+      // as a committed claim: its allowance may already be on the folios.
+      const pendingOffer = await pendingRedemptionForSession(id);
+      if (pendingOffer && pendingOffer.claimantUserId !== user.id) {
+        return jsonError(
+          409,
+          "This booking already has a repeat-guest offer applied by another account. Please start a new search.",
+        );
+      }
       await prisma.bookingSession.updateMany({
         where: { id, booking: null },
-        data: { applyCredit: false, creditAmount: null },
+        data: {
+          applyCredit: false,
+          creditAmount: null,
+          repeatOfferRecordId: null,
+          repeatOfferDiscount: null,
+        },
       });
     }
 
