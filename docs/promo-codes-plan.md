@@ -1,6 +1,6 @@
 # The repeat-guest offer (UNP-7)
 
-Status: implementing
+Status: in-review
 
 Plan approved: 2 Sep 2026, Allan wrote "plan-approved"
 Tests approved: 2 Sep 2026, commit f55e876 (suite commits a1443b0, eb5f98c, f55e876, all test-and-spec-only), Allan wrote "tests approved"
