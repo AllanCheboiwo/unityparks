@@ -297,6 +297,21 @@ first holiday leaves nothing to redeem.
 after departure carry no offer; revoking an old one strips it. Churn
 monotonically shrinks the eligible set.
 
+**Review hardening (2 Sep, /code-review on the branch)**: the claim was
+split into decide-then-post. The decision, every honest refusal, the
+code-conflict guard and the PENDING insert all run BEFORE the referral
+instrument posts anything, so no refusal can strand another instrument's
+allowances on a recordless checkout. The KSh 500 floor is enforced
+jointly: the referral module's guard and credit cap take the decided
+offer amount, and each pay-step route subtracts the other instrument.
+Stamping a referral code refuses while the offer rides (and vice versa,
+both directions now guarded at the stamp). Basket edits (lodge, extras,
+location) refuse while a PENDING redemption exists, so a replay's split
+always matches what was posted. stampSessionUser clears the offer
+snapshot on inline sign-in identity changes, same as the details route.
+confirmRedemption wins over the sweep in either order by reclaiming a
+swept row whose allowances are on the frozen folios.
+
 **Notification failures are low-stakes by design**: entitlement does not
 depend on the email. The send claims `offerEmailSentAt` first, then calls
 Resend (no-ops without a key); a failure leaves the stamp and the ops
