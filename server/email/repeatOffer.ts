@@ -12,6 +12,16 @@ import { formatKes } from "@/lib/format";
  * deliberately NOT the partyInvite release-on-failure pattern.
  */
 
+/** House pattern (see partyInvite.ts): anything user-typed that reaches
+ * HTML gets escaped, even when today's only recipient is the typist. */
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
 export type RepeatOfferFacts = {
   firstName: string | null;
   perLodgeAmount: number; // KES
@@ -39,6 +49,7 @@ export function composeRepeatOffer(facts: RepeatOfferFacts): {
   const amount = formatKes(facts.perLodgeAmount);
   const subject = `${amount} per lodge off your next Unity Parks break`;
   const greeting = facts.firstName ? `Hello ${facts.firstName},` : "Hello,";
+  const greetingHtml = facts.firstName ? `Hello ${escapeHtml(facts.firstName)},` : "Hello,";
   const deadline = longDate(facts.deadline);
 
   const text = [
@@ -53,7 +64,7 @@ export function composeRepeatOffer(facts: RepeatOfferFacts): {
   ].join("\n");
 
   const html = [
-    `<p>${greeting}</p>`,
+    `<p>${greetingHtml}</p>`,
     `<p>Thank you for staying with us. As a returning guest you have <strong>${amount} off per lodge</strong> on your next break, up to ${facts.maxLodges} lodges.</p>`,
     `<p>Book by <strong>${deadline}</strong>: just sign in and the offer is applied at the pay step.</p>`,
     `<p><a href="${facts.accountUrl}">${facts.accountUrl}</a></p>`,
