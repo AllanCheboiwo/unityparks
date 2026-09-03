@@ -159,6 +159,22 @@ export default function TermsPage() {
             </p>
           </div>
 
+          <div id="repeat-guest-offer" className="scroll-mt-6">
+            <h2 className="font-display text-2xl font-bold text-ink">
+              Repeat Guest offer
+            </h2>
+            <p className="mt-2 text-foreground">
+              Book a new break within 31 days of departing your last break and
+              save KSh 5,000 per lodge, up to a maximum of three lodges. The
+              offer is available to the account that made the previous booking
+              and to any party member who accepted an invitation to that break
+              before its departure date. Sign in when booking and the offer is
+              applied at the point of booking. It cannot be added to an
+              existing booking and cannot be used in conjunction with any
+              other offer.
+            </p>
+          </div>
+
           <div>
             <h2 className="font-display text-2xl font-bold text-ink">
               A demo, honestly

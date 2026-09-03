@@ -4,6 +4,8 @@ import { prisma } from "../db";
 import { sendEmail } from "./resend";
 import { parseChildrenAges } from "../booking/session";
 import { LODGES } from "@/content/lodges";
+import { formatKes } from "@/lib/format";
+import { OFFER_PER_LODGE, OFFER_WINDOW_DAYS } from "@/lib/repeatOffer";
 
 /**
  * The booking-confirmation email, sent once per booking the moment its
@@ -97,6 +99,11 @@ export async function sendBookingConfirmation(recordId: string): Promise<void> {
             `Pay any time from Manage my booking.`,
           ]),
       ``,
+      `And a thank-you to look forward to: as a returning guest you'll have`,
+      `${formatKes(OFFER_PER_LODGE)} per lodge off your next break, booked within`,
+      `${OFFER_WINDOW_DAYS} days of departing this one. Party members you invite on the`,
+      `guest details page before departure share the offer.`,
+      ``,
       `Manage your break (change dates, add guest names) at ${manageUrl}`,
       `by signing in with your Unity Parks account.`,
       ``,
@@ -141,6 +148,13 @@ export async function sendBookingConfirmation(recordId: string): Promise<void> {
               )
         }
       </table>
+      <p style="margin:0 0 20px;color:#4c4e4b;font-size:14px;line-height:1.5;">
+        And a thank-you to look forward to: as a returning guest you'll have
+        <strong>${formatKes(OFFER_PER_LODGE)} per lodge off your next break</strong>,
+        booked within ${OFFER_WINDOW_DAYS} days of departing this one. Party
+        members you invite on the guest details page before departure share
+        the offer.
+      </p>
       <p style="margin:0 0 20px;color:#4c4e4b;font-size:14px;line-height:1.5;">
         Need to change dates or add guest names? Sign in with your Unity
         Parks account to manage your break.
