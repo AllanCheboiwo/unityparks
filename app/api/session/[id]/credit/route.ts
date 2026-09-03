@@ -38,7 +38,10 @@ async function availableFor(
   const vested = await vestedCreditBalance(participant.id);
   return capApplicableCredit({
     bookingTotal: sessionSnapshotTotal(session),
-    discount: session.referralDiscount ?? 0,
+    // Both discount instruments eat credit room: the referral code and the
+    // repeat-guest offer are folio allowances ahead of the credit, and the
+    // checkout guard enforces the same joint floor (invariant 4, UNP-7).
+    discount: (session.referralDiscount ?? 0) + (session.repeatOfferDiscount ?? 0),
     vestedBalance: vested,
   });
 }

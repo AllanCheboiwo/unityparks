@@ -112,6 +112,10 @@ export async function GET(
         session.applyCredit && session.creditAmount != null
           ? { amount: session.creditAmount }
           : null,
+      repeatOffer:
+        session.repeatOfferRecordId != null && session.repeatOfferDiscount != null
+          ? { amount: session.repeatOfferDiscount }
+          : null,
     });
   });
 }

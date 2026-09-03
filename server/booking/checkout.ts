@@ -9,6 +9,12 @@ import { prisma } from "../db";
 import { pushZohoAfterSettle } from "../zoho/wire";
 import { createBooking, getFolioForReservation, type FolioSummary } from "../apaleo/bookings";
 import {
+  confirmRedemption,
+  decideRepeatOfferAtCheckout,
+  executeRepeatOffer,
+  reconcileOfferFlags,
+} from "../repeatOffer/checkout";
+import {
   assignSpecificUnit,
   autoAssignUnit,
   getAvailableUnits,
@@ -606,8 +612,10 @@ async function ensureRecord(sessionId: string): Promise<{
     // flags agree with the ledger before the pay page renders again: a
     // credit toggled on while this record was mid-flight would otherwise
     // show a discount the frozen total never absorbed (and vice versa
-    // after a refused attempt).
+    // after a refused attempt). The offer reconcile also heals a crash
+    // that landed between the record create and the redemption confirm.
     await reconcileCreditFlags(session.id);
+    await reconcileOfferFlags(session.id);
     return { record: existing, session };
   }
 
@@ -697,12 +705,32 @@ async function ensureRecord(sessionId: string): Promise<{
   // discount can exist (docs/referral-system-plan.md 5.1). The re-read then
   // absorbs it into the total, the deposit, the Pesapal order, the settle
   // basis and refunds with no further referral code anywhere downstream.
+  // The repeat-guest decision runs FIRST, before any allowance exists
+  // anywhere: every honest refusal (window, membership, mismatch, code
+  // conflict) must fire while the folios are still clean, or a refused
+  // attempt would strand the other instrument's posts (2 Sep review).
+  const repeatDecision = await decideRepeatOfferAtCheckout({
+    session,
+    feeDroppedBySlot: assignments.map((a) => a.locationFeeDropped),
+  });
   const referral = await applyReferralAtCheckout({
     session,
     feeDroppedBySlot: assignments.map((a) => a.locationFeeDropped),
     folios,
+    // The offer amount joins the referral module's KSh 500 floor guard and
+    // its credit cap, so the two instruments can never jointly overdraw a
+    // booking (invariant 4).
+    repeatOfferAmount: repeatDecision.kind === "post" ? repeatDecision.amount : 0,
   });
-  if (referral.postedAllowances) {
+  // The second instrument's posts: same window in the booking's life, its
+  // own idempotency keys, PENDING row confirmed with the record create.
+  const repeatOffer = await executeRepeatOffer({
+    session,
+    feeDroppedBySlot: assignments.map((a) => a.locationFeeDropped),
+    folios,
+    decision: repeatDecision,
+  });
+  if (referral.postedAllowances || repeatOffer.postedAllowances) {
     folios = [];
     for (const reservationId of reservationIds) {
       folios.push(await getFolioForReservation(reservationId));
@@ -764,6 +792,13 @@ async function ensureRecord(sessionId: string): Promise<{
         : null;
     if (!raced) throw err;
     record = raced;
+  }
+
+  // Confirm in the same local step that records the booking: conditional
+  // on PENDING plus the unique bookingRecordId, so replay and the racing
+  // tab converge on exactly one CONFIRMED row for this record.
+  if (repeatOffer.redemptionId) {
+    await confirmRedemption(repeatOffer.redemptionId, record.id);
   }
 
   // Stamp each lodge with its reservation, for manage and amend later. When

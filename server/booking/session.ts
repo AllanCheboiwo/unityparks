@@ -316,7 +316,16 @@ export async function stampSessionUser(id: string, userId: string): Promise<void
   // here we only stop the display flags carrying over.
   await prisma.bookingSession.updateMany({
     where: { id, state: { not: "completed" }, userId: { not: userId } },
-    data: { applyCredit: false, creditAmount: null },
+    data: {
+      applyCredit: false,
+      creditAmount: null,
+      // The repeat-guest offer is account state too (UNP-7): a snapshot
+      // applied by the previous identity must not survive the handover.
+      // The claim's own membership re-check is the money backstop; this
+      // stops the display carrying over, same as the credit flags.
+      repeatOfferRecordId: null,
+      repeatOfferDiscount: null,
+    },
   });
   // Expired sessions are dead everywhere else (getSession refuses them),
   // and a dead session's credit spend has already been counted back into

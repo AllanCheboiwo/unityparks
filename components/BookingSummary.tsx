@@ -67,7 +67,8 @@ export function BookingSummary({
   // rows keep the rail honest with what checkout will collect.
   const referralDiscount = summary.referral?.discount ?? 0;
   const creditApplied = summary.credit?.amount ?? 0;
-  const total = Math.max(0, grossTotal - referralDiscount - creditApplied);
+  const offerApplied = summary.repeatOffer?.amount ?? 0;
+  const total = Math.max(0, grossTotal - referralDiscount - creditApplied - offerApplied);
 
   const row = "flex justify-between gap-3";
   const label = "text-foreground/60";
@@ -151,8 +152,14 @@ export function BookingSummary({
             );
           })}
 
-          {(referralDiscount > 0 || creditApplied > 0) && (
+          {(referralDiscount > 0 || creditApplied > 0 || offerApplied > 0) && (
             <div className="px-4 py-3 grid gap-1.5 border-b border-line">
+              {offerApplied > 0 && (
+                <div className={row}>
+                  <span className={label}>Repeat-guest offer</span>
+                  <span className={value}>-{formatKes(offerApplied)}</span>
+                </div>
+              )}
               {referralDiscount > 0 && (
                 <div className={row}>
                   <span className={label}>

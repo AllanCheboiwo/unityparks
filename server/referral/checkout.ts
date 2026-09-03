@@ -3,7 +3,8 @@ import { Prisma, type ReferralLedgerEntry } from "@prisma/client";
 import { prisma } from "../db";
 import { PublicError } from "../api-helpers";
 import { postAllowance } from "../apaleo/payments";
-import { parseExtras, setReferralOnSession, type SessionWithLodges } from "../booking/session";
+import { setReferralOnSession, type SessionWithLodges } from "../booking/session";
+import { planInstrumentAllowances, snapshotBases } from "../booking/instrument";
 import { validateReferralCode, refusalMessage } from "./validate";
 import { vestedCreditBalance } from "./derive";
 import { findClaim, isLiveClaim, markClaimPosting, releaseClaim } from "./claim";
@@ -81,6 +82,12 @@ export async function applyReferralAtCheckout(input: {
   /** Per-slot outcome of assignUnits; a dropped fee shrinks that base. */
   feeDroppedBySlot: boolean[];
   folios: Array<{ folioId: string; currency: string }>;
+  /** The repeat-guest amount decided for this checkout (0 when none). It
+   * joins this module's floor guard and credit cap so the two instruments
+   * never jointly eat past the KSh 500 collectable floor (invariant 4 of
+   * docs/promo-codes-plan.md). A stamped referral CODE cannot coexist with
+   * the offer (refused upstream), so this only interacts with credit. */
+  repeatOfferAmount: number;
 }): Promise<ReferralAtCheckout> {
   const { session, folios } = input;
 
@@ -107,15 +114,9 @@ export async function applyReferralAtCheckout(input: {
     return NOTHING;
   }
 
-  // Deterministic per-lodge bases: the same snapshots every totals surface
-  // sums, minus any fee the unit-assignment fallback just dropped. Live
-  // folio balances are deliberately NOT the basis: a crash between two
-  // allowance posts would change them on replay (settle's own warning).
-  const bases = session.lodges.map((lodge, slot) => {
-    const extras = parseExtras(lodge).reduce((sum, e) => sum + e.grossAmount, 0);
-    const fee = input.feeDroppedBySlot[slot] ? 0 : (lodge.locationFee ?? 0);
-    return Math.round((lodge.stayGrossAmount ?? 0) + extras + fee);
-  });
+  // Deterministic per-lodge bases (see snapshotBases): session snapshots,
+  // never live folio balances, so replays split identically.
+  const bases = snapshotBases(session, input.feeDroppedBySlot);
   const totalBase = bases.reduce((sum, b) => sum + b, 0);
   const lodgingGross = session.lodges.reduce(
     (sum, lodge) => sum + (lodge.stayGrossAmount ?? 0),
@@ -125,7 +126,7 @@ export async function applyReferralAtCheckout(input: {
   // --- The referral code, re-validated authoritatively ---------------------
   let attribution: Prisma.ReferralAttributionUncheckedCreateWithoutRecordInput | null = null;
   let discount = 0;
-  let discountReason = "";
+  let discountRef = "";
   if (session.referralCode) {
     const check = await validateReferralCode({
       code: session.referralCode,
@@ -156,7 +157,7 @@ export async function applyReferralAtCheckout(input: {
         "Your referral discount is larger than this booking can take, so it has been reduced. Please review your total and press Buy now again.",
       );
     }
-    discountReason = `UP-REFERRAL-${check.participant.code}`;
+    discountRef = check.participant.code;
 
     // Velocity check: a hot code is reviewed by a human, never auto-frozen
     // (self-referral economics are already unattractive, plan section 9).
@@ -202,7 +203,7 @@ export async function applyReferralAtCheckout(input: {
 
   // --- Applied credit ------------------------------------------------------
   let credit = 0;
-  let creditReason = "";
+  let creditRef = "";
   let creditClaim: ReferralLedgerEntry | null = null;
 
   if (liveClaim) {
@@ -240,7 +241,7 @@ export async function applyReferralAtCheckout(input: {
     } else {
       creditClaim = liveClaim;
       credit = Math.round(Math.abs(liveClaim.amount));
-      creditReason = `UP-CREDIT-${participant.code}`;
+      creditRef = participant.code;
       await prisma.bookingSession.updateMany({
         where: { id: session.id, booking: null },
         data: { applyCredit: true, creditAmount: credit },
@@ -267,7 +268,7 @@ export async function applyReferralAtCheckout(input: {
         "Your referral credit is not available. It has been removed - please review your total and press Buy now again.",
       );
     }
-    creditReason = `UP-CREDIT-${participant.code}`;
+    creditRef = participant.code;
     const stamped = session.creditAmount;
     let outcome: { kind: "ok" | "none" | "short"; amount: number; claimId?: string };
     try {
@@ -276,7 +277,9 @@ export async function applyReferralAtCheckout(input: {
           const vested = await vestedCreditBalance(participant.id, tx);
           let applicable = capApplicableCredit({
             bookingTotal: totalBase,
-            discount,
+            // The repeat-guest offer eats credit room exactly like the
+            // code discount does; both are folio allowances ahead of it.
+            discount: discount + input.repeatOfferAmount,
             vestedBalance: vested,
           });
           if (applicable <= 0) return { kind: "none" as const, amount: 0 };
@@ -349,7 +352,7 @@ export async function applyReferralAtCheckout(input: {
   // spend is never clamped down silently; the guest resolves it by
   // removing the code at the details step or unticking the credit (which
   // releases the claim), then pressing Buy now again.
-  if (discount + credit > totalBase - MIN_PART_PAYMENT) {
+  if (discount + credit + input.repeatOfferAmount > totalBase - MIN_PART_PAYMENT) {
     throw new PublicError(
       409,
       "Your referral discount and credit together no longer fit this booking's total. Remove the code on the details step or untick the credit, then press Buy now again.",
@@ -371,35 +374,48 @@ export async function applyReferralAtCheckout(input: {
     }
   }
 
-  // --- Post the allowances, deterministic split, own key per family --------
+  // --- Post the allowances through the shared instrument seam --------------
+  // The planner owns the deterministic split and the per-family keys
+  // (server/booking/instrument.ts); the prefixes and amounts are identical
+  // to the pre-seam code, so in-flight bookings replay onto the same keys.
   const discountShares = discount > 0 ? splitAcrossLodges(discount, bases) : bases.map(() => 0);
   // Credit splits over what the discount left, so no folio can be pushed
   // into credit even when both ride one booking.
   const remaining = bases.map((base, slot) => base - discountShares[slot]);
-  const creditShares = credit > 0 ? splitAcrossLodges(credit, remaining) : bases.map(() => 0);
+
+  const planned = [
+    ...(discount > 0
+      ? planInstrumentAllowances({
+          instrument: "referral",
+          sessionId: session.id,
+          amount: discount,
+          bases,
+          folios,
+          reasonRef: discountRef,
+        })
+      : []),
+    ...(credit > 0
+      ? planInstrumentAllowances({
+          instrument: "credit",
+          sessionId: session.id,
+          amount: credit,
+          bases: remaining,
+          folios,
+          reasonRef: creditRef,
+        })
+      : []),
+  ];
 
   const allowanceRefs: string[] = [];
-  for (const [slot, folio] of folios.entries()) {
-    if (discountShares[slot] > 0) {
-      const posted = await postAllowance({
-        folioId: folio.folioId,
-        amount: discountShares[slot],
-        currency: folio.currency,
-        reason: discountReason,
-        idempotencyKey: `up-allow-${session.id}-${slot}`,
-      });
-      allowanceRefs.push(posted.allowanceId);
-    }
-    if (creditShares[slot] > 0) {
-      const posted = await postAllowance({
-        folioId: folio.folioId,
-        amount: creditShares[slot],
-        currency: folio.currency,
-        reason: creditReason,
-        idempotencyKey: `up-credit-${session.id}-${slot}`,
-      });
-      allowanceRefs.push(posted.allowanceId);
-    }
+  for (const post of planned) {
+    const posted = await postAllowance({
+      folioId: post.folioId,
+      amount: post.amount,
+      currency: post.currency,
+      reason: post.reason,
+      idempotencyKey: post.idempotencyKey,
+    });
+    allowanceRefs.push(posted.allowanceId);
   }
 
   if (attribution) attribution.allowanceRefs = JSON.stringify(allowanceRefs);

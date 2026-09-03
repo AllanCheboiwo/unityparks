@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { pendingRedemptionForSession } from "@/server/repeatOffer/derive";
 import { z } from "zod";
 import { getExtraOffers } from "@/server/apaleo/offers";
 import { LOCATION_SERVICE_CODE } from "@/server/apaleo/units";
@@ -68,6 +69,16 @@ export async function POST(
     // extras edit could never reach it and would only make summaries lie.
     if (await prisma.bookingRecord.findUnique({ where: { sessionId: id } })) {
       return jsonError(409, "Your booking is already being processed. Press Buy now to finish.");
+    }
+    // A PENDING redemption means a crashed checkout's offer allowances may
+    // already sit on the folios, split over the current bases; changing
+    // the basket now would make the replay's split diverge from what was
+    // posted (UNP-7 review finding).
+    if (session.userId != null && (await pendingRedemptionForSession(id))) {
+      return jsonError(
+        409,
+        "Your booking is being confirmed with your repeat-guest offer applied. Press Buy now to finish.",
+      );
     }
 
     const parsed = ExtrasBody.safeParse(await req.json());

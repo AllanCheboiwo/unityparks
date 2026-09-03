@@ -12,6 +12,7 @@ import {
 } from "@/lib/paymentPlan";
 import { LODGES } from "@/content/lodges";
 import type { SessionSummary } from "@/lib/types";
+import { OFFER_PER_LODGE } from "@/lib/repeatOffer";
 import { Stepper } from "@/components/Stepper";
 import { BookingSummary } from "@/components/BookingSummary";
 import { ExpiredNotice } from "@/components/ExpiredNotice";
@@ -21,6 +22,10 @@ import { AlertIcon } from "../icons";
 type CheckoutResponse =
   | { status: "redirect"; redirectUrl: string }
   | { status: string; bookingId: string };
+
+type OfferState = {
+  available: { earnedByRecordId: string; amount: number; deadline: string } | null;
+};
 
 // What the guest sees after Pesapal bounced them back without a paid booking.
 const PAYMENT_NOTICES: Record<string, string> = {
@@ -47,6 +52,11 @@ export function PayClient({ provider }: { provider: "simulated" | "pesapal" }) {
   // else; the server is the judge either way.
   const [creditAvailable, setCreditAvailable] = useState(0);
   const [creditBusy, setCreditBusy] = useState(false);
+  // The repeat-guest offer (UNP-7): account state, surfaced by the server
+  // for verified party members of a recent stay. Advisory like the credit;
+  // the claim re-derives everything at checkout.
+  const [offer, setOffer] = useState<{ amount: number; deadline: string } | null>(null);
+  const [offerBusy, setOfferBusy] = useState(false);
   // Referral code. Prefilled from the session (a /r/ link stamped it, or the
   // guest typed it here on an earlier pass) and editable until checkout
   // freezes the totals. Advisory: the server validates again at checkout.
@@ -76,10 +86,12 @@ export function PayClient({ provider }: { provider: "simulated" | "pesapal" }) {
           applyReferral(s.data.referral.code);
         }
       }
-      const c = await apiFetch<{ available: number; applied: boolean }>(
-        `/api/session/${sessionId}/credit`,
-      );
+      const [c, o] = await Promise.all([
+        apiFetch<{ available: number }>(`/api/session/${sessionId}/credit`),
+        apiFetch<OfferState>(`/api/session/${sessionId}/repeat-offer`),
+      ]);
       if (c.ok) setCreditAvailable(c.data.available);
+      if (o.ok) setOffer(o.data.available);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
@@ -89,26 +101,39 @@ export function PayClient({ provider }: { provider: "simulated" | "pesapal" }) {
   // refused apply, an untick that burned this booking's slot, a discount
   // that ate the room left for credit). So every money change re-reads both.
   async function refreshTotals() {
-    const [fresh, credit] = await Promise.all([
+    const [fresh, credit, offerState] = await Promise.all([
       apiFetch<SessionSummary>(`/api/session/${sessionId}`),
       apiFetch<{ available: number }>(`/api/session/${sessionId}/credit`),
+      apiFetch<OfferState>(`/api/session/${sessionId}/repeat-offer`),
     ]);
     if (fresh.ok) setSession(fresh.data);
     if (credit.ok) setCreditAvailable(credit.data.available);
+    if (offerState.ok) setOffer(offerState.data.available);
   }
 
-  async function toggleCredit(apply: boolean) {
+  // One toggle for every discount instrument on the page: same busy
+  // locking, error surfacing and totals refresh, so the boxes cannot
+  // drift apart behaviourally as instruments accumulate.
+  async function toggleInstrument(
+    path: string,
+    setBusyFlag: (busy: boolean) => void,
+    apply: boolean,
+  ) {
     if (!sessionId) return;
-    setCreditBusy(true);
-    const result = await apiFetch<{ applied: boolean; amount: number | null }>(
-      `/api/session/${sessionId}/credit`,
-      { method: "POST", body: JSON.stringify({ apply }) },
-    );
-    setCreditBusy(false);
+    setBusyFlag(true);
+    const result = await apiFetch<{ applied: boolean; amount: number | null }>(path, {
+      method: "POST",
+      body: JSON.stringify({ apply }),
+    });
+    setBusyFlag(false);
     if (!result.ok) setError(result.error);
     else setError(null);
     await refreshTotals();
   }
+  const toggleOffer = (apply: boolean) =>
+    toggleInstrument(`/api/session/${sessionId}/repeat-offer`, setOfferBusy, apply);
+  const toggleCredit = (apply: boolean) =>
+    toggleInstrument(`/api/session/${sessionId}/credit`, setCreditBusy, apply);
 
   async function applyReferral(codeOverride?: string) {
     if (!sessionId) return;
@@ -199,7 +224,11 @@ export function PayClient({ provider }: { provider: "simulated" | "pesapal" }) {
   // them. Advisory like everything else here.
   const referralDiscount = session.referral?.discount ?? 0;
   const creditApplied = session.credit?.amount ?? 0;
-  const bookingTotal = Math.max(0, grossTotal - referralDiscount - creditApplied);
+  const offerApplied = session.repeatOffer?.amount ?? 0;
+  const bookingTotal = Math.max(
+    0,
+    grossTotal - referralDiscount - creditApplied - offerApplied,
+  );
 
   // The deposit option, 57+ days out only. These numbers are advisory: the
   // server recomputes eligibility and the amount from the folio totals,
@@ -395,6 +424,33 @@ export function PayClient({ provider }: { provider: "simulated" | "pesapal" }) {
               <p className="mt-2 text-[#b3261e]">{referralStatus.message}</p>
             )}
           </div>
+
+          {(offer != null || offerApplied > 0) && (
+            <div className="mt-4 rounded-lg bg-white border border-line p-5">
+              <label className="flex cursor-pointer items-start gap-3">
+                <input
+                  type="checkbox"
+                  checked={offerApplied > 0}
+                  // Locked while Buy now runs, same reason as the credit box.
+                  disabled={offerBusy || busy}
+                  onChange={(e) => toggleOffer(e.target.checked)}
+                  className="mt-1 h-4 w-4 accent-[#536917]"
+                />
+                <span className="flex-1 text-sm">
+                  <span className="font-semibold text-ink">
+                    Apply your repeat-guest offer:{" "}
+                    {formatKes(offerApplied > 0 ? offerApplied : (offer?.amount ?? 0))} off
+                  </span>
+                  <span className="mt-0.5 block text-xs text-foreground/60">
+                    {formatKes(OFFER_PER_LODGE)} per lodge off for returning
+                    guests
+                    {offer?.deadline ? `, book by ${formatDate(offer.deadline)}` : ""}.
+                    Cannot be combined with a referral code.
+                  </span>
+                </span>
+              </label>
+            </div>
+          )}
 
           {(creditAvailable > 0 || creditApplied > 0) && (
             <div className="mt-4 rounded-lg bg-white border border-line p-5">

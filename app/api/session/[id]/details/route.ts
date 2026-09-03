@@ -5,6 +5,7 @@ import { prisma } from "@/server/db";
 import { getSession, setGuestDetails, setReferralOnSession } from "@/server/booking/session";
 import { validateReferralCode } from "@/server/referral/validate";
 import { findClaim, isLiveClaim, releaseClaim } from "@/server/referral/claim";
+import { pendingRedemptionForSession } from "@/server/repeatOffer/derive";
 import { normalizeReferralCode } from "@/lib/referral";
 import { adultAtArrival } from "@/lib/guestRules";
 import { getCurrentUser, createAuthSession } from "@/server/auth/session";
@@ -209,9 +210,28 @@ export async function POST(
           );
         }
       }
+      // The repeat-guest offer is account state too: it must not outlive
+      // the account that earned it. A PENDING redemption is the same wall
+      // as a committed claim: its allowance may already be on the folios.
+      // Only a walk that had a signed-in owner can carry one, so a fresh
+      // guest walk (userId null) skips the read.
+      if (session.userId != null) {
+        const pendingOffer = await pendingRedemptionForSession(id);
+        if (pendingOffer && pendingOffer.claimantUserId !== user.id) {
+          return jsonError(
+            409,
+            "This booking already has a repeat-guest offer applied by another account. Please start a new search.",
+          );
+        }
+      }
       await prisma.bookingSession.updateMany({
         where: { id, booking: null },
-        data: { applyCredit: false, creditAmount: null },
+        data: {
+          applyCredit: false,
+          creditAmount: null,
+          repeatOfferRecordId: null,
+          repeatOfferDiscount: null,
+        },
       });
     }
 
@@ -234,6 +254,21 @@ export async function POST(
         ? normalizeReferralCode(session.referralCode ?? "")
         : normalizeReferralCode(referralCode);
     if (typedCode) {
+      // One discount instrument per booking (UNP-7 decision 7): a session
+      // already carrying the repeat-guest offer (a live snapshot, or an
+      // in-flight claim from a crashed checkout) refuses a referral code
+      // here at the stamp, not at the money click. Skipped when the
+      // identity just changed, because that block cleared the snapshot.
+      const offerRiding =
+        session.userId === user.id &&
+        (session.repeatOfferRecordId != null ||
+          (await pendingRedemptionForSession(id)) != null);
+      if (offerRiding) {
+        return jsonError(
+          409,
+          "This booking carries your repeat-guest offer, which cannot be combined with a referral code. Remove the offer at the pay step first.",
+        );
+      }
       const check = await validateReferralCode({
         code: typedCode,
         guestEmail: email,

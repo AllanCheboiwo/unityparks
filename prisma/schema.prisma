@@ -50,6 +50,7 @@ model User {
   bookingRecords  BookingRecord[]
   acceptedInvites BookingInvite[]
   referralParticipant ReferralParticipant?
+  repeatRedemptions   RepeatGuestRedemption[]
 }
 
 // A login session. The row id IS the bearer token carried by the up_session
@@ -150,6 +151,13 @@ model BookingSession {
   // re-derives the spendable balance authoritatively and clamps.
   applyCredit  Boolean @default(false)
   creditAmount Float?
+
+  // Repeat-guest offer snapshot (UNP-7), stamped from the pay step's Apply
+  // and frozen with the rest once a BookingRecord exists. Advisory like the
+  // referral fields: the claim re-derives eligibility and amount
+  // authoritatively (server/repeatOffer/claim.ts).
+  repeatOfferRecordId String?
+  repeatOfferDiscount Float?
 
   booking BookingRecord?
   creditSpend ReferralLedgerEntry?
@@ -307,6 +315,12 @@ model BookingRecord {
   reminderUpcomingEmailAt DateTime?
   reminderOverdueEmailAt  DateTime?
 
+  // Repeat-guest offer reminder (UNP-7), claimed atomically like every
+  // other email stamp. Unlike the others the stamp STAYS on a failed send:
+  // a doubled marketing email is worse than a missed one, and the ops
+  // overview lists stamped-but-possibly-unsent records for a human.
+  offerEmailSentAt DateTime?
+
   // Ownership. Copied from the session at creation, or adopted later by the
   // claim backfill when an account registers/logs in with the guest email.
   // claimedVia records how the link happened so a wrong adoption is visible
@@ -321,6 +335,41 @@ model BookingRecord {
   referralAttribution ReferralAttribution?
   extrasOrders        ExtrasOrder[]
   invites BookingInvite[]
+  redemptionsEarned RepeatGuestRedemption[] @relation("RedemptionEarnedBy")
+  redemption        RepeatGuestRedemption?  @relation("RedemptionSpentOn")
+}
+
+// One redemption of the repeat-guest offer (UNP-7). The earning stay is NOT
+// unique - anyone in its party can claim inside the 31-day window - but the
+// NEW booking is: one discount instrument per booking, and the unique
+// bookingRecordId is what makes confirm idempotent under crash replay.
+// Lifecycle: PENDING at the claim (just before the allowance posts),
+// CONFIRMED in the same step that records the booking, RELEASED only by the
+// 24h dead-checkout sweep. No downstream money code reads this table.
+model RepeatGuestRedemption {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  earnedByRecordId String
+  earnedBy         BookingRecord @relation("RedemptionEarnedBy", fields: [earnedByRecordId], references: [id])
+
+  // The claiming session. Unique: the conditional-insert key that settles
+  // two racing tabs (loser adopts the winner's PENDING row).
+  sessionId String @unique
+
+  // The NEW booking, set at confirm.
+  bookingRecordId String?        @unique
+  bookingRecord   BookingRecord? @relation("RedemptionSpentOn", fields: [bookingRecordId], references: [id])
+
+  // Always present (accounts are mandatory); identity gates the adopt path
+  // and makes every redemption attributable.
+  claimantUserId String
+  claimant       User   @relation(fields: [claimantUserId], references: [id])
+
+  amount Float // frozen KES granted
+
+  status String @default("PENDING") // PENDING | CONFIRMED | RELEASED
 }
 
 // One "add extras after booking" operation for one lodge, created BEFORE any
