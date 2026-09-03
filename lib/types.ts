@@ -113,6 +113,8 @@ export type SessionSummary = {
   referral: { code: string; discount: number | null } | null;
   /** Referral credit the guest chose to apply at the pay step. */
   credit: { amount: number } | null;
+  /** Repeat-guest offer the guest applied at the pay step (UNP-7). */
+  repeatOffer: { amount: number } | null;
 };
 
 /** One extra offered on the Manage add-extras card. */

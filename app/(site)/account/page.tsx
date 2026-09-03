@@ -12,6 +12,7 @@ import {
 import { formatDate, formatKes, nightsLabel } from "@/lib/format";
 import { LODGES } from "@/content/lodges";
 import { ReferralCard } from "./ReferralCard";
+import { offerForUser } from "@/server/repeatOffer/derive";
 
 function nightsBetween(arrival: string, departure: string): number {
   return Math.round((Date.parse(departure) - Date.parse(arrival)) / 86_400_000);
@@ -26,7 +27,7 @@ export default async function AccountPage() {
   // Three independent reads, one round trip wait. invitedRecords are the
   // breaks this account was invited to (UNP-20): live accepted invites on
   // uncancelled bookings, listed with a badge and no money.
-  const [records, invitedRecords, participant] = await Promise.all([
+  const [records, invitedRecords, participant, offer] = await Promise.all([
     prisma.bookingRecord.findMany({
       where: { userId: user.id },
       include: { session: { include: { lodges: { orderBy: { slot: "asc" } } } } },
@@ -45,6 +46,9 @@ export default async function AccountPage() {
     // The referral card's numbers, derived at read like every referral
     // figure. Null participant renders the claim card.
     prisma.referralParticipant.findUnique({ where: { userId: user.id } }),
+    // The repeat-guest offer card (UNP-7): shown to owners and accepted
+    // invitees of a stay inside its 31-day window, consent-blind.
+    offerForUser(user.id),
   ]);
   const referral =
     participant && !participant.revokedAt
@@ -73,6 +77,22 @@ export default async function AccountPage() {
       </p>
 
       <ReferralCard participant={referral} shareBase={shareBase} />
+
+      {offer && (
+        <div className="mt-6 rounded-lg border border-bronze bg-white p-5">
+          <p className="font-display text-lg font-bold text-ink">
+            Your repeat-guest offer
+          </p>
+          <p className="mt-1 text-sm text-foreground">
+            {formatKes(offer.perLodge)} off per lodge of your next break, up to{" "}
+            {offer.maxLodges} lodges. Book by {formatDate(offer.deadline)}, signed
+            in to this account, and the offer is applied at the pay step.
+          </p>
+          <Link href="/" className="btn-primary mt-4 text-sm">
+            Book your next break
+          </Link>
+        </div>
+      )}
 
       {invitedRecords.length > 0 && (
         <div className="mt-6 grid gap-4">
