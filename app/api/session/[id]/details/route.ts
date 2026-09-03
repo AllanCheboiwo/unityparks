@@ -213,12 +213,16 @@ export async function POST(
       // The repeat-guest offer is account state too: it must not outlive
       // the account that earned it. A PENDING redemption is the same wall
       // as a committed claim: its allowance may already be on the folios.
-      const pendingOffer = await pendingRedemptionForSession(id);
-      if (pendingOffer && pendingOffer.claimantUserId !== user.id) {
-        return jsonError(
-          409,
-          "This booking already has a repeat-guest offer applied by another account. Please start a new search.",
-        );
+      // Only a walk that had a signed-in owner can carry one, so a fresh
+      // guest walk (userId null) skips the read.
+      if (session.userId != null) {
+        const pendingOffer = await pendingRedemptionForSession(id);
+        if (pendingOffer && pendingOffer.claimantUserId !== user.id) {
+          return jsonError(
+            409,
+            "This booking already has a repeat-guest offer applied by another account. Please start a new search.",
+          );
+        }
       }
       await prisma.bookingSession.updateMany({
         where: { id, booking: null },
