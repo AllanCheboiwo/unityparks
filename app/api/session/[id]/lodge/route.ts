@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { pendingRedemptionForSession } from "@/server/repeatOffer/derive";
 import { z } from "zod";
 import { chooseLodge, getSession } from "@/server/booking/session";
 import { handleRoute, jsonError } from "@/server/api-helpers";
@@ -23,6 +24,14 @@ export async function POST(
     if (!session) return jsonError(410, "Session expired.");
     if (session.state === "completed") {
       return jsonError(409, "This booking is already confirmed. Start a new search to book another break.");
+    }
+    // A PENDING redemption freezes the bases its crashed allowances were
+    // split over (UNP-7 review finding).
+    if (session.userId != null && (await pendingRedemptionForSession(id))) {
+      return jsonError(
+        409,
+        "Your booking is being confirmed with your repeat-guest offer applied. Press Buy now to finish.",
+      );
     }
 
     const parsed = LodgeBody.safeParse(await req.json());

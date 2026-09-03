@@ -5,6 +5,7 @@ import { getSession, sessionSnapshotTotal } from "@/server/booking/session";
 import { getCurrentUser } from "@/server/auth/session";
 import { handleRoute, jsonError } from "@/server/api-helpers";
 import { offerForUser, pendingRedemptionForSession } from "@/server/repeatOffer/derive";
+import { clearOfferSnapshot } from "@/server/repeatOffer/checkout";
 import { capOfferDiscount, offerDiscountFor } from "@/lib/repeatOffer";
 
 /**
@@ -24,8 +25,12 @@ async function offerAmountFor(
   if (!user || session.userId !== user.id) return null;
   const offer = await offerForUser(user.id);
   if (!offer) return null;
+  // Applied referral credit eats offer room, mirroring the credit route
+  // subtracting the offer: one joint KSh 500 floor (invariant 4).
+  const creditApplied =
+    session.applyCredit && session.creditAmount != null ? session.creditAmount : 0;
   const amount = capOfferDiscount({
-    bookingTotal: sessionSnapshotTotal(session),
+    bookingTotal: sessionSnapshotTotal(session) - creditApplied,
     discount: offerDiscountFor(session.lodges.length),
   });
   if (amount <= 0) return null;
@@ -40,11 +45,9 @@ export async function GET(
     const { id } = await params;
     const session = await getSession(id);
     if (!session) return jsonError(410, "Session expired.");
-    return NextResponse.json({
-      available: await offerAmountFor(session),
-      applied: session.repeatOfferRecordId != null,
-      amount: session.repeatOfferDiscount,
-    });
+    // Applied state is deliberately absent: the session summary
+    // (/api/session/[id] repeatOffer) is the one source the UI trusts.
+    return NextResponse.json({ available: await offerAmountFor(session) });
   });
 }
 
@@ -75,12 +78,8 @@ export async function POST(
 
     if (!parsed.data.apply) {
       // Freeze rule folded into the write itself (check-then-act would race
-      // the record create): count 0 means a record landed.
-      const cleared = await prisma.bookingSession.updateMany({
-        where: { id, booking: null },
-        data: { repeatOfferRecordId: null, repeatOfferDiscount: null },
-      });
-      if (cleared.count === 0) {
+      // the record create): a refusal means a record landed.
+      if (!(await clearOfferSnapshot(id))) {
         return jsonError(409, "Your booking is already being confirmed. Press Buy now to finish.");
       }
       return NextResponse.json({ applied: false, amount: null });

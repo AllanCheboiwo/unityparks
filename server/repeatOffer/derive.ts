@@ -1,7 +1,12 @@
 import "server-only";
 import { prisma } from "../db";
-import { qualifyingStay, type StayFacts } from "./eligibility";
-import { OFFER_LODGE_CAP, OFFER_PER_LODGE, offerDeadline } from "@/lib/repeatOffer";
+import { propertyDay, qualifyingStay, type StayFacts } from "./eligibility";
+import {
+  OFFER_LODGE_CAP,
+  OFFER_PER_LODGE,
+  offerDeadline,
+  offerEarliestDeparture,
+} from "@/lib/repeatOffer";
 
 /**
  * The executor half of eligibility: load the facts, let the pure policy
@@ -9,9 +14,10 @@ import { OFFER_LODGE_CAP, OFFER_PER_LODGE, offerDeadline } from "@/lib/repeatOff
  * code; the queries here only bound the read.
  */
 
-/** Property-local today (+02:00), the same discipline as the manifest rule. */
+/** Property-local today, from the same +02:00 helper as the manifest rule
+ * so the two can never disagree about what day it is. */
 export function propertyTodayIso(now = new Date()): string {
-  return new Date(now.getTime() + 2 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  return propertyDay(now.toISOString());
 }
 
 /** Candidate stays for a user: paid records they own or hold a live
@@ -49,10 +55,20 @@ function toStayFacts(record: StayRow): StayFacts {
   };
 }
 
-export async function stayFactsForUser(userId: string): Promise<StayFacts[]> {
+/** Candidate stays for a user: paid records they own or hold a live
+ * accepted invite on, bounded to departures that can still be in-window
+ * (departure is an ISO date string, so string comparison is date order).
+ * The manifest and membership fine-print run in qualifyingStay, not SQL. */
+export async function stayFactsForUser(
+  userId: string,
+  todayIso: string = propertyTodayIso(),
+): Promise<StayFacts[]> {
   const records = await prisma.bookingRecord.findMany({
     where: {
       status: "paid",
+      session: {
+        departure: { gte: offerEarliestDeparture(todayIso), lt: todayIso },
+      },
       OR: [
         { userId },
         { invites: { some: { acceptedByUserId: userId, revokedAt: null } } },
@@ -96,7 +112,11 @@ export async function offerForUser(
   todayIso: string = propertyTodayIso(),
 ): Promise<OfferView | null> {
   if (!userId) return null;
-  const stay = qualifyingStay({ userId, stays: await stayFactsForUser(userId), todayIso });
+  const stay = qualifyingStay({
+    userId,
+    stays: await stayFactsForUser(userId, todayIso),
+    todayIso,
+  });
   if (!stay) return null;
   return {
     earnedByRecordId: stay.recordId,

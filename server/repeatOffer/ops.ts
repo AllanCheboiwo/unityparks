@@ -9,7 +9,12 @@ import {
 import { isOfferNotifiable } from "./notify";
 import { isSweepablePending } from "./claim";
 import { propertyTodayIso } from "./derive";
-import { OFFER_LODGE_CAP, OFFER_PER_LODGE, offerDeadline } from "@/lib/repeatOffer";
+import {
+  OFFER_LODGE_CAP,
+  OFFER_PER_LODGE,
+  offerDeadline,
+  offerEarliestDeparture,
+} from "@/lib/repeatOffer";
 
 /**
  * The ops job behind POST /api/ops/repeat-offers/run: sweep dead-checkout
@@ -59,7 +64,17 @@ export async function runRepeatOffers(): Promise<{
   // window and consent rules.
   const todayIso = propertyTodayIso();
   const candidates = await prisma.bookingRecord.findMany({
-    where: { status: "paid", offerEmailSentAt: null, userId: { not: null } },
+    where: {
+      status: "paid",
+      offerEmailSentAt: null,
+      userId: { not: null },
+      // Bounded to departures that can still be in-window; without this
+      // the never-notified set (non-consenting leads, missed windows)
+      // grows forever and every run re-reads all of it.
+      session: {
+        departure: { gte: offerEarliestDeparture(todayIso), lt: todayIso },
+      },
+    },
     select: {
       id: true,
       status: true,
@@ -103,8 +118,6 @@ export async function runRepeatOffers(): Promise<{
       });
       return claimed.count === 1;
     },
-    // Stamp-stays: the sender never calls this (spec section 9).
-    release: async () => {},
   };
   await sendRepeatOfferNotices(store, async (args) => {
     const result = await sendEmail(args);
@@ -130,7 +143,12 @@ export type RepeatOfferOverviewRow = {
 export async function repeatOfferOverview(): Promise<RepeatOfferOverviewRow[]> {
   const todayIso = propertyTodayIso();
   const records = await prisma.bookingRecord.findMany({
-    where: { status: "paid" },
+    where: {
+      status: "paid",
+      session: {
+        departure: { gte: offerEarliestDeparture(todayIso), lt: todayIso },
+      },
+    },
     select: {
       id: true,
       offerEmailSentAt: true,
@@ -152,5 +170,5 @@ export async function repeatOfferOverview(): Promise<RepeatOfferOverviewRow[]> {
       notifiedAt: record.offerEmailSentAt ? record.offerEmailSentAt.toISOString() : null,
       redemptions: record.redemptionsEarned.filter((r) => r.status === "CONFIRMED").length,
     }))
-    .sort((a, b) => (a.departure < b.departure ? 1 : -1));
+    .sort((a, b) => b.departure.localeCompare(a.departure));
 }

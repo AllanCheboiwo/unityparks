@@ -25,8 +25,6 @@ type CheckoutResponse =
 
 type OfferState = {
   available: { earnedByRecordId: string; amount: number; deadline: string } | null;
-  applied: boolean;
-  amount: number | null;
 };
 
 // What the guest sees after Pesapal bounced them back without a paid booking.
@@ -88,11 +86,11 @@ export function PayClient({ provider }: { provider: "simulated" | "pesapal" }) {
           applyReferral(s.data.referral.code);
         }
       }
-      const c = await apiFetch<{ available: number; applied: boolean }>(
-        `/api/session/${sessionId}/credit`,
-      );
+      const [c, o] = await Promise.all([
+        apiFetch<{ available: number }>(`/api/session/${sessionId}/credit`),
+        apiFetch<OfferState>(`/api/session/${sessionId}/repeat-offer`),
+      ]);
       if (c.ok) setCreditAvailable(c.data.available);
-      const o = await apiFetch<OfferState>(`/api/session/${sessionId}/repeat-offer`);
       if (o.ok) setOffer(o.data.available);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -113,31 +111,29 @@ export function PayClient({ provider }: { provider: "simulated" | "pesapal" }) {
     if (offerState.ok) setOffer(offerState.data.available);
   }
 
-  async function toggleOffer(apply: boolean) {
+  // One toggle for every discount instrument on the page: same busy
+  // locking, error surfacing and totals refresh, so the boxes cannot
+  // drift apart behaviourally as instruments accumulate.
+  async function toggleInstrument(
+    path: string,
+    setBusyFlag: (busy: boolean) => void,
+    apply: boolean,
+  ) {
     if (!sessionId) return;
-    setOfferBusy(true);
-    const result = await apiFetch<{ applied: boolean; amount: number | null }>(
-      `/api/session/${sessionId}/repeat-offer`,
-      { method: "POST", body: JSON.stringify({ apply }) },
-    );
-    setOfferBusy(false);
+    setBusyFlag(true);
+    const result = await apiFetch<{ applied: boolean; amount: number | null }>(path, {
+      method: "POST",
+      body: JSON.stringify({ apply }),
+    });
+    setBusyFlag(false);
     if (!result.ok) setError(result.error);
     else setError(null);
     await refreshTotals();
   }
-
-  async function toggleCredit(apply: boolean) {
-    if (!sessionId) return;
-    setCreditBusy(true);
-    const result = await apiFetch<{ applied: boolean; amount: number | null }>(
-      `/api/session/${sessionId}/credit`,
-      { method: "POST", body: JSON.stringify({ apply }) },
-    );
-    setCreditBusy(false);
-    if (!result.ok) setError(result.error);
-    else setError(null);
-    await refreshTotals();
-  }
+  const toggleOffer = (apply: boolean) =>
+    toggleInstrument(`/api/session/${sessionId}/repeat-offer`, setOfferBusy, apply);
+  const toggleCredit = (apply: boolean) =>
+    toggleInstrument(`/api/session/${sessionId}/credit`, setCreditBusy, apply);
 
   async function applyReferral(codeOverride?: string) {
     if (!sessionId) return;

@@ -27,11 +27,14 @@ export type StayFacts = {
 };
 
 // The property runs on +02:00 (see server/apaleo/units.ts); the manifest
-// closes at local midnight on the departure day, not UTC midnight.
+// closes at local midnight on the departure day, not UTC midnight. This is
+// the ONE home of the offset for the offer: derive.ts builds "today" from
+// the same helper, so the manifest boundary and the window can never
+// disagree about what day it is.
 const PROPERTY_UTC_OFFSET_MS = 2 * 60 * 60 * 1000;
 
 /** The property-local calendar day an instant falls on. */
-function propertyDay(iso: string): string {
+export function propertyDay(iso: string): string {
   return new Date(Date.parse(iso) + PROPERTY_UTC_OFFSET_MS).toISOString().slice(0, 10);
 }
 

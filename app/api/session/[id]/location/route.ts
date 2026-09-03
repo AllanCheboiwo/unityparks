@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { pendingRedemptionForSession } from "@/server/repeatOffer/derive";
 import { z } from "zod";
 import { getExtraOffers } from "@/server/apaleo/offers";
 import { getAvailableUnits, LOCATION_SERVICE_CODE } from "@/server/apaleo/units";
@@ -111,6 +112,14 @@ export async function POST(
     // reach them and would only make the summaries lie.
     if (await prisma.bookingRecord.findUnique({ where: { sessionId: id } })) {
       return jsonError(409, "Your booking is already being processed. Press Buy now to finish.");
+    }
+    // A PENDING redemption freezes the bases its crashed allowances were
+    // split over (UNP-7 review finding).
+    if (session.userId != null && (await pendingRedemptionForSession(id))) {
+      return jsonError(
+        409,
+        "Your booking is being confirmed with your repeat-guest offer applied. Press Buy now to finish.",
+      );
     }
 
     const parsed = LocationBody.safeParse(await req.json());

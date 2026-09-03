@@ -9,8 +9,9 @@ import { prisma } from "../db";
 import { pushZohoAfterSettle } from "../zoho/wire";
 import { createBooking, getFolioForReservation, type FolioSummary } from "../apaleo/bookings";
 import {
-  applyRepeatOfferAtCheckout,
   confirmRedemption,
+  decideRepeatOfferAtCheckout,
+  executeRepeatOffer,
   reconcileOfferFlags,
 } from "../repeatOffer/checkout";
 import {
@@ -704,20 +705,30 @@ async function ensureRecord(sessionId: string): Promise<{
   // discount can exist (docs/referral-system-plan.md 5.1). The re-read then
   // absorbs it into the total, the deposit, the Pesapal order, the settle
   // basis and refunds with no further referral code anywhere downstream.
+  // The repeat-guest decision runs FIRST, before any allowance exists
+  // anywhere: every honest refusal (window, membership, mismatch, code
+  // conflict) must fire while the folios are still clean, or a refused
+  // attempt would strand the other instrument's posts (2 Sep review).
+  const repeatDecision = await decideRepeatOfferAtCheckout({
+    session,
+    feeDroppedBySlot: assignments.map((a) => a.locationFeeDropped),
+  });
   const referral = await applyReferralAtCheckout({
     session,
     feeDroppedBySlot: assignments.map((a) => a.locationFeeDropped),
     folios,
+    // The offer amount joins the referral module's KSh 500 floor guard and
+    // its credit cap, so the two instruments can never jointly overdraw a
+    // booking (invariant 4).
+    repeatOfferAmount: repeatDecision.kind === "post" ? repeatDecision.amount : 0,
   });
-  // The second instrument on the same seam: the repeat-guest offer
-  // (docs/promo-codes-plan.md section 6). Same window in the booking's
-  // life, its own idempotency keys, PENDING row confirmed with the record
-  // create below.
-  const repeatOffer = await applyRepeatOfferAtCheckout({
+  // The second instrument's posts: same window in the booking's life, its
+  // own idempotency keys, PENDING row confirmed with the record create.
+  const repeatOffer = await executeRepeatOffer({
     session,
     feeDroppedBySlot: assignments.map((a) => a.locationFeeDropped),
     folios,
-    referralDiscountApplied: referral.attribution != null,
+    decision: repeatDecision,
   });
   if (referral.postedAllowances || repeatOffer.postedAllowances) {
     folios = [];

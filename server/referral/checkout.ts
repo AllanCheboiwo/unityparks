@@ -82,6 +82,12 @@ export async function applyReferralAtCheckout(input: {
   /** Per-slot outcome of assignUnits; a dropped fee shrinks that base. */
   feeDroppedBySlot: boolean[];
   folios: Array<{ folioId: string; currency: string }>;
+  /** The repeat-guest amount decided for this checkout (0 when none). It
+   * joins this module's floor guard and credit cap so the two instruments
+   * never jointly eat past the KSh 500 collectable floor (invariant 4 of
+   * docs/promo-codes-plan.md). A stamped referral CODE cannot coexist with
+   * the offer (refused upstream), so this only interacts with credit. */
+  repeatOfferAmount: number;
 }): Promise<ReferralAtCheckout> {
   const { session, folios } = input;
 
@@ -271,7 +277,9 @@ export async function applyReferralAtCheckout(input: {
           const vested = await vestedCreditBalance(participant.id, tx);
           let applicable = capApplicableCredit({
             bookingTotal: totalBase,
-            discount,
+            // The repeat-guest offer eats credit room exactly like the
+            // code discount does; both are folio allowances ahead of it.
+            discount: discount + input.repeatOfferAmount,
             vestedBalance: vested,
           });
           if (applicable <= 0) return { kind: "none" as const, amount: 0 };
@@ -344,7 +352,7 @@ export async function applyReferralAtCheckout(input: {
   // spend is never clamped down silently; the guest resolves it by
   // removing the code at the details step or unticking the credit (which
   // releases the claim), then pressing Buy now again.
-  if (discount + credit > totalBase - MIN_PART_PAYMENT) {
+  if (discount + credit + input.repeatOfferAmount > totalBase - MIN_PART_PAYMENT) {
     throw new PublicError(
       409,
       "Your referral discount and credit together no longer fit this booking's total. Remove the code on the details step or untick the credit, then press Buy now again.",

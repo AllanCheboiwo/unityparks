@@ -254,6 +254,21 @@ export async function POST(
         ? normalizeReferralCode(session.referralCode ?? "")
         : normalizeReferralCode(referralCode);
     if (typedCode) {
+      // One discount instrument per booking (UNP-7 decision 7): a session
+      // already carrying the repeat-guest offer (a live snapshot, or an
+      // in-flight claim from a crashed checkout) refuses a referral code
+      // here at the stamp, not at the money click. Skipped when the
+      // identity just changed, because that block cleared the snapshot.
+      const offerRiding =
+        session.userId === user.id &&
+        (session.repeatOfferRecordId != null ||
+          (await pendingRedemptionForSession(id)) != null);
+      if (offerRiding) {
+        return jsonError(
+          409,
+          "This booking carries your repeat-guest offer, which cannot be combined with a referral code. Remove the offer at the pay step first.",
+        );
+      }
       const check = await validateReferralCode({
         code: typedCode,
         guestEmail: email,

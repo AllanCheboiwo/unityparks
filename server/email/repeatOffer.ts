@@ -72,12 +72,11 @@ export type PendingOfferNotice = {
 /** Storage the sender drives. The real adapter selects notifiable records
  * (server/repeatOffer/notify.ts) and claims offerEmailSentAt with an
  * atomic conditional update; the fake in the frozen suite mirrors those
- * semantics. release() exists for adapters that want it; this sender never
- * calls it (stamp-stays). */
+ * semantics. Deliberately no release(): the stamp stays on failure, and a
+ * release hook would invite someone to wire the double-send path back in. */
 export type RepeatOfferStore = {
   loadPending(): Promise<PendingOfferNotice[]>;
   claim(recordId: string): Promise<boolean>;
-  release(recordId: string): Promise<void>;
 };
 
 export async function sendRepeatOfferNotices(

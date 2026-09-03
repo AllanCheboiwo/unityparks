@@ -33,6 +33,15 @@ export function isOfferWindowOpen(input: { departure: string; todayIso: string }
   return days > 0 && days <= OFFER_WINDOW_DAYS;
 }
 
+/** The earliest departure date that can still be inside the window today.
+ * A query floor: bounds reads to at most 31 days of history instead of
+ * every paid stay ever. */
+export function offerEarliestDeparture(todayIso: string): string {
+  const d = new Date(`${todayIso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - OFFER_WINDOW_DAYS);
+  return d.toISOString().slice(0, 10);
+}
+
 /** Cap so at least KSh 500 of the booking stays collectable. */
 export function capOfferDiscount(input: { bookingTotal: number; discount: number }): number {
   const room = Math.floor(input.bookingTotal - MIN_PART_PAYMENT);
