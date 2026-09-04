@@ -14,7 +14,7 @@ model User {
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())
 
-  email        String @unique // always lowercase
+  email        String  @unique // always lowercase
   passwordHash String // "saltHex:hashHex" from node:crypto scrypt
   firstName    String
   lastName     String
@@ -46,9 +46,9 @@ model User {
 
   authSessions        AuthSession[]
   passwordResetTokens PasswordResetToken[]
-  bookingSessions BookingSession[]
-  bookingRecords  BookingRecord[]
-  acceptedInvites BookingInvite[]
+  bookingSessions     BookingSession[]
+  bookingRecords      BookingRecord[]
+  acceptedInvites     BookingInvite[]
   referralParticipant ReferralParticipant?
   repeatRedemptions   RepeatGuestRedemption[]
 }
@@ -159,7 +159,7 @@ model BookingSession {
   repeatOfferRecordId String?
   repeatOfferDiscount Float?
 
-  booking BookingRecord?
+  booking     BookingRecord?
   creditSpend ReferralLedgerEntry?
 }
 
@@ -216,15 +216,15 @@ model SessionGuest {
 
   sessionId String
   session   BookingSession @relation(fields: [sessionId], references: [id])
-  slot      Int @default(0) // which lodge this guest stays in
+  slot      Int            @default(0) // which lodge this guest stays in
   position  Int // 0 = lead adult; order fixed by the booked party shape
   band      String // adult | child | toddler | infant, derived from the party
-  isLead    Boolean @default(false)
+  isLead    Boolean        @default(false)
 
-  firstName   String?
-  lastName    String?
-  dateOfBirth String? // ISO YYYY-MM-DD, expected for non-adults
-  email       String? // lowercase; feeds the invite reconcile after booking
+  firstName     String?
+  lastName      String?
+  dateOfBirth   String? // ISO YYYY-MM-DD, expected for non-adults
+  email         String? // lowercase; feeds the invite reconcile after booking
   // Mirror of the live accepted BookingInvite for this seat: set on accept,
   // cleared on revoke, in the invite's own transaction. BookingInvite is
   // authoritative; this column is the cheap party-membership read for the
@@ -330,13 +330,13 @@ model BookingRecord {
   claimedAt  DateTime?
   claimedVia String? // "email-match" when adopted by the claim backfill
 
-  reservations BookingReservation[]
+  reservations        BookingReservation[]
   pesapalTransactions PesapalTransaction[]
   referralAttribution ReferralAttribution?
   extrasOrders        ExtrasOrder[]
-  invites BookingInvite[]
-  redemptionsEarned RepeatGuestRedemption[] @relation("RedemptionEarnedBy")
-  redemption        RepeatGuestRedemption?  @relation("RedemptionSpentOn")
+  invites             BookingInvite[]
+  redemptionsEarned   RepeatGuestRedemption[] @relation("RedemptionEarnedBy")
+  redemption          RepeatGuestRedemption?  @relation("RedemptionSpentOn")
 }
 
 // One redemption of the repeat-guest offer (UNP-7). The earning stay is NOT
@@ -652,7 +652,7 @@ model ReferralLedgerEntry {
   // releasedAt: the claim was given back to the pool (self-service before a
   // record exists, or an ops release); the paired credit_release row stays
   // as the ledger's value entry.
-  releasedAt DateTime?
+  releasedAt       DateTime?
   // postingStartedAt: checkout committed this claim to a folio allowance.
   // Once set, no release may happen: the money is on the bill.
   postingStartedAt DateTime?
@@ -713,4 +713,97 @@ model ZohoExport {
   zohoPaymentId String? // set once the payment is recorded
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+}
+
+// Activities inventory (UNP-6, docs/activity-inventory-plan.md). Our
+// Postgres is the authority on whether a bike or a spa place exists to
+// sell; Apaleo stays the only authority on money. Three tables: what we
+// sell, who has what, and a per-day counter that exists to be locked.
+
+// One row per sellable pool: adult cycles, the 14:00 spa session. Capacity
+// is flat across dates in v1. An activity added later is a new row here
+// plus an Apaleo service for its price, and no schema change.
+model InventoryResource {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  code String @unique // CYCLE-ADULT, CYCLE-CHILD, SPA-1000, SPA-1400
+  name String
+  kind String // STOCK (consumed per night) | SESSION (a date plus a start time)
+
+  capacity       Int
+  sessionStart   String? // "HH:MM" property-local wall clock, sessions only
+  sessionMinutes Int? // display only; never crosses midnight
+
+  // Which Apaleo service prices one unit. Both spa sessions point at the
+  // same SPA-SESSION service; Apaleo sees "3 places", we know which day.
+  apaleoServiceCode String
+
+  // Bookable from this many days before arrival; null means from the
+  // moment the break is confirmed (bikes). Spa sessions use 56.
+  openDaysBefore Int?
+
+  // Which head count of the lodge caps this resource: adults | children.
+  capRule String
+
+  // Honoured only once UNP-25 lands; the checkout route ignores it in v1.
+  sellAtCheckout Boolean @default(false)
+
+  // Inactive resources are not offered; their existing holds stay valid.
+  active Boolean @default(true)
+
+  days  ResourceDay[]
+  holds InventoryHold[]
+}
+
+// The contention point: one row per (resource, date) that has ever been
+// touched, created lazily on first hold. A COUNTER, not a truth: the truth
+// is the hold ledger, and reconciliation asserts they agree. Written only
+// by the guarded update, the confirm and release paths, and the sweep.
+model ResourceDay {
+  id String @id @default(cuid())
+
+  resourceId String
+  resource   InventoryResource @relation(fields: [resourceId], references: [id])
+  date       String // ISO YYYY-MM-DD, property-local
+
+  taken Int @default(0)
+
+  @@unique([resourceId, date])
+}
+
+// The ledger. One row per claim: HELD while an order is in flight (with an
+// expiry), CONFIRMED once the order settled, RELEASED when given back (the
+// row stays as audit). Identity is (ownerKey, resourceId, date) so a
+// replay upserts instead of duplicating; adjustments have no owner, and
+// Postgres treats null as distinct so many per day are allowed.
+model InventoryHold {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  resourceId String
+  resource   InventoryResource @relation(fields: [resourceId], references: [id])
+  date       String // ISO YYYY-MM-DD, property-local
+  qty        Int
+
+  status String // HELD | CONFIRMED | RELEASED
+  kind   String // ORDER | ADJUSTMENT
+
+  // "order:<extrasOrderId>" in v1. UNP-25 adds "session:<sessionId>:<slot>"
+  // as a new value, not a schema change.
+  ownerKey String?
+  orderId  String? // the ExtrasOrder that placed it, for joins
+  recordId String? // denormalised for cancellation and reconciliation
+  slot     Int? // which lodge
+
+  expiresAt DateTime? // a real instant, set while HELD
+
+  reason    String? // ADJUSTMENT: "two bikes in the workshop"
+  createdBy String? // admin email on adjustments
+
+  @@unique([ownerKey, resourceId, date])
+  @@index([recordId])
+  @@index([resourceId, date, status])
 }
