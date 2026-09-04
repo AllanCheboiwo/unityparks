@@ -26,6 +26,8 @@ export type ResourceFacts = {
   kind: ResourceKind;
   capacity: number;
   sessionStart: string | null;
+  /** Display only; optional because the validator never needs it. */
+  sessionMinutes?: number | null;
   apaleoServiceCode: string;
   openDaysBefore: number | null;
   capRule: CapRule;
