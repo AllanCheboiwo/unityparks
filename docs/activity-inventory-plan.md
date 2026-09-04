@@ -1,6 +1,6 @@
 # Activities: bikes, spa sessions and the inventory layer (UNP-6)
 
-Status: tests-approved
+Status: implementing
 
 Plan approved: 4 Sep 2026, Allan wrote "plan-approved"
 Tests approved: 4 Sep 2026, commit 9dc671d (suite commits 17bd674, 9dc671d, both test-and-config-only), Allan wrote "tests approved"
