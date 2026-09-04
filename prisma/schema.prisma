@@ -737,7 +737,7 @@ model InventoryResource {
   sessionMinutes Int? // display only; never crosses midnight
 
   // Which Apaleo service prices one unit. Both spa sessions point at the
-  // same SPA-SESSION service; Apaleo sees "3 places", we know which day.
+  // same SPASESSION service; Apaleo sees "3 places", we know which day.
   apaleoServiceCode String
 
   // Bookable from this many days before arrival; null means from the
