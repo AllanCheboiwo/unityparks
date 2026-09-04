@@ -1,6 +1,6 @@
 # Activities: bikes, spa sessions and the inventory layer (UNP-6)
 
-Status: plan-approved
+Status: writing-tests
 
 Plan approved: 4 Sep 2026, Allan wrote "plan-approved"
 
@@ -167,6 +167,7 @@ Three tables, `prisma db push` as always. Dates are property-local ISO
 | `sessionMinutes` Int? | 180, display only |
 | `apaleoServiceCode` String | which service prices it; both spa sessions point at `SPA-SESSION` |
 | `openDaysBefore` Int? | 56 for spa sessions; null means bookable from confirmation (bikes) |
+| `capRule` String | `adults` or `children`: which head count of the lodge caps this resource (section 5.6). Data, so a new activity needs no code |
 | `sellAtCheckout` Boolean | default false; honoured only once UNP-25 lands |
 | `active` Boolean | inactive resources are not offered but their holds stay valid |
 
@@ -286,13 +287,15 @@ never silent.
 
 ### 5.6 Caps and the window
 
-Per lodge, at the time of the add, owned plus requested:
+Per lodge, at the time of the add, owned plus requested, driven by the
+resource's `capRule` (tests-phase clarification, 4 Sep: the rule is a
+column so an activity is still only a row):
 
-- adult cycles at most the lodge's adult count,
-- child cycles at most the lodge's child count (children under 2 do not
-  ride; the same `occupancyAges` rule extras already use),
-- spa places per session at most the lodge's adult count, and one session
-  per date per lodge.
+- `adults`: at most the lodge's adult count (adult cycles, spa places),
+- `children`: at most the lodge's children aged 2 and over (child cycles;
+  infants do not ride, the same rule per-person extras already follow),
+- and for sessions, one session per date per lodge across owned and
+  requested.
 
 The window: a resource is bookable when `today < arrival` (the existing
 extras rule) and, if `openDaysBefore` is set, `today >= arrival -
