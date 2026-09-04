@@ -39,13 +39,14 @@ activity is one row in a table plus an Apaleo service for its price.
 Researched 4 Sep 2026 (sources in section 11). The facts that shape the
 design:
 
-- **Neither bikes nor spa are sold at checkout.** Both are booked afterwards
-  through the guest's account, and the spa page says outright that a
-  booking cannot be made without an accommodation booking. Checkout is the
-  lodge plus house extras.
-- **Activities open 12 weeks before arrival** and bikes close 24 hours
-  before arrival; after that the Cycle Centre sells walk-ins from what is
-  left.
+- **Cycle hire is sold at checkout**, priced into the booking summary
+  (Allan checked the live site, 4 Sep; an earlier draft of this section
+  claimed otherwise and was wrong). It can also be added later through
+  the account, up to 24 hours before arrival; after that the Cycle Centre
+  sells walk-ins from what is left.
+- **The spa is not sold at checkout.** The spa page says outright that a
+  booking cannot be made without an accommodation booking; sessions open
+  through the account 12 weeks before arrival.
 - **Bikes are sold by category, not size**: adult cycle, child's cycle.
   Staff fit the rider on arrival. Categories are priced differently (about
   £45 adult, £35 child for a short break).
@@ -60,9 +61,19 @@ For an investor demo, "3 adult cycles left for your dates" and a spa grid
 that greys out at zero are a better story than CP's silence, and they are
 honest as long as the pay step is the moment of truth (section 5.9).
 
-Our window is **8 weeks** (56 days), not 12, because that is already the
-booking's balance-due anchor (`lib/paymentPlan.ts`, `BALANCE_DUE_DAYS`) and
-one anchor is easier to explain than two.
+Our spa window is **8 weeks** (56 days), not 12, because that is already
+the booking's balance-due anchor (`lib/paymentPlan.ts`, `BALANCE_DUE_DAYS`)
+and one anchor is easier to explain than two. Bikes have no window: they
+are bookable from the moment the break is confirmed.
+
+**Bikes at checkout are deferred to UNP-25**, deliberately. The checkout
+entry point means session-owned holds placed at pay-start and confirmed
+inside `ensureRecord`, the replay-sensitive sequence, and the primitive
+should be proven by the account path first. v1 keeps a Cycle Hire teaser
+card at checkout ("Book from your account after checkout, subject to
+availability") so the client sees no regression, and the schema carries
+the `sellAtCheckout` flag now so switching it on later is data plus one
+caller, not a migration.
 
 ## 3. Scope
 
@@ -70,9 +81,11 @@ one anchor is easier to explain than two.
 
 - Adult cycle and child's cycle as whole-break hire with real stock.
 - Spa as 3-hour sessions at fixed start times with real capacity.
-- One surface: an Activities card on Manage my booking, open from 56 days
-  before arrival until the day before arrival, owner only.
-- Bikes and spa removed from the checkout extras step.
+- One surface: an Activities card on Manage my booking, owner only, until
+  the day before arrival. Bikes from confirmation onward; spa from 56 days
+  before arrival.
+- Bikes and spa removed from the checkout extras step; a Cycle Hire teaser
+  card (copy only) takes their place.
 - The hold gate inside the existing post-booking extras engine.
 - Cancellation releases holds. Date amendment refuses while activities are
   held.
@@ -90,6 +103,9 @@ one anchor is easier to explain than two.
 - A scheduler. Lazy expiry plus a manual sweep, like reminders.
 - Sizes. Fitting is a Cycle Centre job, as at CP.
 - A during-stay app. The endpoints would serve one; none is built.
+- Bikes sold at checkout with real stock (UNP-25, the next slice set after
+  this ships). The `sellAtCheckout` flag exists in v1 and is ignored by the
+  checkout route until that caller lands.
 
 ## 4. The mental model
 
@@ -148,7 +164,8 @@ Three tables, `prisma db push` as always. Dates are property-local ISO
 | `sessionStart` String? | "HH:MM", sessions only |
 | `sessionMinutes` Int? | 180, display only |
 | `apaleoServiceCode` String | which service prices it; both spa sessions point at `SPA-SESSION` |
-| `openDaysBefore` Int | 56 |
+| `openDaysBefore` Int? | 56 for spa sessions; null means bookable from confirmation (bikes) |
+| `sellAtCheckout` Boolean | default false; honoured only once UNP-25 lands |
 | `active` Boolean | inactive resources are not offered but their holds stay valid |
 
 **ResourceDay**, the contention point: `resourceId`, `date`, `taken` Int,
@@ -163,13 +180,14 @@ reconciliation asserts they agree.
 | `resourceId`, `date`, `qty` | what and how much |
 | `status` String | `HELD`, `CONFIRMED`, `RELEASED` |
 | `kind` String | `ORDER` or `ADJUSTMENT` |
-| `orderId` String? | the `ExtrasOrder` that placed it (`ORDER` kind) |
+| `ownerKey` String? | `order:<extrasOrderId>` in v1; UNP-25 adds `session:<sessionId>:<slot>` as a new value, not a schema change |
+| `orderId` String? | the `ExtrasOrder` that placed it (`ORDER` kind), for joins |
 | `recordId` String? | denormalised for cancellation and reconciliation |
 | `slot` Int? | which lodge |
 | `expiresAt` DateTime? | set while `HELD`, a real instant |
 | `reason` String? | `ADJUSTMENT` kind: "two bikes in the workshop" |
 | `createdBy` String? | admin email on adjustments |
-| `@@unique([orderId, resourceId, date])` | a replay upserts, never duplicates; `ADJUSTMENT` rows have a null `orderId`, which Postgres treats as distinct, so many adjustments per day are allowed |
+| `@@unique([ownerKey, resourceId, date])` | a replay upserts, never duplicates; `ADJUSTMENT` rows have a null `ownerKey`, which Postgres treats as distinct, so many adjustments per day are allowed |
 
 `taken` counts holds in `HELD` (unexpired) plus `CONFIRMED`. `RELEASED`
 holds stay as audit rows and count nothing.
@@ -274,9 +292,10 @@ Per lodge, at the time of the add, owned plus requested:
 - spa places per session at most the lodge's adult count, and one session
   per date per lodge.
 
-The window: a resource is bookable when `today >= arrival - openDaysBefore`
-and `today < arrival` (the existing extras rule). Before the window the
-card shows "Opens on 14 November". `today` uses the same UTC-sliced
+The window: a resource is bookable when `today < arrival` (the existing
+extras rule) and, if `openDaysBefore` is set, `today >= arrival -
+openDaysBefore`. Before a window the card shows "Opens on 14 November".
+Bikes have no window and are offered from confirmation. `today` uses the same UTC-sliced
 `todayIso()` the extras engine already uses (open question 3).
 
 ### 5.7 Expiry and the sweep, schedulerless
@@ -388,7 +407,7 @@ cheapest unit of contention there is.
 4. No Apaleo write for a capacity-limited service happens without a `HELD`
    hold already in place for the same order.
 5. A cancelled record has no `CONFIRMED` holds.
-6. Holds are identified by `(orderId, resourceId, date)`; a replay of any
+6. Holds are identified by `(ownerKey, resourceId, date)`; a replay of any
    step writes the same rows.
 7. `taken` is written only by the guarded update, the confirm and release
    paths, the sweep, and adjustments through the same guarded update. No
@@ -474,12 +493,14 @@ cheapest unit of contention there is.
 ## 10. Acceptance check (end to end, deployed)
 
 1. Reprovision services, seed resources and CMS rows, deploy. Checkout's
-   extras step shows firewood, grocery, BBQ, early check-in only.
+   extras step shows firewood, grocery, BBQ, early check-in, and the Cycle
+   Hire teaser with no quantity control.
 2. Book a break with arrival inside 56 days, two adults and one child, pay
    in full. Confirmation page and email say activities are open.
 3. Manage my booking shows the Activities card: adult cycles with a count,
    child cycles with a count, a spa grid for the stay's nights at 10:00 and
-   14:00 with counts.
+   14:00 with counts. A second booking 70 days out shows bikes open and the
+   spa as "Opens on <date>".
 4. Add 2 adult cycles and 1 child cycle. Folio shows `CYCLE-ADULT x2` and
    `CYCLE-CHILD x1` once, at break prices; card shows owned counts; the
    receipt email lists them.
@@ -492,8 +513,8 @@ cheapest unit of contention there is.
    the other is refused by name with no money moved. Reconcile: no alerts.
 8. Cap: a third adult cycle for a two-adult lodge is refused before any
    Apaleo call.
-9. Window: a booking 70 days out shows "Opens on <date>" and a direct POST
-   for a capacity-limited service is refused 409.
+9. Window: on the 70-day booking a direct POST for a spa session is
+   refused 409 while a bike add succeeds.
 10. Amend: moving the break from step 4 is refused with the activities
     message. A break with no activities still moves as today.
 11. Cancel the break from step 4: refund math unchanged; the adult and
@@ -588,7 +609,8 @@ they were agreed.
    date per lodge. Bike caps: adults and children of the lodge.
 4. Spa sessions offered on the stay's nights only, never the departure day.
 5. The account section is called "Activities". Bikes sit inside it.
-6. The window is 56 days, the same anchor as the balance due date.
+6. The spa window is 56 days, the same anchor as the balance due date;
+   bikes have none.
 7. Amend refuses outright while activities are held (your "keep simple").
 8. Reconciliation writes `OpsAlert` rows rather than printing, so the
    existing alerts page is the report.
@@ -598,6 +620,8 @@ they were agreed.
     engine already uses, for consistency with its arrival rule, even though
     the repeat offer uses property-local days.
 11. Old `CYCLE` and `SPA` services are excluded by code, not deleted.
+12. Bikes at checkout deferred to UNP-25 with a teaser card in v1 (Allan
+    agreed 4 Sep). `sellAtCheckout` and `ownerKey` are shaped for it now.
 
 ## 14. Open questions
 
