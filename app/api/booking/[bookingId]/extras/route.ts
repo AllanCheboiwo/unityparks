@@ -27,6 +27,12 @@ const AddBody = z.object({
       z.object({
         serviceId: z.string().min(1).max(64),
         count: z.number().int().min(1).max(MAX_EXTRA_QTY),
+        // Activities (UNP-6): the resource, and for sessions the date.
+        resourceCode: z.string().min(1).max(32).optional(),
+        date: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/)
+          .optional(),
       }),
     )
     .min(1)

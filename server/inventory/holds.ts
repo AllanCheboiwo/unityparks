@@ -262,6 +262,20 @@ export async function confirmHolds(ownerKey: string, now = new Date()): Promise<
   return { confirmed, oversold };
 }
 
+/**
+ * The settle transaction's half of confirm: flip an owner's HELD rows to
+ * CONFIRMED inside the caller's transaction, so a hold is confirmed if and
+ * only if its order settled. Rows swept while the order was in flight are
+ * left for confirmHolds to re-place after the transaction commits.
+ */
+export async function confirmHeldInTx(tx: Tx, ownerKey: string): Promise<number> {
+  const flipped = await tx.inventoryHold.updateMany({
+    where: { ownerKey, status: "HELD" },
+    data: { status: "CONFIRMED", expiresAt: null },
+  });
+  return flipped.count;
+}
+
 /** Give an owner's holds back (HELD or CONFIRMED). Idempotent. */
 export async function releaseHolds(ownerKey: string, db: Db = prisma): Promise<number> {
   const run = (tx: Tx) => flipAndRelease(tx, { ownerKey }, ["HELD", "CONFIRMED"]);
