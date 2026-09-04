@@ -1,6 +1,14 @@
 # Activity inventory and time slots: implementation plan
 
-Status: agreed direction, not yet scheduled. Written 20 Aug 2026 after the
+Status: interviewing
+
+Scheduled 3 Sep 2026 as UNP-6, on branch `unp-6-activities-inventory`. Allan
+mapped the old freeform status ("agreed direction, not yet scheduled") onto
+the workflow's `interviewing` state, so this document is treated as notes to
+be re-questioned, not as an approved plan. v1 scope is bikes and spa only;
+activities ride the same tables afterwards as data rows.
+
+Written 20 Aug 2026 after the
 client feedback round (see the client's items 4 on bikes and spa). The build
 was deliberately deferred out of client-feedback round 1 because it is the
 first feature where our database, not Apaleo, becomes the source of truth
@@ -392,3 +400,56 @@ backend and demo nothing, which is fine.
   manual-plus-lazy like reminders do today?
 - Minimum viable ops surface: is a read-only availability table plus an
   adjustment form enough for the demo?
+
+## 11. Build vs adopt: why none of the free software fits
+
+Asked on 3 Sep 2026 before the interview, because the answer decides what the
+rest of the plan is about. Two candidates were examined properly rather than
+dismissed from the search-result summary.
+
+**LibreBooking** (GPL-3.0, the maintained fork of Booked Scheduler). PHP 8.2,
+Apache, MySQL 8 or MariaDB. It is a whole separate application: its own
+database engine, its own accounts, its own admin. Adopting it means a second
+service on Railway, a second identity system, and a third source of truth
+after Apaleo and ours. It also models the wrong thing, a person or room
+calendar with conflict detection, where we need a counter of 30 bikes against
+a resource-day. Rejected.
+
+**payload-reserve** (MIT, v4.1.0 published 26 Aug 2026, peer dep
+`payload ^3.86.0`). This one deserved a real read, because Payload 3.86.0 is
+already a dependency on main, `app/(payload)` already ships, and the plugin
+shares our Postgres. Its concurrency work is honest and close to ours: a
+`bookingLock` write per resource manufactures row contention before the
+conflict read, resource ids are sorted to make deadlock impossible, and the
+retry wrapper distinguishes transient write conflicts by driver code rather
+than message text. Its README documents a measured gap on SQLite instead of
+hiding it. Good software. Still rejected, for three reasons that are about
+fit, not quality:
+
+1. **It models appointments, we need stock.** Reservations are start and end
+   times with services, guest counts and buffers. A whole-break bike hire is
+   one hold per night per size, which would have to be bent into overlapping
+   time-window reservations to fit.
+2. **The gate cannot join our transaction.** Its writes go through Payload's
+   Local API on `req`; checkout is Prisma. The `HELD -> CONFIRMED` flip in
+   `ensureRecord` (section 5.4) would become a cross-ORM two-phase problem,
+   adding a compensating path exactly where our own design gets atomicity for
+   free from one local transaction.
+3. **It duplicates money and identity.** It carries services, pricing and
+   customers, which are Apaleo's job and our accounts' job. We would adopt a
+   booking system to use a small fraction of it and then fight the rest.
+
+Maturity is a secondary concern, not the deciding one: first release 14 Feb
+2026, four majors by August, 31 GitHub stars. Fine for a salon, thin for the
+money path of a demo we have to explain line by line.
+
+**What the engine actually is.** The valuable part of this feature is not a
+booking UI, it is the guarded `UPDATE` in section 5.1. It has to run inside
+our checkout transaction, next to our session snapshot, ordered against our
+Apaleo call. No external package can own that, which is the whole reason the
+buy option keeps failing.
+
+**Where borrowing still makes sense**, and is not ruled out: a calendar
+component for the session picker, and a generic admin table for the ops
+adjustments surface (section 5.9). Both are leaf-level and carry no
+correctness weight.
