@@ -138,6 +138,18 @@ Documented rather than built, in the spirit of the other two engines.
   Apaleo removal wrapper exists and the rollback path uses it, but
   self-serve removal needs a refund policy decision first.
 
+## Activities ride this engine (UNP-6)
+
+Since September 2026 the capacity-limited extras (adult and child cycles,
+Forest Spa sessions) are booked through this same engine from the
+Activities card, with one addition: holds. `addManageExtras` validates the
+activities, claims stock under `order:<id>` right after the order row
+exists and before the first Apaleo write, confirms the holds inside
+`settleExtrasOrder`'s transaction, and releases them whenever `retireOrder`
+retires the order as failed. Uncapped extras take none of those branches.
+The design, the invariants and the reconciliation live in
+`docs/activity-inventory-plan.md`.
+
 ## Files
 
 | Concern | File |

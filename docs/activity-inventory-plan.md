@@ -1,6 +1,6 @@
 # Activities: bikes, spa sessions and the inventory layer (UNP-6)
 
-Status: implementing
+Status: in-review
 
 Plan approved: 4 Sep 2026, Allan wrote "plan-approved"
 Tests approved: 4 Sep 2026, commit 9dc671d (suite commits 17bd674, 9dc671d, both test-and-config-only), Allan wrote "tests approved"
@@ -592,7 +592,51 @@ bike hire pages, centerparcs.co.uk Cycle Centre and Forest Spa Experience
 pages, help.centerparcs.co.uk "How do I book a spa session",
 insideoursuitcase.com bike hire guide.
 
-## 12. Build order
+## 12. Build record, 4 Sep 2026
+
+Built in eight slices on `unp-6-activities-inventory`, every slice ending
+with the full `npm test` green (28 files, 385 tests, the 58 frozen ones
+included) and `tsc` clean:
+
+| Slice | Commit | What |
+|---|---|---|
+| 1a | d1241bb | three tables, `prisma db push` on unity_parks_dev |
+| 1b | 1101a9b | `lib/inventory.ts`, the pure half |
+| 1c | 17164f0 | `server/inventory/holds.ts`, the guarded update |
+| 1d | 3fbf460 | `server/inventory/reconcile.ts` |
+| 2 | 61bc949 | availability derivation, activities GET |
+| 3 | 9c63c5b | the hold gate inside `addManageExtras` |
+| 4 | 2ac0ca5 | cancellation release, amend refusal |
+| 5 | 5d9de25 | checkout exclusion, retired codes, Apaleo services, seeds |
+| 6 | 9ef8b14 | Activities card, confirmation line, receipt lines |
+| 7 | 7a3a007 | ops page, sweep, adjustments, reconcile |
+
+Two things the build taught, both kept in code comments:
+
+- The lazy `ResourceDay` row must be created with a native
+  `INSERT ... ON CONFLICT DO NOTHING`. Prisma's `upsert` is a read-then-
+  insert, and the burst test turned ten first claimants into unique
+  violations for everyone but the first.
+- `scripts/inventory/reconcile.ts` calls the ops route with
+  `INVENTORY_RUN_SECRET` rather than importing the server modules, which
+  are `server-only` and cannot load under tsx. That also makes it usable
+  against Railway.
+
+Verified on the local dev server before review: `/ops/inventory` sends a
+signed-out visitor to login; `GET /api/booking/<ref>/activities` and the
+ops routes answer 401 signed out; the checkout extras GET no longer lists
+`CYCLE` or `SPA`; the snapshot POST refuses a resource-backed service with
+"Activities are booked from your account after checkout." The teaser
+cards and the Activities card need the Apaleo reprovision
+(`npm run apaleo:provision -- --services-only`) and a signed-in account,
+which is the acceptance check.
+
+Deploy steps, in order: Railway `prisma db push` (three new tables), the
+reprovision above, `npx tsx --env-file=.env scripts/seed-inventory.ts`,
+`npm run seed:cms`, and set `INVENTORY_RUN_SECRET` if a scheduler will
+ever call the sweep.
+
+## 12a. Build order (as planned)
 
 1. Schema plus `lib/inventory.ts` pure logic and `server/inventory/holds.ts`
    with the concurrent placement tests. This step is the feature.
