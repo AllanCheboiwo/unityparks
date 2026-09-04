@@ -136,10 +136,60 @@ export type ManageExtraOfferDto = {
   maxAdd: number;
 };
 
-/** GET /api/booking/[id]/extras: live offers per lodge plus money handling. */
+/** GET /api/booking/[id]/extras: live offers per lodge plus money handling.
+ *  `extras` carries the uncapped services for the little-extras card;
+ *  `activityOffers` carries the price and service id of every resource-
+ *  backed service by Apaleo code, for the Activities card (UNP-6). */
 export type ManageExtrasDto = {
   kind: "charge_now" | "on_balance";
   lodges: { slot: number; extras: ManageExtraOfferDto[] }[];
+  activityOffers: Record<string, { serviceId: string; unitPrice: number; currency: string }>;
+};
+
+/** UNP-6: one addition on POST /api/booking/[id]/extras. Activities carry
+ *  the resource code, and sessions the date. */
+export type ManageAdditionDto = {
+  serviceId: string;
+  count: number;
+  resourceCode?: string;
+  date?: string;
+};
+
+export type ActivityWindowDto =
+  | { state: "open" }
+  | { state: "opens_on"; date: string }
+  | { state: "closed" };
+
+export type ActivitySessionSlotDto = { date: string; free: number; owned: number };
+
+/** One resource on the Activities card (GET /api/booking/[id]/activities). */
+export type ActivityResourceDto = {
+  code: string;
+  name: string;
+  kind: "STOCK" | "SESSION";
+  sessionStart: string | null;
+  sessionMinutes: number | null;
+  apaleoServiceCode: string;
+  window: ActivityWindowDto;
+  /** The most this lodge may hold, from its party. */
+  cap: number;
+  /** STOCK: riders already hired for the break. SESSION: total places. */
+  owned: number;
+  /** STOCK: free for the whole stay (scarcest night). SESSION: null, see sessions. */
+  free: number | null;
+  /** SESSION only: one entry per night of the stay. */
+  sessions: ActivitySessionSlotDto[] | null;
+};
+
+export type ActivityLodgeDto = {
+  slot: number;
+  party: { adults: number; childrenAges: number[] };
+  resources: ActivityResourceDto[];
+};
+
+export type ActivitiesDto = {
+  nights: string[];
+  lodges: ActivityLodgeDto[];
 };
 
 /** POST /api/booking/[id]/extras outcome. */

@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { SPA_OPEN_DAYS_BEFORE } from "../lib/inventory";
 
 /**
  * The v1 activity resources (UNP-6, docs/activity-inventory-plan.md).
@@ -40,7 +41,7 @@ const RESOURCES = [
     sessionStart: "10:00",
     sessionMinutes: 180,
     apaleoServiceCode: "SPA-SESSION",
-    openDaysBefore: 56,
+    openDaysBefore: SPA_OPEN_DAYS_BEFORE,
     capRule: "adults",
   },
   {
@@ -51,7 +52,7 @@ const RESOURCES = [
     sessionStart: "14:00",
     sessionMinutes: 180,
     apaleoServiceCode: "SPA-SESSION",
-    openDaysBefore: 56,
+    openDaysBefore: SPA_OPEN_DAYS_BEFORE,
     capRule: "adults",
   },
 ] as const;

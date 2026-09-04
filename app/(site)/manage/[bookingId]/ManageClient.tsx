@@ -10,6 +10,7 @@ import { LODGES } from "@/content/lodges";
 import type { BookingConfirmation, InviteeBooking, ExtrasContentDto } from "@/lib/types";
 import { TurnoverCalendar } from "@/components/TurnoverCalendar";
 import { AddExtrasCard } from "./AddExtrasCard";
+import { ActivitiesCard } from "./ActivitiesCard";
 
 type AmendResponse = {
   ok: boolean;
@@ -437,6 +438,16 @@ export function ManageClient({
           </div>
         </div>
       )}
+
+      {(booking.status === "paid" || depositPaid) &&
+        booking.stay.arrival > new Date().toISOString().slice(0, 10) && (
+          <ActivitiesCard
+            bookingId={bookingId}
+            proofQuery={proofQuery}
+            booking={booking}
+            onChanged={load}
+          />
+        )}
 
       {(booking.status === "paid" || depositPaid) &&
         booking.stay.arrival > new Date().toISOString().slice(0, 10) && (

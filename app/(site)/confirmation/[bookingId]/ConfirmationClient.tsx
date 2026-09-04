@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { opensOnDate, SPA_OPEN_DAYS_BEFORE } from "@/lib/inventory";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { apiFetch } from "@/lib/api";
@@ -124,6 +125,20 @@ export function ConfirmationClient({ bookingId }: { bookingId: string }) {
               ? "Folio settled · balance KES 0"
               : `Folio balance ${formatKes(Math.abs(booking.folioBalance))}`}
           </span>
+        </div>
+
+        <div className="mt-6 rounded-lg border border-line bg-mist px-6 py-5 text-left">
+          <p className="font-display text-lg font-bold text-ink">Activities</p>
+          <p className="mt-1 text-sm text-foreground">
+            Cycle hire is open in your account now.{" "}
+            {new Date().toISOString().slice(0, 10) >=
+            opensOnDate(booking.stay.arrival, SPA_OPEN_DAYS_BEFORE)
+              ? "Forest Spa sessions are open too."
+              : `Forest Spa sessions open on ${formatDate(
+                  opensOnDate(booking.stay.arrival, SPA_OPEN_DAYS_BEFORE),
+                )}.`}{" "}
+            Both are subject to availability, so book early.
+          </p>
         </div>
 
         {booking.status === "deposit_paid" && (

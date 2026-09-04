@@ -11,8 +11,12 @@ import {
   type LodgeParty,
   type OwnedLine,
   type ResourceFacts,
-  type WindowState,
 } from "@/lib/inventory";
+import type {
+  ActivitiesDto,
+  ActivityLodgeDto,
+  ActivityResourceDto,
+} from "@/lib/types";
 
 /**
  * What the Activities card reads (UNP-6, spec section 5.9). A local read:
@@ -25,37 +29,6 @@ import {
 export type RecordForActivities = BookingRecord & {
   session: BookingSession & { lodges: SessionLodge[] };
   reservations: BookingReservation[];
-};
-
-export type SessionSlotDto = { date: string; free: number; owned: number };
-
-export type ResourceAvailabilityDto = {
-  code: string;
-  name: string;
-  kind: "STOCK" | "SESSION";
-  sessionStart: string | null;
-  sessionMinutes: number | null;
-  apaleoServiceCode: string;
-  window: WindowState;
-  /** The most this lodge may hold of it, from its party. */
-  cap: number;
-  /** STOCK: riders already hired for the break. SESSION: total places. */
-  owned: number;
-  /** STOCK: free for the whole stay (scarcest night). SESSION: null, see sessions. */
-  free: number | null;
-  /** SESSION only: one entry per night of the stay. */
-  sessions: SessionSlotDto[] | null;
-};
-
-export type LodgeActivitiesDto = {
-  slot: number;
-  party: LodgeParty;
-  resources: ResourceAvailabilityDto[];
-};
-
-export type ActivitiesDto = {
-  nights: string[];
-  lodges: LodgeActivitiesDto[];
 };
 
 function todayIso(): string {
@@ -183,10 +156,10 @@ export async function activitiesForRecord(
     now,
   );
 
-  const lodges: LodgeActivitiesDto[] = [];
+  const lodges: ActivityLodgeDto[] = [];
   for (const { slot, party } of lodgeParties(record)) {
     const owned = await ownedForLodge(record.id, slot, resources);
-    const dtos: ResourceAvailabilityDto[] = resources.map((resource) => {
+    const dtos: ActivityResourceDto[] = resources.map((resource) => {
       const window = resourceWindow({
         arrival: record.session.arrival,
         openDaysBefore: resource.openDaysBefore,

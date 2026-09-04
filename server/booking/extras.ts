@@ -13,7 +13,11 @@ import { getReservation } from "../apaleo/amend";
 import { getFolioForReservation } from "../apaleo/bookings";
 import { payFolio } from "../apaleo/payments";
 import { bookReservationService, getReservationServices } from "../apaleo/services";
-import { LOCATION_SERVICE_CODE, removeReservationService } from "../apaleo/units";
+import {
+  LOCATION_SERVICE_CODE,
+  RETIRED_SERVICE_CODES,
+  removeReservationService,
+} from "../apaleo/units";
 import { parseExtras } from "./session";
 import {
   extraUnitPrice,
@@ -85,6 +89,9 @@ export type ManageExtraOffer = {
 export type ManageExtrasQuote = {
   kind: "charge_now" | "on_balance";
   lodges: Array<{ slot: number; extras: ManageExtraOffer[] }>;
+  /** Price and id of every resource-backed service, by Apaleo code, for
+   *  the Activities card. Same live offers, one read. */
+  activityOffers: Record<string, { serviceId: string; unitPrice: number; currency: string }>;
 };
 
 /** How long a live order is assumed genuinely in flight before recovery may
@@ -210,11 +217,30 @@ export async function quoteManageExtras(record: RecordForExtras): Promise<Manage
   // before recovery ever ran.
   await recoverStaleExtrasOrder(record);
   const kind = assertExtrasAllowed(record);
+  // Resource-backed services are activities: priced here, but sold from
+  // the Activities card with availability, never from the plain list.
+  const backedCodes = new Set((await activeResources()).map((r) => r.apaleoServiceCode));
   const lodges = [];
+  const activityOffers: ManageExtrasQuote["activityOffers"] = {};
   for (const lodge of lodgeSlots(record)) {
-    lodges.push({ slot: lodge.slot, extras: await quoteSlot(lodge) });
+    const offers = await quoteSlot(lodge);
+    for (const offer of offers) {
+      if (backedCodes.has(offer.code)) {
+        activityOffers[offer.code] = {
+          serviceId: offer.serviceId,
+          unitPrice: offer.unitPrice,
+          currency: offer.currency,
+        };
+      }
+    }
+    lodges.push({
+      slot: lodge.slot,
+      extras: offers.filter(
+        (o) => !backedCodes.has(o.code) && !RETIRED_SERVICE_CODES.has(o.code),
+      ),
+    });
   }
-  return { kind, lodges };
+  return { kind, lodges, activityOffers };
 }
 
 /** The wire shape of one addition: a plain extra by service id, or an

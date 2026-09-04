@@ -15,6 +15,11 @@ export const HOLD_TTL_MINUTES = 30;
 /** Under this many free, the card says the number; above it, nothing. */
 export const LOW_STOCK_THRESHOLD = 5;
 
+/** The spa sessions' booking window, and what the confirmation page and
+ *  email quote. The same anchor as the balance due date (56 days). Seeded
+ *  onto the spa resources by scripts/seed-inventory.ts. */
+export const SPA_OPEN_DAYS_BEFORE = 56;
+
 export type ResourceKind = "STOCK" | "SESSION";
 export type CapRule = "adults" | "children";
 
