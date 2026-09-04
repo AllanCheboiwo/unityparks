@@ -124,7 +124,9 @@ our concern, not Apaleo's; Apaleo sees "3 places at KES 2,500".
 `CYCLE` and `SPA` are retired. Apaleo service codes are immutable, so the
 old services stay in the sandbox; the provisioning script deactivates them
 if the API allows, and code carries a `RETIRED_SERVICE_CODES` exclusion so
-they never reach an offers list either way (open question 1).
+they never reach an offers list either way (open question 1). Sandbox
+bookings that already own `CYCLE` keep it on their folio; the extras card
+simply stops listing it, which is acceptable for demo data.
 
 CMS content for the new codes: three `extras` collection rows keyed by the
 new service codes, seeded by `scripts/seed-cms.ts`, photos reused.
@@ -167,7 +169,7 @@ reconciliation asserts they agree.
 | `expiresAt` DateTime? | set while `HELD`, a real instant |
 | `reason` String? | `ADJUSTMENT` kind: "two bikes in the workshop" |
 | `createdBy` String? | admin email on adjustments |
-| `@@unique([orderId, resourceId, date])` | a replay upserts, never duplicates |
+| `@@unique([orderId, resourceId, date])` | a replay upserts, never duplicates; `ADJUSTMENT` rows have a null `orderId`, which Postgres treats as distinct, so many adjustments per day are allowed |
 
 `taken` counts holds in `HELD` (unexpired) plus `CONFIRMED`. `RELEASED`
 holds stay as audit rows and count nothing.
@@ -195,9 +197,17 @@ two transactions touching the same set of rows lock them in the same order
 and cannot deadlock. If any row refuses, the whole order rolls back: a
 3-night hire that can only get 2 nights is not a sale.
 
-Before applying itself, the placement transaction sweeps expired `HELD`
-holds on the rows it is about to touch (status to `RELEASED`, `taken`
-decremented), so an abandoned claim never blocks a real one.
+Before applying itself to a row, the placement transaction sweeps expired
+`HELD` holds on that row (status to `RELEASED`, `taken` decremented), so an
+abandoned claim never blocks a real one. The sweep and the guarded update
+run inside the same ordered loop, row by row, so every lock on a
+`ResourceDay` is still taken in `(resourceId, date)` order.
+
+Every release, wherever it runs (placement sweep, ops sweep, order
+failure, cancellation), is a **guarded status flip**: `updateMany` where
+the hold id matches and `status` is what the caller expects, and `taken`
+moves only when that flip affected a row. Two sweeps racing over one
+expired hold therefore decrement once, not twice.
 
 ### 5.4 Where the gate sits: inside `addManageExtras`
 
@@ -283,9 +293,11 @@ TTL is 30 minutes, one constant. Real payments take under five minutes.
 
 ### 5.8 Cancellation and amendment
 
-- `cancelBooking` gains one step: release every `CONFIRMED` hold for the
-  record (guarded `updateMany` on status, `taken` decremented per row).
-  Idempotent because only rows still in `CONFIRMED` move.
+- `cancelBooking` gains one step, inside the same transaction as the
+  record's status flip to `cancelled`: release every `CONFIRMED` hold for
+  the record (guarded flip per row, `taken` decremented per row that
+  flipped). A crash cannot leave a cancelled record still holding stock,
+  and a replay finds nothing left to flip.
 - The amend route refuses while the record has any `CONFIRMED` hold:
   "This break has activities booked. Call our team to move it." Blunt on
   purpose; guests cannot remove activities themselves in v1 either.
@@ -294,7 +306,10 @@ TTL is 30 minutes, one constant. Real payments take under five minutes.
 
 `GET /api/booking/[bookingId]/activities` answers, per lodge, every active
 resource with: window state (`opens_on` with a date, `open`, `closed`),
-owned count, the cap, and free counts. For `STOCK` the free count is the
+owned count, the cap, and free counts. Owned counts come from the lodge's
+`CONFIRMED` holds, not from Apaleo: the card is then a local read, Apaleo
+is touched only on an add, and a spa booking can be shown per session
+("2 places, Saturday 14:00") where Apaleo only knows "4 places". For `STOCK` the free count is the
 minimum over the stay's nights; for `SESSION` it is per date of the stay
 per session. Reads apply the expiry rule at read time.
 
@@ -378,15 +393,21 @@ cheapest unit of contention there is.
 7. `taken` is written only by the guarded update, the confirm and release
    paths, the sweep, and adjustments through the same guarded update. No
    route or page sets it directly.
+9. A hold's status moves only by a guarded flip, and `taken` moves only
+   when a flip affected a row. Nothing is ever decremented twice.
 8. Uncapped extras behave exactly as before this feature.
 
 ## 7. Inputs and outputs
 
 - `GET /api/booking/[bookingId]/activities`: per-lodge availability,
   window state, owned counts, caps. Owner or invitee may read.
-- `POST /api/booking/[bookingId]/extras`: unchanged body shape. Capacity-
-  limited service ids are simply valid additions now, and the two new
-  refusals are 409s with the item named.
+- `POST /api/booking/[bookingId]/extras`: each addition is still
+  `{ serviceId, count }`; a `SESSION` addition also carries
+  `{ resourceCode, date }`. Several session additions may share one
+  `serviceId` (two spa sessions on different nights), so the existing
+  "each extra once per request" rule relaxes to once per
+  `(serviceId, resourceCode, date)`, and the Apaleo count for that service
+  is the sum. The two new refusals are 409s with the item named.
 - `POST /api/ops/inventory/sweep`, `.../reconcile`, `.../resources`,
   `.../adjustments`: admin.
 - Emails: the extras receipt already exists and now lists sessions with
@@ -590,3 +611,10 @@ they were agreed.
 4. Should the balance reminder email, which fires around the same 56-day
    mark, mention that activities are open? Copy only, and out of scope
    unless you want it in.
+5. The concurrent placement test (build step 1) needs a real Postgres: a
+   guarded update cannot be proven against a mock. Today's suite is pure
+   and mock-based. Options: a `*.db.test.ts` pattern run against
+   `unity_parks_dev` when `DATABASE_URL` is set and skipped otherwise, or a
+   separate `npm run test:db` script. Either touches `vitest.config` and
+   the `scripts` block, which are frozen during implementation, so the
+   choice must be made before the tests phase, not during it.
