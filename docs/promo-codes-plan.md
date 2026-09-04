@@ -1,6 +1,9 @@
 # The repeat-guest offer (UNP-7)
 
-Status: in-review
+Status: shipped
+
+Merged to main 3 Sep 2026 as PR #29 (commit 57fd943); Railway deployed and
+`prisma db push` run against the Railway database the same day.
 
 Plan approved: 2 Sep 2026, Allan wrote "plan-approved"
 Tests approved: 2 Sep 2026, commit f55e876 (suite commits a1443b0, eb5f98c, f55e876, all test-and-spec-only), Allan wrote "tests approved"
@@ -410,6 +413,37 @@ no alerts; the page is a read-out, not a control panel.
 11. Both instruments on one booking: a repeat discount plus referral
    credit on a cheap booking leaves exactly the KSh 500 floor
    collectable, never less (invariant 4, decision 7).
+
+### What was actually checked, 3 Sep 2026
+
+Allan closed the issue on the merge rather than run the eleven steps
+above, so this is the honest record: **steps 1 to 4 and 6 to 11 were
+never run against the deployed site.** What was checked on Railway that
+day, signed out or by inspection:
+
+- The terms page carries the section 4 wording verbatim: KSh 5,000 per
+  lodge, three lodges, 31 days, account plus accepted-before-departure
+  party members, not combinable.
+- `/ops/repeat-offers` answers 307 to a signed-out visitor and
+  `POST /api/ops/repeat-offers/run` answers 401 without admin or the run
+  secret.
+- An apply against an unknown session answers 410 (part of step 5).
+- The lead account's page showed no offer card while its most recent
+  departure was 41 days old: the closed-window case of step 5, passing.
+
+Two steps could never have passed live and are covered by the frozen
+suite instead, not by this environment. Step 8 needs checkout killed
+between the claim and the confirm, which a deployed app gives no way to
+induce; `server/repeatOffer/claim.test.ts` pins the adoption rule that
+matters. Step 11's KSh 500 floor only binds when the discount approaches
+the booking total, and the cheapest real stay is around KES 119,000;
+`lib/repeatOffer.test.ts` and the referral floor tests pin it.
+
+`scripts/force-past-departure.mjs` exists for whoever runs the rest: it
+shifts a paid stay back whole weeks (keeping the Fri/Mon turnover) and
+backdates its invites past the manifest rule, which is the fixture every
+remaining step needs. The owner half of the check needs nothing else;
+steps 4 and 6 need a second registered account.
 
 ## 13. Open questions
 
