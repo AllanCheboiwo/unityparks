@@ -1,6 +1,8 @@
 # Activities: bikes, spa sessions and the inventory layer (UNP-6)
 
-Status: grilling
+Status: plan-approved
+
+Plan approved: 4 Sep 2026, Allan wrote "plan-approved"
 
 Scheduled 3 Sep 2026 as UNP-6, on branch `unp-6-activities-inventory`.
 Redrafted 4 Sep 2026 from the phase 1 interview. The 20 Aug draft (checkout
