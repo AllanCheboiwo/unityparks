@@ -317,6 +317,47 @@ export function classifyCheckoutOffers<T extends { code: string }>(
     .map((offer) => ({ ...offer, teaser: rules.resourceCodes.has(offer.code) }));
 }
 
+/**
+ * Resolve a checkout snapshot against the lodge's live offers (security
+ * review, 4 Sep 2026). The client sends service ids, codes, names and
+ * amounts; only the service id is trusted, and only once it resolves to a
+ * live offer. Everything else on the line is taken from that offer, and a
+ * line whose offer is governed (inventory-backed or retired) or is the
+ * location fee is refused, so ensureRecord can never book stock nobody
+ * held, whatever code the client wrote next to the id.
+ */
+export function resolveCheckoutSnapshot<
+  T extends { serviceId: string; code: string; name: string; count: number; totalGrossAmount: number },
+>(
+  offers: T[],
+  extras: Array<{ serviceId: string; count: number }>,
+  rules: { governed: ReadonlySet<string>; locationCode: string },
+):
+  | { ok: true; extras: Array<{ serviceId: string; code: string; name: string; count: number; grossAmount: number }> }
+  | { ok: false; reason: string } {
+  const byId = new Map(offers.map((o) => [o.serviceId, o]));
+  const resolved = [];
+  for (const line of extras) {
+    const offer = byId.get(line.serviceId);
+    if (!offer) return { ok: false, reason: "One of those extras isn't on offer for this stay." };
+    if (rules.governed.has(offer.code)) {
+      return { ok: false, reason: "Activities are booked from your account after checkout." };
+    }
+    if (offer.code === rules.locationCode) {
+      return { ok: false, reason: "The lodge location fee is chosen on the location step." };
+    }
+    const unit = Math.round(offer.totalGrossAmount / Math.max(1, offer.count));
+    resolved.push({
+      serviceId: offer.serviceId,
+      code: offer.code,
+      name: offer.name,
+      count: line.count,
+      grossAmount: unit * line.count,
+    });
+  }
+  return { ok: true, extras: resolved };
+}
+
 /** True when a checkout extras snapshot carries a resource-backed service. */
 export function isTeaserSnapshot(
   extras: Array<{ code: string }>,

@@ -3,7 +3,7 @@ import { pendingRedemptionForSession } from "@/server/repeatOffer/derive";
 import { z } from "zod";
 import { getExtraOffers } from "@/server/apaleo/offers";
 import { LOCATION_SERVICE_CODE, RETIRED_SERVICE_CODES } from "@/server/apaleo/units";
-import { classifyCheckoutOffers, isTeaserSnapshot } from "@/lib/inventory";
+import { classifyCheckoutOffers, resolveCheckoutSnapshot } from "@/lib/inventory";
 import { governedServiceCodes } from "@/server/inventory/availability";
 import { getSession, parseChildrenAges, setExtras } from "@/server/booking/session";
 import { handleRoute, jsonError } from "@/server/api-helpers";
@@ -94,14 +94,29 @@ export async function POST(
     if (!session.lodges.some((l) => l.slot === parsed.data.slot)) {
       return jsonError(400, "That lodge slot is not part of this break.");
     }
-    // Stock is never booked from checkout in v1 (UNP-25 is the entry point
-    // with holds), and retired services are never booked at all; a snapshot
-    // carrying either would make ensureRecord book what nobody held.
-    if (isTeaserSnapshot(parsed.data.extras, await governedServiceCodes())) {
-      return jsonError(400, "Activities are booked from your account after checkout.");
-    }
+    // The snapshot is rebuilt from the lodge's live offers by service id:
+    // the client's code, name and amount are never stored. Stock is never
+    // booked from checkout in v1 (UNP-25 is the entry point with holds) and
+    // retired services never at all, so a line whose offer is governed is
+    // refused whatever code the client wrote next to the id. Otherwise
+    // ensureRecord, which books the snapshot's service ids verbatim, could
+    // be made to book what nobody held.
+    const lodge = session.lodges.find((l) => l.slot === parsed.data.slot);
+    if (!lodge?.ratePlanId) return jsonError(400, "Choose a lodge first.");
+    const offers = await getExtraOffers({
+      ratePlanId: lodge.ratePlanId,
+      arrival: session.arrival,
+      departure: session.departure,
+      adults: lodge.adults,
+      childrenAges: parseChildrenAges(lodge),
+    });
+    const resolved = resolveCheckoutSnapshot(offers, parsed.data.extras, {
+      governed: await governedServiceCodes(),
+      locationCode: LOCATION_SERVICE_CODE,
+    });
+    if (!resolved.ok) return jsonError(400, resolved.reason);
 
-    await setExtras(id, parsed.data.extras, parsed.data.slot);
+    await setExtras(id, resolved.extras, parsed.data.slot);
     return NextResponse.json({ ok: true });
   });
 }
