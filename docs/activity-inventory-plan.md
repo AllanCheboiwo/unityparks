@@ -661,6 +661,14 @@ and an activities add; two Manage cards both run extras recovery), UNP-27
 copy reads the spa window from a constant the ops form can contradict),
 UNP-28 (shared stepper, one lodge helper, form and gate duplication).
 
+`/security-review`: one Medium, fixed. The checkout snapshot POST checked
+the client's `code` while `ensureRecord` books the client's `serviceId`;
+a forged pair would have booked stock with no hold. The POST now resolves
+every line by service id against the lodge's live offers and refuses
+governed, retired and unknown services (`resolveCheckoutSnapshot`). The
+resolver has no unit test because the suite was frozen; it is covered by
+the live check recorded in the fix commit and by acceptance step 1.
+
 ## 12a. Build order (as planned)
 
 1. Schema plus `lib/inventory.ts` pure logic and `server/inventory/holds.ts`
