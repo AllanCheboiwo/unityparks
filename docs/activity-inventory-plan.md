@@ -623,7 +623,32 @@ they were agreed.
 12. Bikes at checkout deferred to UNP-25 with a teaser card in v1 (Allan
     agreed 4 Sep). `sellAtCheckout` and `ownerKey` are shaped for it now.
 
-## 14. Open questions
+## 14. The grill record, 4 Sep 2026
+
+Allan's own words on the three tables, lightly punctuated: "We have the
+resource inventory: it shows what inventory we have and quantity for
+specific time slots. Then we have the table that is like a ledger that
+documents everything that happens to the resources: hold, confirmed,
+released. And the final table is used to calculate available quantity,
+and uses the ledger as proof." Nudge recorded: the third table exists to
+be locked, availability is capacity minus its counter, the ledger proves
+the counter.
+
+On ordering (question 2): "We can charge on Apaleo on an already taken
+resource, which complicates matters: you have to find a new resource or
+do a refund." On the race (question 4): "Whoever gets a hold first and
+their transaction succeeds in the database." Sharpened to: the decision
+is the WHERE clause of one guarded UPDATE under its row lock.
+
+Answered for him and accepted: why the counter is never stored as truth
+(a cached count of a contended value can be wrong silently, a derived one
+cannot); why holds belong to the order (they inherit its create, settle,
+fail and recovery life); per-night rows (stays overlap by nights); capacity
+cut below taken (holds untouched, sold out until they release); the
+deposit-paid path (charge on the folio at once, holds CONFIRMED, money
+collected by the pay route, released on cancellation).
+
+## 15. Open questions
 
 1. Can the provisioning script deactivate `CYCLE` and `SPA` in Apaleo, or
    is the code exclusion the only tool? To check against the sandbox API
@@ -635,10 +660,7 @@ they were agreed.
 4. Should the balance reminder email, which fires around the same 56-day
    mark, mention that activities are open? Copy only, and out of scope
    unless you want it in.
-5. The concurrent placement test (build step 1) needs a real Postgres: a
-   guarded update cannot be proven against a mock. Today's suite is pure
-   and mock-based. Options: a `*.db.test.ts` pattern run against
-   `unity_parks_dev` when `DATABASE_URL` is set and skipped otherwise, or a
-   separate `npm run test:db` script. Either touches `vitest.config` and
-   the `scripts` block, which are frozen during implementation, so the
-   choice must be made before the tests phase, not during it.
+5. Closed 4 Sep, Allan: "yes" to the `*.db.test.ts` convention. Files
+   matching it run against `unity_parks_dev` when `DATABASE_URL` is set and
+   skip with a printed notice otherwise, so `npm test` stays one command.
+   The `vitest.config` change lands in the tests commit, before the freeze.
