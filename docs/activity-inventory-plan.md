@@ -345,12 +345,16 @@ Rules the UI must keep:
 
 ### 5.10 Checkout exclusion
 
-`GET /api/session/[id]/extras` filters out any service whose code has an
-`InventoryResource` row (active or not) and any code in
-`RETIRED_SERVICE_CODES`, the same way it already filters `LOCATION`.
-Checkout's snapshot therefore never contains a capacity-limited service and
-`ensureRecord` is untouched. The confirmation page and email say when
-activities open.
+`GET /api/session/[id]/extras` drops any code in `RETIRED_SERVICE_CODES`
+the way it already drops `LOCATION`, and returns any service whose code
+has an `InventoryResource` row flagged `teaser: true`: price included, so
+Apaleo stays the only price source, and the extras step renders it as the
+Cycle Hire teaser with no quantity control. `POST /api/session/[id]/extras`
+refuses a teaser service in the snapshot, so checkout's snapshot never
+contains a capacity-limited service and `ensureRecord` is untouched. (Post-
+approval clarification, 4 Sep: the earlier wording dropped teaser services
+entirely, which left the teaser with no honest price to show.) The
+confirmation page and email say when activities open.
 
 ### 5.11 Ops surface
 
