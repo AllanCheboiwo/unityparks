@@ -636,6 +636,31 @@ reprovision above, `npx tsx --env-file=.env scripts/seed-inventory.ts`,
 `npm run seed:cms`, and set `INVENTORY_RUN_SECRET` if a scheduler will
 ever call the sweep.
 
+### Review record, 4 Sep 2026
+
+`/code-review` at high effort: eight finder angles, 33 deduplicated
+candidates, each verified independently (12 confirmed, 8 plausible, 2
+refuted, 11 cleanup). The confirmed and plausible correctness findings are
+fixed in the review-fix commit; the three worth remembering:
+
+- "Resource-backed" had two definitions. The checkout route used every
+  resource row, the Manage engine used active ones only, so deactivating a
+  resource would have sold its service as a hold-less plain extra. Now one
+  `governedServiceCodes()` (all rows plus retired codes) gates every path.
+- Owned stock was read as the max over hold rows, and separate orders are
+  separate rows per night, so a lodge that added one bike twice read as
+  owning one and could take a third. Summed per night first now.
+- `retireOrder` released holds even when its flip matched no row, so a
+  late recovery against a settled order could release confirmed stock; and
+  a throw after the settle commit would have sent the caller into a
+  rollback of a settled order. Both guarded.
+
+Left for follow-up issues: UNP-26 (no serializer between a date amendment
+and an activities add; two Manage cards both run extras recovery), UNP-27
+(the card prices activities with the last lodge's rate; the confirmation
+copy reads the spa window from a constant the ops form can contradict),
+UNP-28 (shared stepper, one lodge helper, form and gate duplication).
+
 ## 12a. Build order (as planned)
 
 1. Schema plus `lib/inventory.ts` pure logic and `server/inventory/holds.ts`
