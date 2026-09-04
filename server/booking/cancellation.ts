@@ -4,6 +4,7 @@ import { prisma } from "../db";
 import { cancelReservationOnce } from "../apaleo/cancel";
 import { getFolioForReservation } from "../apaleo/bookings";
 import { refundFolio } from "../apaleo/payments";
+import { releaseForRecord } from "../inventory/holds";
 import { PublicError } from "../api-helpers";
 import { sendBookingCancellation } from "../email/bookingCancellation";
 import { raiseOpsAlert } from "../ops/alerts";
@@ -215,9 +216,17 @@ export async function cancelBooking(staleRecord: RecordForCancel): Promise<Cance
 
   const refunded = shares.reduce((sum, s) => sum + s, 0);
 
-  const flipped = await prisma.bookingRecord.updateMany({
-    where: { id: record.id, status: { in: ["paid", "deposit_paid"] } },
-    data: { status: "cancelled", cancelledAt: new Date(), refundAmount: refunded },
+  // The status flip and the activities release share one transaction
+  // (UNP-6, spec 5.8): a crash between them could otherwise leave a
+  // cancelled break still holding bikes. The release is a guarded flip per
+  // hold, so a replay finds nothing left to give back.
+  const flipped = await prisma.$transaction(async (tx) => {
+    const result = await tx.bookingRecord.updateMany({
+      where: { id: record.id, status: { in: ["paid", "deposit_paid"] } },
+      data: { status: "cancelled", cancelledAt: new Date(), refundAmount: refunded },
+    });
+    if (result.count === 1) await releaseForRecord(tx, record.id);
+    return result;
   });
   if (flipped.count === 1) {
     // Narrow race, loud detection: a settle that committed while the Apaleo
