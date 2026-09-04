@@ -123,9 +123,29 @@ describe("findDrift", () => {
     ]);
   });
 
-  it("bikes compare riders per night, not riders times nights; spa compares total places", () => {
-    // Two riders over two nights is four hold-quantity in the ledger and 2 on Apaleo. Consistent.
-    expect(findDrift(clean())).toEqual([]);
+  it("bikes compare riders per night, not riders times nights", () => {
+    // Two riders over two nights: the ledger holds qty 2 on each of two nights.
+    // Apaleo carrying 2 is consistent (the clean fixture); Apaleo carrying 4,
+    // which is what riders times nights would demand, is a mismatch.
+    const input = clean();
+    input.apaleoCounts[0].count = 4;
+    expect(findDrift(input)).toMatchObject([
+      { kind: "apaleo_mismatch", serviceCode: "CYCLE-ADULT", apaleo: 4, ledger: 2 },
+    ]);
+  });
+
+  it("spa places are compared as a total across the booking's sessions", () => {
+    const input = clean();
+    input.holds.push({
+      resourceId: "res-spa", date: "2026-12-11", qty: 1, status: "CONFIRMED", kind: "ORDER",
+      ownerKey: "order:o-1", orderId: "o-1", recordId: "rec-1", slot: 0, expiresAt: null,
+    });
+    input.days.push({ resourceId: "res-spa", date: "2026-12-11", taken: 1 });
+    expect(findDrift(input)).toMatchObject([
+      { kind: "apaleo_mismatch", serviceCode: "SPA-SESSION", apaleo: 2, ledger: 3 },
+    ]);
+    input.apaleoCounts[1].count = 3;
+    expect(findDrift(input)).toEqual([]);
   });
 
   it("a service Apaleo carries that no resource backs (a retired code on an old booking) is ignored", () => {
