@@ -13,6 +13,7 @@ import { nightsBetween, validateStay } from "@/server/booking/rules";
 import { assertBookingAccess } from "@/server/booking/access";
 import { reconcileInvites } from "@/server/booking/invites";
 import { recoverStaleExtrasOrder } from "@/server/booking/extras";
+import { hasConfirmedHolds } from "@/server/inventory/holds";
 import { getCurrentUser } from "@/server/auth/session";
 import { handleRoute, jsonError, PublicError } from "@/server/api-helpers";
 
@@ -73,6 +74,16 @@ export async function POST(
     // as unreachable folio credit once that order rolled back. Same guard the
     // pay route carries: an order in flight refuses, a crashed one resolves.
     await recoverStaleExtrasOrder(record);
+
+    // Activities are held per night (UNP-6, spec 5.8). Moving the break
+    // would strand them on the old dates, and v1 has no grab-new-first
+    // dance, so a break with activities does not move itself.
+    if (await hasConfirmedHolds(record.id)) {
+      return jsonError(
+        409,
+        "This break has activities booked. Call our team on +254 700 000 000 to move it.",
+      );
+    }
 
     const parsed = AmendBody.safeParse(await req.json());
     if (!parsed.success) return jsonError(400, "Please choose new dates.");

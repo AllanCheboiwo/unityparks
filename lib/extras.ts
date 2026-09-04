@@ -66,6 +66,11 @@ export function priceAdditions(
   }>,
   owned: Array<{ serviceId: string; count: number }>,
   requests: AdditionRequest[],
+  options: {
+    /** Service ids whose quantity was already capped by the inventory
+     *  validator (UNP-6): the stepper cap does not apply to them. */
+    uncapped?: ReadonlySet<string>;
+  } = {},
 ): PriceAdditionsResult {
   if (requests.length === 0) {
     return { ok: false, reason: "Pick at least one extra to add." };
@@ -90,7 +95,7 @@ export function priceAdditions(
 
     const previousCount = ownedById.get(request.serviceId) ?? 0;
     if (isQuantityExtra(offer)) {
-      if (previousCount + request.count > MAX_EXTRA_QTY) {
+      if (!options.uncapped?.has(offer.serviceId) && previousCount + request.count > MAX_EXTRA_QTY) {
         return {
           ok: false,
           reason: `You can have at most ${MAX_EXTRA_QTY} of each extra per lodge.`,

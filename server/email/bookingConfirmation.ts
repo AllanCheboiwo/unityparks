@@ -1,3 +1,4 @@
+import { opensOnDate, SPA_OPEN_DAYS_BEFORE } from "@/lib/inventory";
 import { VILLAGE_LOCALE_LINE, VILLAGE_NAME } from "@/content/village";
 import "server-only";
 import { prisma } from "../db";
@@ -23,6 +24,15 @@ function appBaseUrl(): string {
 }
 
 /** "Monday, 20 July 2026" */
+/** UNP-6: bikes open from confirmation, spa sessions eight weeks out. */
+function activitiesLine(arrival: string): string {
+  const spaOpens = opensOnDate(arrival, SPA_OPEN_DAYS_BEFORE);
+  const today = new Date().toISOString().slice(0, 10);
+  return today >= spaOpens
+    ? "Activities are open in your account: cycle hire and Forest Spa sessions, subject to availability."
+    : `Cycle hire is open in your account now; Forest Spa sessions open on ${longDate(spaOpens)}, subject to availability.`;
+}
+
 function longDate(iso: string): string {
   return new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", {
     weekday: "long",
@@ -104,6 +114,8 @@ export async function sendBookingConfirmation(recordId: string): Promise<void> {
       `${OFFER_WINDOW_DAYS} days of departing this one. Party members you invite on the`,
       `guest details page before departure share the offer.`,
       ``,
+      activitiesLine(session.arrival),
+      ``,
       `Manage your break (change dates, add guest names) at ${manageUrl}`,
       `by signing in with your Unity Parks account.`,
       ``,
@@ -154,6 +166,9 @@ export async function sendBookingConfirmation(recordId: string): Promise<void> {
         booked within ${OFFER_WINDOW_DAYS} days of departing this one. Party
         members you invite on the guest details page before departure share
         the offer.
+      </p>
+      <p style="margin:0 0 20px;color:#4c4e4b;font-size:14px;line-height:1.5;">
+        ${activitiesLine(session.arrival)}
       </p>
       <p style="margin:0 0 20px;color:#4c4e4b;font-size:14px;line-height:1.5;">
         Need to change dates or add guest names? Sign in with your Unity

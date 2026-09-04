@@ -45,6 +45,25 @@ export async function sendExtrasReceipt(orderId: string): Promise<void> {
     }
 
     const additions = JSON.parse(order.additions) as PricedAddition[];
+    // UNP-6: what the holds say, so a spa line carries its day and time and
+    // a bike line says it covers the whole break.
+    const holds = await prisma.inventoryHold.findMany({
+      where: { orderId, status: "CONFIRMED" },
+      include: { resource: { select: { name: true, kind: true, sessionStart: true } } },
+      orderBy: [{ resourceId: "asc" }, { date: "asc" }],
+    });
+    const activityLines: string[] = [];
+    const seenStock = new Set<string>();
+    for (const hold of holds) {
+      if (hold.resource.kind === "SESSION") {
+        activityLines.push(
+          `${hold.resource.name} on ${longDate(hold.date)}: ${hold.qty} place${hold.qty === 1 ? "" : "s"}`,
+        );
+      } else if (!seenStock.has(hold.resourceId)) {
+        seenStock.add(hold.resourceId);
+        activityLines.push(`${hold.resource.name} x ${hold.qty}, for the whole of your break`);
+      }
+    }
     const amount = order.chargedDelta ?? order.expectedDelta;
     const outstanding = Math.max(0, record.totalGrossAmount - record.paidAmount);
     const greeting = session.guestFirstName ? `Hello ${session.guestFirstName},` : "Hello,";
@@ -69,19 +88,27 @@ export async function sendExtrasReceipt(orderId: string): Promise<void> {
       `Booking reference: ${reference}`,
       `Stay: ${longDate(session.arrival)} to ${longDate(session.departure)}`,
       ...itemLines,
+      ...activityLines,
       moneyLine,
       ``,
       `Unity Parks · ${VILLAGE_LOCALE_LINE}`,
       `Demo environment: no real payments were taken.`,
     ].join("\n");
 
-    const itemRows = additions
-      .map(
-        (a) => `
+    const itemRows =
+      additions
+        .map(
+          (a) => `
         <tr><td style="padding:6px 16px 6px 0;color:#4c4e4b;font-size:14px;">${a.name}${a.addCount > 1 ? ` x ${a.addCount}` : ""}</td>
             <td style="padding:6px 0;color:#1d1d1d;font-size:14px;font-weight:600;">${formatMoney(a.amount, order.currency)}</td></tr>`,
-      )
-      .join("");
+        )
+        .join("") +
+      activityLines
+        .map(
+          (line) => `
+        <tr><td colspan="2" style="padding:2px 0 6px;color:#4c4e4b;font-size:13px;">${line}</td></tr>`,
+        )
+        .join("");
 
     const html = `
 <div style="margin:0;padding:24px 12px;background:#f5f3ee;font-family:Arial,Helvetica,sans-serif;">

@@ -11,6 +11,10 @@ import { apaleo, PROPERTY_ID } from "./client";
  *  this code out - the fee is sold by the location step, never as an extra. */
 export const LOCATION_SERVICE_CODE = "LOCATION";
 
+/** Services the activities layer replaced (UNP-6). Apaleo codes are
+ *  immutable, so the old rows outlive the switch; nothing lists them. */
+export const RETIRED_SERVICE_CODES: ReadonlySet<string> = new Set(["CYCLE", "SPA"]);
+
 /** One pickable lodge on the location step. */
 export type UnitOption = {
   id: string; // Apaleo unit id, e.g. UPNV-EBP

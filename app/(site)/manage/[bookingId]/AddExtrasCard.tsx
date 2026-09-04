@@ -153,8 +153,9 @@ export function AddExtrasCard({
     <div className="mt-8 rounded-lg border border-line bg-white p-6">
       <p className="font-display text-xl font-bold text-ink">Add little extras</p>
       <p className="mt-1 text-sm text-foreground">
-        Bikes, spa passes and lodge treats can join your break any time until
-        the day before you arrive.{" "}
+        Lodge treats like the grocery pack, firewood and early check-in can
+        join your break any time until the day before you arrive. Bikes and
+        spa sessions are booked under Activities above.{" "}
         {booking.status === "deposit_paid"
           ? "Anything you add joins your outstanding balance."
           : "Anything you add is charged to your booking straight away."}

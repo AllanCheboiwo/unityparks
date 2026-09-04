@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { pendingRedemptionForSession } from "@/server/repeatOffer/derive";
 import { z } from "zod";
 import { getExtraOffers } from "@/server/apaleo/offers";
-import { LOCATION_SERVICE_CODE } from "@/server/apaleo/units";
+import { LOCATION_SERVICE_CODE, RETIRED_SERVICE_CODES } from "@/server/apaleo/units";
+import { classifyCheckoutOffers, resolveCheckoutSnapshot } from "@/lib/inventory";
+import { governedServiceCodes } from "@/server/inventory/availability";
 import { getSession, parseChildrenAges, setExtras } from "@/server/booking/session";
 import { handleRoute, jsonError } from "@/server/api-helpers";
 import { prisma } from "@/server/db";
@@ -10,7 +12,10 @@ import { prisma } from "@/server/db";
 /**
  * Live extras (Apaleo service offers) for one lodge of the break (?slot=,
  * default 0), priced against that lodge's rate plan and party - extras are
- * per lodge, the grocery pack goes to a specific kitchen.
+ * per lodge, the grocery pack goes to a specific kitchen. Resource-backed
+ * services come back flagged as teasers (UNP-6, spec 5.10): the price is
+ * Apaleo's, the card shows no quantity control, and the snapshot POST
+ * refuses them.
  */
 export async function GET(
   req: NextRequest,
@@ -34,7 +39,10 @@ export async function GET(
       childrenAges: parseChildrenAges(lodge),
     });
     // The location-choice fee is sold by the location step, never here.
-    const extras = offers.filter((o) => o.code !== LOCATION_SERVICE_CODE);
+    const extras = classifyCheckoutOffers(
+      offers.filter((o) => o.code !== LOCATION_SERVICE_CODE),
+      { resourceCodes: await governedServiceCodes(), retired: RETIRED_SERVICE_CODES },
+    );
     return NextResponse.json({ extras, slot });
   });
 }
@@ -86,8 +94,29 @@ export async function POST(
     if (!session.lodges.some((l) => l.slot === parsed.data.slot)) {
       return jsonError(400, "That lodge slot is not part of this break.");
     }
+    // The snapshot is rebuilt from the lodge's live offers by service id:
+    // the client's code, name and amount are never stored. Stock is never
+    // booked from checkout in v1 (UNP-25 is the entry point with holds) and
+    // retired services never at all, so a line whose offer is governed is
+    // refused whatever code the client wrote next to the id. Otherwise
+    // ensureRecord, which books the snapshot's service ids verbatim, could
+    // be made to book what nobody held.
+    const lodge = session.lodges.find((l) => l.slot === parsed.data.slot);
+    if (!lodge?.ratePlanId) return jsonError(400, "Choose a lodge first.");
+    const offers = await getExtraOffers({
+      ratePlanId: lodge.ratePlanId,
+      arrival: session.arrival,
+      departure: session.departure,
+      adults: lodge.adults,
+      childrenAges: parseChildrenAges(lodge),
+    });
+    const resolved = resolveCheckoutSnapshot(offers, parsed.data.extras, {
+      governed: await governedServiceCodes(),
+      locationCode: LOCATION_SERVICE_CODE,
+    });
+    if (!resolved.ok) return jsonError(400, resolved.reason);
 
-    await setExtras(id, parsed.data.extras, parsed.data.slot);
+    await setExtras(id, resolved.extras, parsed.data.slot);
     return NextResponse.json({ ok: true });
   });
 }
