@@ -406,41 +406,59 @@ const EXTRAS: Array<{
     ],
     displayOrder: 4,
   },
+  // Activities (UNP-6): booked from the account with real availability.
+  // At checkout these render as teaser cards, price shown, no stepper.
   {
-    serviceCode: "CYCLE",
+    serviceCode: "CYCLE-ADULT",
     photo: "activity-cycle.jpg",
     noun: "bike",
     more: [
       {
         heading: "Adult cycles",
-        body: "Quality mountain bikes with seven gears, front and rear lights, a cushioned saddle and a stand. A helmet and lock are included free with every hire.",
+        body: "Quality mountain bikes with seven gears, front and rear lights, a cushioned saddle and a stand. A helmet and lock are included free with every hire, for the whole of your break.",
       },
       {
         heading: "Getting the right fit",
-        body: "Our Cycle Centre team sizes every rider on arrival, so you leave on a bike that fits. Trailers, tag-alongs and child seats are available at the centre too.",
+        body: "Our Cycle Centre team fits every rider on arrival, so you leave on a bike that fits. Trailers, tag-alongs and child seats are available at the centre too.",
       },
       {
         heading: "Good to know",
-        body: "Cycle hire runs from your arrival day through to departure. Over 15 km of car-free forest trails start right outside your lodge, and they ride best in the dry months from December to February.",
+        body: "Bikes are popular and the fleet is limited, so book early from your account. Over 15 km of car-free forest trails start right outside your lodge, and they ride best in the dry months from December to February.",
       },
     ],
     displayOrder: 5,
   },
   {
-    serviceCode: "SPA",
-    photo: "activity-spa.jpg",
-    noun: "pass",
+    serviceCode: "CYCLE-CHILD",
+    photo: "activity-cycle.jpg",
+    noun: "bike",
     more: [
       {
-        heading: "Your day at the spa",
-        body: "A full day pass to The Forest Spa: sauna, steam room, hydrotherapy pool and a quiet relaxation lounge. Towels and robes are provided. Sweetest on a misty cool-season morning, June to September.",
+        heading: "Child's cycles",
+        body: "Bikes for riders aged two and over, fitted by height at the Cycle Centre on arrival, with a helmet and lock included for the whole of your break.",
       },
       {
         heading: "Good to know",
-        body: "One pass covers one guest for the day. Guests must be 16 or over to use the thermal spa. Book a treatment on arrival to make a morning of it.",
+        body: "Younger children can ride along in a child seat or on a tag-along behind an adult bike, arranged at the centre. Child bikes sell out on school-holiday weekends, so book from your account as soon as your break is confirmed.",
       },
     ],
     displayOrder: 6,
+  },
+  {
+    serviceCode: "SPA-SESSION",
+    photo: "activity-spa.jpg",
+    noun: "place",
+    more: [
+      {
+        heading: "Your three hours",
+        body: "A three-hour session at The Forest Spa: sauna, steam room, hydrotherapy pool and a quiet relaxation lounge. Towels and robes are provided. Sweetest on a misty cool-season morning, June to September.",
+      },
+      {
+        heading: "Good to know",
+        body: "Sessions start at 10:00 and 14:00 and open for booking eight weeks before your arrival, from your account. Guests must be 16 or over to use the thermal spa. Book a treatment on arrival to make a morning of it.",
+      },
+    ],
+    displayOrder: 7,
   },
 ];
 

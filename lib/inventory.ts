@@ -286,7 +286,7 @@ export function validateActivityRequests(input: {
  */
 export function classifyCheckoutOffers<T extends { code: string }>(
   offers: T[],
-  rules: { resourceCodes: Set<string>; retired: Set<string> },
+  rules: { resourceCodes: ReadonlySet<string>; retired: ReadonlySet<string> },
 ): Array<T & { teaser: boolean }> {
   return offers
     .filter((offer) => !rules.retired.has(offer.code))
@@ -296,7 +296,7 @@ export function classifyCheckoutOffers<T extends { code: string }>(
 /** True when a checkout extras snapshot carries a resource-backed service. */
 export function isTeaserSnapshot(
   extras: Array<{ code: string }>,
-  resourceCodes: Set<string>,
+  resourceCodes: ReadonlySet<string>,
 ): boolean {
   return extras.some((extra) => resourceCodes.has(extra.code));
 }

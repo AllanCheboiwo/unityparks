@@ -361,6 +361,10 @@ export function ExtrasClient({
                             Remove
                           </button>
                         </div>
+                      ) : extra.teaser ? (
+                        <p className="mt-4 text-sm text-foreground/70">
+                          Book from your account after checkout, subject to availability.
+                        </p>
                       ) : (
                         <button
                           type="button"

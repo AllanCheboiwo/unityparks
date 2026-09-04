@@ -21,6 +21,9 @@ export type ExtraOfferDto = {
   count: number;
   totalGrossAmount: number;
   currency: string;
+  /** UNP-6: a resource-backed service, shown with its price and no
+   *  quantity control; booked from the account after checkout. */
+  teaser?: boolean;
 };
 
 export type ExtraSnapshotDto = {

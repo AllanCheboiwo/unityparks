@@ -177,24 +177,37 @@ const SERVICES = [
     mode: "Arrival" as const,
     serviceType: "FoodAndBeverages" as const,
   },
+  // Activities (UNP-6). Priced once per break or per place (Arrival mode,
+  // per person), the Center Parcs shape. Stock and session capacity live in
+  // our own InventoryResource table; Apaleo only ever sees "3 places".
   {
-    code: "CYCLE",
-    name: "Cycle Hire",
+    code: "CYCLE-ADULT",
+    name: "Adult cycle hire",
     description:
-      "A quality mountain bike per person, with helmet and lock, for the duration of your stay. Explore 15 km of dedicated trails through the forest.",
-    price: 800,
+      "A quality mountain bike with helmet and lock for the whole of your break. Our Cycle Centre team fits every rider on arrival. Explore 15 km of dedicated trails through the forest.",
+    price: 3_000,
     pricingUnit: "Person" as const,
-    mode: "Daily" as const,
+    mode: "Arrival" as const,
     serviceType: "Other" as const,
   },
   {
-    code: "SPA",
-    name: "Spa Day Pass",
+    code: "CYCLE-CHILD",
+    name: "Child's cycle hire",
     description:
-      "Full access to The Forest Spa per person per day: hot pools, sauna, steam room and relaxation lounge, ten minutes uphill from the square. Towels provided.",
-    price: 1_500,
+      "A child's bike with helmet and lock for the whole of your break, fitted at the Cycle Centre on arrival. Tag-alongs and child seats are available at the centre too.",
+    price: 2_000,
     pricingUnit: "Person" as const,
-    mode: "Daily" as const,
+    mode: "Arrival" as const,
+    serviceType: "Other" as const,
+  },
+  {
+    code: "SPA-SESSION",
+    name: "Forest Spa session",
+    description:
+      "A three-hour session at The Forest Spa: hot pools, sauna, steam room and relaxation lounge, ten minutes uphill from the square. Choose your day and start time from your account. Towels provided.",
+    price: 2_500,
+    pricingUnit: "Person" as const,
+    mode: "Arrival" as const,
     serviceType: "Other" as const,
   },
   {
@@ -649,6 +662,30 @@ async function setRatePlanPrices(rpId: string, pricePerNight: number) {
   );
 }
 
+// Services the activities layer replaced (UNP-6). Apaleo service codes are
+// immutable, so they stay in the sandbox; this pulls them off every sales
+// channel so the offers endpoint stops listing them. The app also excludes
+// them by code (RETIRED_SERVICE_CODES in server/apaleo/units.ts), so a
+// failure here is logged, not fatal.
+const RETIRED_SERVICES = ["CYCLE", "SPA"] as const;
+
+async function retireService(code: string) {
+  const svcId = `${PROPERTY_ID}-${code}`;
+  const { status } = await api("GET", `/rateplan/v1/services/${svcId}`);
+  if (status === 404) {
+    log("✅", `${code} not present, nothing to retire.`);
+    return;
+  }
+  const { status: s, data } = await api("PATCH", `/rateplan/v1/services/${svcId}`, [
+    { op: "replace", path: "/channelCodes", value: [] },
+  ]);
+  if (ok(s)) {
+    log("✅", `${code} retired from every sales channel.`);
+  } else {
+    log("⚠️", `Could not retire ${code} (${s}): ${JSON.stringify(data)}. The app excludes it by code regardless.`);
+  }
+}
+
 async function ensureService(svc: (typeof SERVICES)[number]) {
   const svcId = `${PROPERTY_ID}-${svc.code}`;
   log("🎁", `Checking service ${svc.code} (${svc.name})…`);
@@ -793,6 +830,9 @@ async function main() {
     log("🎁", "Ensuring services only…");
     for (const svc of SERVICES) {
       await ensureService(svc);
+    }
+    for (const code of RETIRED_SERVICES) {
+      await retireService(code);
     }
     console.log("\n✨  Services ensured.\n");
     return;
