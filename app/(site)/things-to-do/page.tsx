@@ -165,8 +165,9 @@ export default async function ThingsToDoPage() {
             <p className="mt-3 max-w-xl text-foreground">
               On a cold mountain a spa sells heat: hot pools, sauna, steam and
               outdoor tubs looking at the peaks, ten minutes uphill through
-              the trees. Adults only, quiet is the rule, and the day pass is
-              one of the extras you can add to any break.
+              the trees. Adults only, quiet is the rule, and three-hour
+              sessions are booked from your account once your break is
+              confirmed, subject to availability.
             </p>
           </div>
         </div>

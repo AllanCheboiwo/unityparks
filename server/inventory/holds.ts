@@ -1,7 +1,7 @@
 import "server-only";
-import type { Prisma, PrismaClient } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../db";
-import type { HoldLine } from "@/lib/inventory";
+import { compareHoldLines, type HoldLine } from "@/lib/inventory";
 
 /**
  * The placement primitive (UNP-6, docs/activity-inventory-plan.md section
@@ -25,10 +25,19 @@ import type { HoldLine } from "@/lib/inventory";
  */
 
 type Tx = Prisma.TransactionClient;
-type Db = Tx | PrismaClient;
 
 export type HoldStatus = "HELD" | "CONFIRMED" | "RELEASED";
 export type HoldKind = "ORDER" | "ADJUSTMENT";
+
+/** The hold identity an extras order claims under. UNP-25 adds a
+ *  session-owned variant here, next to the format it has to match. */
+export function orderOwnerKey(orderId: string): string {
+  return `order:${orderId}`;
+}
+
+/** Interactive transactions default to 5 s; a season-long adjustment is
+ *  hundreds of guarded updates and needs longer. */
+const PLACE_TIMEOUT_MS = 30_000;
 
 export type PlaceHoldsInput = {
   /** "order:<extrasOrderId>" for orders; null for adjustments. */
@@ -37,12 +46,14 @@ export type PlaceHoldsInput = {
   lines: HoldLine[];
   /** Set for HELD order claims; null for adjustments, which are born CONFIRMED. */
   expiresAt: Date | null;
+  /** Orders are born HELD, adjustments CONFIRMED. The late re-place path
+   *  (confirmHolds) claims straight into CONFIRMED in one write. */
+  status?: HoldStatus;
   orderId?: string | null;
   recordId?: string | null;
   slot?: number | null;
   reason?: string | null;
   createdBy?: string | null;
-  now?: Date;
 };
 
 export type PlaceHoldsResult =
@@ -52,24 +63,12 @@ export type PlaceHoldsResult =
       refusal: { resourceId: string; date: string; requested: number; available: number };
     };
 
+/** Thrown inside the placement transaction so Prisma rolls it back; caught
+ *  at the edge and returned as a plain refusal. */
 class Refused extends Error {
-  constructor(public refusal: PlaceHoldsResult & { ok: false }) {
+  constructor(public refusal: { resourceId: string; date: string; requested: number; available: number }) {
     super("refused");
   }
-}
-
-/** A cuid-shaped id for the raw insert; Prisma only fills @default(cuid())
- *  on writes it builds itself. */
-function newRowId(): string {
-  return `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 14)}`;
-}
-
-function ordered(lines: HoldLine[]): HoldLine[] {
-  return [...lines].sort((a, b) =>
-    a.resourceId === b.resourceId
-      ? a.date.localeCompare(b.date)
-      : a.resourceId.localeCompare(b.resourceId),
-  );
 }
 
 /**
@@ -102,10 +101,6 @@ async function flipAndRelease(
   return released;
 }
 
-/** Sweep expired HELD holds on one row, inside the caller's transaction. */
-async function sweepRow(tx: Tx, resourceId: string, date: string, now: Date): Promise<number> {
-  return flipAndRelease(tx, { resourceId, date, expiresAt: { lt: now } }, ["HELD"]);
-}
 
 /**
  * Claim a set of lines as one unit. A replay with the same owner and lines
@@ -114,96 +109,101 @@ async function sweepRow(tx: Tx, resourceId: string, date: string, now: Date): Pr
  * kept and the refusal names the row.
  */
 export async function placeHolds(input: PlaceHoldsInput): Promise<PlaceHoldsResult> {
-  const now = input.now ?? new Date();
-  const status: HoldStatus = input.kind === "ADJUSTMENT" ? "CONFIRMED" : "HELD";
+  const now = new Date();
+  const status: HoldStatus =
+    input.status ?? (input.kind === "ADJUSTMENT" ? "CONFIRMED" : "HELD");
+  const lines = [...input.lines].sort(compareHoldLines);
+  const rows = lines.map((l) => ({ resourceId: l.resourceId, date: l.date }));
   try {
-    await prisma.$transaction(async (tx) => {
-      for (const line of ordered(input.lines)) {
-        // Replay: this owner already holds this row, and it still counts.
+    await prisma.$transaction(
+      async (tx) => {
+        // Replay: rows this owner already holds, and that still count, are
+        // left alone. One read for the whole batch.
+        const alreadyHeld = new Set<string>();
         if (input.ownerKey) {
-          const existing = await tx.inventoryHold.findUnique({
-            where: {
-              ownerKey_resourceId_date: {
-                ownerKey: input.ownerKey,
-                resourceId: line.resourceId,
-                date: line.date,
-              },
-            },
-            select: { status: true },
+          const existing = await tx.inventoryHold.findMany({
+            where: { ownerKey: input.ownerKey, OR: rows, status: { not: "RELEASED" } },
+            select: { resourceId: true, date: true },
           });
-          if (existing && existing.status !== "RELEASED") continue;
+          for (const row of existing) alreadyHeld.add(`${row.resourceId}|${row.date}`);
         }
 
-        // Lazily create the counter row. Native ON CONFLICT, because a burst
-        // of first claimants would race a read-then-insert upsert into a
-        // unique violation for everyone but the first.
-        await tx.$executeRaw`
-          INSERT INTO "ResourceDay" (id, "resourceId", date, taken)
-          VALUES (${newRowId()}, ${line.resourceId}, ${line.date}, 0)
-          ON CONFLICT ("resourceId", date) DO NOTHING`;
-        await sweepRow(tx, line.resourceId, line.date, now);
+        // Lazily create the counter rows. createMany with skipDuplicates
+        // compiles to ON CONFLICT DO NOTHING, so a burst of first claimants
+        // cannot race into a unique violation (house pattern, see
+        // server/referral/claim.ts).
+        await tx.resourceDay.createMany({
+          data: rows.map((row) => ({ ...row, taken: 0 })),
+          skipDuplicates: true,
+        });
+        // Sweep expired HELD holds on every row we are about to claim, in
+        // (resourceId, date) order, so an abandoned claim never blocks a
+        // real one and the locks are still taken in the one order.
+        await flipAndRelease(tx, { OR: rows, expiresAt: { lt: now } }, ["HELD"]);
 
-        const claimed = await tx.$executeRaw`
+        for (const line of lines) {
+          if (alreadyHeld.has(`${line.resourceId}|${line.date}`)) continue;
+
+          const claimed = await tx.$executeRaw`
           UPDATE "ResourceDay"
           SET taken = taken + ${line.qty}
           WHERE "resourceId" = ${line.resourceId} AND date = ${line.date}
             AND taken + ${line.qty} <= (
               SELECT capacity FROM "InventoryResource" WHERE id = ${line.resourceId}
             )`;
-        if (claimed === 0) {
-          const [day, resource] = await Promise.all([
-            tx.resourceDay.findUnique({
-              where: { resourceId_date: { resourceId: line.resourceId, date: line.date } },
-            }),
-            tx.inventoryResource.findUnique({ where: { id: line.resourceId } }),
-          ]);
-          throw new Refused({
-            ok: false,
-            refusal: {
+          if (claimed === 0) {
+            const [day, resource] = await Promise.all([
+              tx.resourceDay.findUnique({
+                where: { resourceId_date: { resourceId: line.resourceId, date: line.date } },
+              }),
+              tx.inventoryResource.findUnique({ where: { id: line.resourceId } }),
+            ]);
+            throw new Refused({
               resourceId: line.resourceId,
               date: line.date,
               requested: line.qty,
               available: Math.max(0, (resource?.capacity ?? 0) - (day?.taken ?? 0)),
-            },
-          });
-        }
+            });
+          }
 
-        const data = {
-          resourceId: line.resourceId,
-          date: line.date,
-          qty: line.qty,
-          status,
-          kind: input.kind,
-          ownerKey: input.ownerKey,
-          orderId: input.orderId ?? null,
-          recordId: input.recordId ?? null,
-          slot: input.slot ?? null,
-          expiresAt: status === "HELD" ? input.expiresAt : null,
-          reason: input.reason ?? null,
-          createdBy: input.createdBy ?? null,
-        };
-        if (input.ownerKey) {
-          // A RELEASED row for this owner is re-claimed in place (the late
-          // confirm path); otherwise this is the first claim.
-          await tx.inventoryHold.upsert({
-            where: {
-              ownerKey_resourceId_date: {
-                ownerKey: input.ownerKey,
-                resourceId: line.resourceId,
-                date: line.date,
+          const data = {
+            resourceId: line.resourceId,
+            date: line.date,
+            qty: line.qty,
+            status,
+            kind: input.kind,
+            ownerKey: input.ownerKey,
+            orderId: input.orderId ?? null,
+            recordId: input.recordId ?? null,
+            slot: input.slot ?? null,
+            expiresAt: status === "HELD" ? input.expiresAt : null,
+            reason: input.reason ?? null,
+            createdBy: input.createdBy ?? null,
+          };
+          if (input.ownerKey) {
+            // A RELEASED row for this owner is re-claimed in place (the late
+            // confirm path); otherwise this is the first claim.
+            await tx.inventoryHold.upsert({
+              where: {
+                ownerKey_resourceId_date: {
+                  ownerKey: input.ownerKey,
+                  resourceId: line.resourceId,
+                  date: line.date,
+                },
               },
-            },
-            create: data,
-            update: { status, qty: line.qty, expiresAt: data.expiresAt },
-          });
-        } else {
-          await tx.inventoryHold.create({ data });
+              create: data,
+              update: { status, qty: line.qty, expiresAt: data.expiresAt },
+            });
+          } else {
+            await tx.inventoryHold.create({ data });
+          }
         }
-      }
-    });
+      },
+      { timeout: PLACE_TIMEOUT_MS },
+    );
     return { ok: true };
   } catch (err) {
-    if (err instanceof Refused) return err.refusal;
+    if (err instanceof Refused) return { ok: false, refusal: err.refusal };
     throw err;
   }
 }
@@ -218,10 +218,13 @@ export type ConfirmHoldsResult = {
 /**
  * Flip an owner's HELD holds to CONFIRMED and clear their expiry. A hold
  * that was swept while the order was in flight (RELEASED) is re-placed
- * through the guarded update; if that refuses, it is reported as oversold
- * rather than pretended (spec 5.5). Already-confirmed rows are a no-op.
+ * through the guarded update straight into CONFIRMED, one write; if that
+ * refuses, it is reported as oversold rather than pretended (spec 5.5).
+ * A RELEASED row on a record that has since been cancelled was released
+ * by the cancellation, not by a sweep, and is left alone. Already-
+ * confirmed rows are a no-op.
  */
-export async function confirmHolds(ownerKey: string, now = new Date()): Promise<ConfirmHoldsResult> {
+export async function confirmHolds(ownerKey: string): Promise<ConfirmHoldsResult> {
   const rows = await prisma.inventoryHold.findMany({
     where: { ownerKey, status: { in: ["HELD", "RELEASED"] } },
     orderBy: [{ resourceId: "asc" }, { date: "asc" }],
@@ -229,34 +232,39 @@ export async function confirmHolds(ownerKey: string, now = new Date()): Promise<
   let confirmed = 0;
   const oversold: ConfirmHoldsResult["oversold"] = [];
 
-  for (const row of rows) {
-    if (row.status === "HELD") {
-      const flipped = await prisma.inventoryHold.updateMany({
-        where: { id: row.id, status: "HELD" },
-        data: { status: "CONFIRMED", expiresAt: null },
-      });
-      if (flipped.count > 0) confirmed += 1;
-      continue;
-    }
-    // RELEASED: swept while in flight. Claim it again, confirmed.
+  const flipped = await prisma.inventoryHold.updateMany({
+    where: { ownerKey, status: "HELD" },
+    data: { status: "CONFIRMED", expiresAt: null },
+  });
+  confirmed += flipped.count;
+
+  const released = rows.filter((row) => row.status === "RELEASED");
+  if (released.length === 0) return { confirmed, oversold };
+
+  const recordId = released[0].recordId;
+  if (recordId) {
+    const record = await prisma.bookingRecord.findUnique({
+      where: { id: recordId },
+      select: { status: true },
+    });
+    if (record?.status === "cancelled") return { confirmed, oversold };
+  }
+
+  for (const row of released) {
     const placed = await placeHolds({
       ownerKey,
       kind: row.kind as HoldKind,
+      status: "CONFIRMED",
       lines: [{ resourceId: row.resourceId, date: row.date, qty: row.qty }],
       expiresAt: null,
       orderId: row.orderId,
       recordId: row.recordId,
       slot: row.slot,
-      now,
     });
     if (!placed.ok) {
       oversold.push({ resourceId: row.resourceId, date: row.date, qty: row.qty });
       continue;
     }
-    await prisma.inventoryHold.updateMany({
-      where: { id: row.id, status: "HELD" },
-      data: { status: "CONFIRMED", expiresAt: null },
-    });
     confirmed += 1;
   }
   return { confirmed, oversold };
@@ -277,9 +285,8 @@ export async function confirmHeldInTx(tx: Tx, ownerKey: string): Promise<number>
 }
 
 /** Give an owner's holds back (HELD or CONFIRMED). Idempotent. */
-export async function releaseHolds(ownerKey: string, db: Db = prisma): Promise<number> {
-  const run = (tx: Tx) => flipAndRelease(tx, { ownerKey }, ["HELD", "CONFIRMED"]);
-  return "$transaction" in db ? db.$transaction(run) : run(db);
+export async function releaseHolds(ownerKey: string): Promise<number> {
+  return prisma.$transaction((tx) => flipAndRelease(tx, { ownerKey }, ["HELD", "CONFIRMED"]));
 }
 
 /** Cancellation's step: release every hold a record owns, inside the

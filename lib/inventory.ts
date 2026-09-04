@@ -9,6 +9,8 @@
  * convention as arrival and departure.
  */
 
+import { BALANCE_DUE_DAYS } from "./paymentPlan";
+
 /** How long an unconfirmed hold lives. One constant, tuned in one place. */
 export const HOLD_TTL_MINUTES = 30;
 
@@ -16,9 +18,9 @@ export const HOLD_TTL_MINUTES = 30;
 export const LOW_STOCK_THRESHOLD = 5;
 
 /** The spa sessions' booking window, and what the confirmation page and
- *  email quote. The same anchor as the balance due date (56 days). Seeded
- *  onto the spa resources by scripts/seed-inventory.ts. */
-export const SPA_OPEN_DAYS_BEFORE = 56;
+ *  email quote. Literally the balance-due anchor, so the two cannot drift.
+ *  Seeded onto the spa resources by scripts/seed-inventory.ts. */
+export const SPA_OPEN_DAYS_BEFORE = BALANCE_DUE_DAYS;
 
 export type ResourceKind = "STOCK" | "SESSION";
 export type CapRule = "adults" | "children";
@@ -43,6 +45,22 @@ export type LodgeParty = { adults: number; childrenAges: number[] };
 
 /** One line the placement primitive will claim. */
 export type HoldLine = { resourceId: string; date: string; qty: number };
+
+/** The one lock order: (resourceId, date). Every writer sorts by this, so
+ *  two transactions over the same rows cannot deadlock. */
+export function compareHoldLines(a: HoldLine, b: HoldLine): number {
+  return a.resourceId === b.resourceId
+    ? a.date.localeCompare(b.date)
+    : a.resourceId.localeCompare(b.resourceId);
+}
+
+/** Riders on any one night: holds from separate orders are separate rows
+ *  per night, so sum per date first, then take the busiest date. */
+export function ownedStockCount(lines: Array<{ date: string; qty: number }>): number {
+  const perDate = new Map<string, number>();
+  for (const line of lines) perDate.set(line.date, (perDate.get(line.date) ?? 0) + line.qty);
+  return Math.max(0, ...perDate.values());
+}
 
 /** A guest's pick: a resource, a quantity, and for sessions the date. */
 export type ActivityRequest = { resourceCode: string; qty: number; date?: string };
@@ -169,10 +187,10 @@ export function validateActivityRequests(input: {
   const nights = stayNights(input.stay.arrival, input.stay.departure);
   const byCode = new Map(input.resources.map((r) => [r.code, r]));
 
-  // Owned riders per stock resource (the count on any one night), owned
-  // places per session resource-date, and which dates already carry a
-  // session.
-  const ownedStock = new Map<string, number>();
+  // Owned riders per stock resource (the count on any one night, summed
+  // across orders), owned places per session resource-date, and which
+  // dates already carry a session.
+  const ownedStockLines = new Map<string, Array<{ date: string; qty: number }>>();
   const ownedSession = new Map<string, number>();
   const sessionDates = new Set<string>();
   for (const line of input.owned) {
@@ -183,9 +201,14 @@ export function validateActivityRequests(input: {
       ownedSession.set(key, (ownedSession.get(key) ?? 0) + line.qty);
       sessionDates.add(line.date);
     } else {
-      ownedStock.set(resource.code, Math.max(ownedStock.get(resource.code) ?? 0, line.qty));
+      const list = ownedStockLines.get(resource.code) ?? [];
+      list.push({ date: line.date, qty: line.qty });
+      ownedStockLines.set(resource.code, list);
     }
   }
+  const ownedStock = new Map(
+    [...ownedStockLines].map(([code, lines]) => [code, ownedStockCount(lines)]),
+  );
 
   const lines: HoldLine[] = [];
   const additions = new Map<string, number>();
@@ -270,11 +293,7 @@ export function validateActivityRequests(input: {
     );
   }
 
-  lines.sort((a, b) =>
-    a.resourceId === b.resourceId
-      ? a.date.localeCompare(b.date)
-      : a.resourceId.localeCompare(b.resourceId),
-  );
+  lines.sort(compareHoldLines);
 
   return {
     ok: true,

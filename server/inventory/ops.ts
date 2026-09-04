@@ -163,10 +163,15 @@ export async function runSweep(): Promise<{ released: number }> {
  */
 export async function runReconcile(): Promise<{ violations: Drift[]; filed: number }> {
   const now = new Date();
+  // Past stays cannot be oversold any more and Apaleo is read-only history
+  // for them; a week's margin still catches a late settle on a just-
+  // departed break. Without this bound the Apaleo reads below grow with
+  // every booking that ever added an activity.
+  const since = new Date(now.getTime() - 7 * 86_400_000).toISOString().slice(0, 10);
   const [resources, days, holds] = await Promise.all([
     prisma.inventoryResource.findMany(),
-    prisma.resourceDay.findMany(),
-    prisma.inventoryHold.findMany(),
+    prisma.resourceDay.findMany({ where: { date: { gte: since } } }),
+    prisma.inventoryHold.findMany({ where: { date: { gte: since } } }),
   ]);
   const orderIds = [...new Set(holds.map((h) => h.orderId).filter((id): id is string => id !== null))];
   const recordIds = [...new Set(holds.map((h) => h.recordId).filter((id): id is string => id !== null))];
@@ -188,6 +193,7 @@ export async function runReconcile(): Promise<{ violations: Drift[]; filed: numb
       .map((h) => `${h.recordId}|${h.slot}`),
   );
   const apaleoCounts: Array<{ recordId: string; slot: number; serviceCode: string; count: number }> = [];
+  const unreadable = new Set<string>();
   for (const key of lodges) {
     const [recordId, slotText] = key.split("|");
     const slot = Number(slotText);
@@ -204,6 +210,7 @@ export async function runReconcile(): Promise<{ violations: Drift[]; filed: numb
       }
     } catch (err) {
       console.error("[inventory] reconcile could not read Apaleo services", reservationId, err);
+      unreadable.add(key);
     }
   }
 
@@ -226,6 +233,7 @@ export async function runReconcile(): Promise<{ violations: Drift[]; filed: numb
     orders,
     records: records.map((r) => ({ id: r.id, status: r.status })),
     apaleoCounts,
+    unreadable,
   });
 
   const open = await prisma.opsAlert.findMany({

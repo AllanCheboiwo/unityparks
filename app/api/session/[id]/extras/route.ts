@@ -4,18 +4,10 @@ import { z } from "zod";
 import { getExtraOffers } from "@/server/apaleo/offers";
 import { LOCATION_SERVICE_CODE, RETIRED_SERVICE_CODES } from "@/server/apaleo/units";
 import { classifyCheckoutOffers, isTeaserSnapshot } from "@/lib/inventory";
+import { governedServiceCodes } from "@/server/inventory/availability";
 import { getSession, parseChildrenAges, setExtras } from "@/server/booking/session";
 import { handleRoute, jsonError } from "@/server/api-helpers";
 import { prisma } from "@/server/db";
-
-/** Every service code an inventory resource prices, active or not: those
- *  are activities, sold from the account with availability, never here. */
-async function resourceBackedCodes(): Promise<Set<string>> {
-  const rows = await prisma.inventoryResource.findMany({
-    select: { apaleoServiceCode: true },
-  });
-  return new Set(rows.map((r) => r.apaleoServiceCode));
-}
 
 /**
  * Live extras (Apaleo service offers) for one lodge of the break (?slot=,
@@ -49,7 +41,7 @@ export async function GET(
     // The location-choice fee is sold by the location step, never here.
     const extras = classifyCheckoutOffers(
       offers.filter((o) => o.code !== LOCATION_SERVICE_CODE),
-      { resourceCodes: await resourceBackedCodes(), retired: RETIRED_SERVICE_CODES },
+      { resourceCodes: await governedServiceCodes(), retired: RETIRED_SERVICE_CODES },
     );
     return NextResponse.json({ extras, slot });
   });
@@ -103,9 +95,9 @@ export async function POST(
       return jsonError(400, "That lodge slot is not part of this break.");
     }
     // Stock is never booked from checkout in v1 (UNP-25 is the entry point
-    // with holds); a snapshot carrying it would make ensureRecord book what
-    // nobody held.
-    if (isTeaserSnapshot(parsed.data.extras, await resourceBackedCodes())) {
+    // with holds), and retired services are never booked at all; a snapshot
+    // carrying either would make ensureRecord book what nobody held.
+    if (isTeaserSnapshot(parsed.data.extras, await governedServiceCodes())) {
       return jsonError(400, "Activities are booked from your account after checkout.");
     }
 

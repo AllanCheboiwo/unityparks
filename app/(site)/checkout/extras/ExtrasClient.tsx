@@ -313,7 +313,11 @@ export function ExtrasClient({
                       <p className="text-lg font-bold text-ink">{extra.name}</p>
                       <p className="mt-1 text-sm text-foreground/70">{extra.description}</p>
 
-                      {quantity ? (
+                      {extra.teaser ? (
+                        <p className="mt-4 text-sm text-foreground/70">
+                          Book from your account after checkout, subject to availability.
+                        </p>
+                      ) : quantity ? (
                         <div className="mt-4 flex items-center gap-4">
                           <button
                             type="button"
@@ -361,10 +365,6 @@ export function ExtrasClient({
                             Remove
                           </button>
                         </div>
-                      ) : extra.teaser ? (
-                        <p className="mt-4 text-sm text-foreground/70">
-                          Book from your account after checkout, subject to availability.
-                        </p>
                       ) : (
                         <button
                           type="button"

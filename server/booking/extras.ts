@@ -13,11 +13,7 @@ import { getReservation } from "../apaleo/amend";
 import { getFolioForReservation } from "../apaleo/bookings";
 import { payFolio } from "../apaleo/payments";
 import { bookReservationService, getReservationServices } from "../apaleo/services";
-import {
-  LOCATION_SERVICE_CODE,
-  RETIRED_SERVICE_CODES,
-  removeReservationService,
-} from "../apaleo/units";
+import { LOCATION_SERVICE_CODE, removeReservationService } from "../apaleo/units";
 import { parseExtras } from "./session";
 import {
   extraUnitPrice,
@@ -32,12 +28,14 @@ import { sendExtrasReceipt } from "../email/extrasReceipt";
 import { raiseOpsAlert } from "../ops/alerts";
 import {
   activeResources,
+  governedServiceCodes,
   ownedForLodge,
   lodgeParties,
 } from "../inventory/availability";
 import {
   confirmHeldInTx,
   confirmHolds,
+  orderOwnerKey,
   placeHolds,
   releaseHolds,
 } from "../inventory/holds";
@@ -217,15 +215,17 @@ export async function quoteManageExtras(record: RecordForExtras): Promise<Manage
   // before recovery ever ran.
   await recoverStaleExtrasOrder(record);
   const kind = assertExtrasAllowed(record);
-  // Resource-backed services are activities: priced here, but sold from
-  // the Activities card with availability, never from the plain list.
-  const backedCodes = new Set((await activeResources()).map((r) => r.apaleoServiceCode));
+  // Governed services (inventory-backed, active or not, plus retired) are
+  // never in the plain list. Active resources' services are priced for
+  // the Activities card.
+  const governed = await governedServiceCodes();
+  const activityCodes = new Set((await activeResources()).map((r) => r.apaleoServiceCode));
   const lodges = [];
   const activityOffers: ManageExtrasQuote["activityOffers"] = {};
   for (const lodge of lodgeSlots(record)) {
     const offers = await quoteSlot(lodge);
     for (const offer of offers) {
-      if (backedCodes.has(offer.code)) {
+      if (activityCodes.has(offer.code)) {
         activityOffers[offer.code] = {
           serviceId: offer.serviceId,
           unitPrice: offer.unitPrice,
@@ -235,9 +235,7 @@ export async function quoteManageExtras(record: RecordForExtras): Promise<Manage
     }
     lodges.push({
       slot: lodge.slot,
-      extras: offers.filter(
-        (o) => !backedCodes.has(o.code) && !RETIRED_SERVICE_CODES.has(o.code),
-      ),
+      extras: offers.filter((o) => !governed.has(o.code)),
     });
   }
   return { kind, lodges, activityOffers };
@@ -247,43 +245,53 @@ export async function quoteManageExtras(record: RecordForExtras): Promise<Manage
  *  activity by resource code (and date, for sessions). */
 export type ManageAddition = AdditionRequest & { resourceCode?: string; date?: string };
 
-/** The hold owner key for an order: the one identity holds are claimed under. */
-export function orderOwnerKey(orderId: string): string {
-  return `order:${orderId}`;
-}
-
 /**
  * Step 2 of the engine (spec 5.4): split the request into plain extras and
  * activities, validate the activities against window and caps, and fold
- * their Apaleo counts into one service-id request list. A resource-backed
- * service asked for as a plain extra is refused: stock can only be booked
- * through its resource, never around it.
+ * their Apaleo counts into one service-id request list. A governed service
+ * (inventory-backed, active or not, or retired) asked for as a plain extra
+ * is refused: stock can only be booked through its resource, never around
+ * it. The activity service ids come back so pricing can exempt them from
+ * the plain-extras quantity cap, which the validator has already replaced
+ * with the lodge's real caps.
  */
 async function planActivities(
   record: RecordForExtras,
   slot: number,
   offers: ManageExtraOffer[],
   requests: ManageAddition[],
-): Promise<{ apaleoRequests: AdditionRequest[]; lines: HoldLine[]; resources: ResourceFacts[] }> {
-  const resources = await activeResources();
-  const backedCodes = new Set(resources.map((r) => r.apaleoServiceCode));
+): Promise<{
+  apaleoRequests: AdditionRequest[];
+  activityServiceIds: Set<string>;
+  lines: HoldLine[];
+  resources: ResourceFacts[];
+}> {
+  const [resources, governed] = await Promise.all([activeResources(), governedServiceCodes()]);
   const offerByCode = new Map(offers.map((o) => [o.code, o]));
   const offerById = new Map(offers.map((o) => [o.serviceId, o]));
 
   const plain: AdditionRequest[] = [];
   const activities: ActivityRequest[] = [];
+  const seenPlain = new Set<string>();
   for (const request of requests) {
     if (request.resourceCode) {
       activities.push({ resourceCode: request.resourceCode, qty: request.count, date: request.date });
       continue;
     }
     const offer = offerById.get(request.serviceId);
-    if (offer && backedCodes.has(offer.code)) {
+    if (offer && governed.has(offer.code)) {
       throw new PublicError(400, `${offer.name} is booked as an activity, with availability.`);
     }
+    if (seenPlain.has(request.serviceId)) {
+      throw new PublicError(400, "Each extra can only appear once per request.");
+    }
+    seenPlain.add(request.serviceId);
     plain.push({ serviceId: request.serviceId, count: request.count });
   }
-  if (activities.length === 0) return { apaleoRequests: plain, lines: [], resources };
+  const activityServiceIds = new Set<string>();
+  if (activities.length === 0) {
+    return { apaleoRequests: plain, activityServiceIds, lines: [], resources };
+  }
 
   const party = lodgeParties(record).find((l) => l.slot === slot);
   if (!party) throw new PublicError(400, "That lodge isn't part of this booking.");
@@ -303,10 +311,12 @@ async function planActivities(
     if (!offer) {
       throw new PublicError(502, "That activity isn't priced for this stay yet. Call our team on +254 700 000 000.");
     }
+    activityServiceIds.add(offer.serviceId);
     merged.set(offer.serviceId, (merged.get(offer.serviceId) ?? 0) + addition.count);
   }
   return {
     apaleoRequests: [...merged].map(([serviceId, count]) => ({ serviceId, count })),
+    activityServiceIds,
     lines: validated.lines,
     resources,
   };
@@ -402,6 +412,7 @@ export async function addManageExtras(
     })),
     owned,
     plan.apaleoRequests,
+    { uncapped: plan.activityServiceIds },
   );
   if (!priced.ok) throw new PublicError(400, priced.reason);
 
@@ -595,8 +606,9 @@ async function retireOrder(
     data: { status, chargedDelta, liveForRecordId: null },
   });
   // Every path that retires an order as failed gives its stock back
-  // (spec 5.4 step 9). Idempotent, so a replayed retire is harmless.
-  if (status === "failed") await releaseHolds(orderOwnerKey(orderId));
+  // (spec 5.4 step 9), but only when THIS call retired it: a late recovery
+  // that finds the order already settled must not release confirmed stock.
+  if (status === "failed" && flipped.count > 0) await releaseHolds(orderOwnerKey(orderId));
   return flipped.count;
 }
 
@@ -709,15 +721,27 @@ async function settleExtrasOrder(
 
   // A hold swept while the order was in flight (the late-recovery window,
   // spec 5.5) is re-placed now; if the stock has since gone, the money has
-  // already moved, so the fleet is oversold by that line. Never silent.
-  const leftovers = await confirmHolds(orderOwnerKey(orderId));
-  if (leftovers.oversold.length > 0) {
-    console.error("Inventory oversold by a late-settled order", orderId, leftovers.oversold);
+  // already moved, so the fleet is oversold by that line. Never silent, and
+  // never fatal: the order IS settled, and a throw here would send the
+  // caller's catch into resolveOrder against a settled order.
+  try {
+    const leftovers = await confirmHolds(orderOwnerKey(orderId));
+    if (leftovers.oversold.length > 0) {
+      console.error("Inventory oversold by a late-settled order", orderId, leftovers.oversold);
+      await raiseOpsAlert({
+        kind: "inventory_oversold",
+        recordId: record.id,
+        summary: `Order ${orderId} settled after its holds expired and the stock is gone`,
+        detail: { orderId, booking: record.apaleoBookingId, slot: lodge.slot, oversold: leftovers.oversold },
+      });
+    }
+  } catch (err) {
+    console.error("Post-settle hold confirmation failed; order is settled", orderId, err);
     await raiseOpsAlert({
-      kind: "inventory_oversold",
+      kind: "inventory_confirm_failed",
       recordId: record.id,
-      summary: `Order ${orderId} settled after its holds expired and the stock is gone`,
-      detail: { orderId, booking: record.apaleoBookingId, slot: lodge.slot, oversold: leftovers.oversold },
+      summary: `Order ${orderId} settled but its holds could not be re-checked`,
+      detail: { orderId, booking: record.apaleoBookingId, slot: lodge.slot, error: String(err) },
     });
   }
   return totals;

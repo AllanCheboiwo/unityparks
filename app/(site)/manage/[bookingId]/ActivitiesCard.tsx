@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
-import { formatDate, formatKes } from "@/lib/format";
+import { formatDate, formatKes, formatShortDate } from "@/lib/format";
 import { LOW_STOCK_THRESHOLD } from "@/lib/inventory";
 import type {
   ActivitiesDto,
@@ -28,13 +28,14 @@ function pickKey(slot: number, code: string, date: string | null): string {
   return `${slot}:${code}:${date ?? ""}`;
 }
 
-function shortDay(iso: string): string {
-  return new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-    timeZone: "UTC",
-  });
+/** "three-hour" from the resource's own minutes, so the ops form is the
+ *  source of truth for the copy too. */
+function sessionLengthWords(activities: ActivitiesDto | null): string {
+  const minutes = activities?.lodges[0]?.resources.find((r) => r.kind === "SESSION")?.sessionMinutes;
+  if (!minutes) return "";
+  const hours = minutes / 60;
+  const words = ["", "one", "two", "three", "four", "five", "six"];
+  return Number.isInteger(hours) && hours < words.length ? `${words[hours]}-hour` : `${minutes}-minute`;
 }
 
 function stockNote(free: number): string | null {
@@ -179,7 +180,9 @@ export function ActivitiesCard({
             )}.`,
       );
     }
-    await Promise.all([onChanged(), loadAvailability(), loadPrices()]);
+    // Prices cannot have changed (the engine only settles when the folio
+    // matched the quote), so only the local availability is re-read.
+    await Promise.all([onChanged(), loadAvailability()]);
     setBusy(false);
   }
 
@@ -222,8 +225,8 @@ export function ActivitiesCard({
     <div className="mt-8 rounded-lg border border-line bg-white p-6">
       <p className="font-display text-xl font-bold text-ink">Activities</p>
       <p className="mt-1 text-sm text-foreground">
-        Bikes for the whole of your break, and three-hour Forest Spa sessions by
-        day and start time. Both are limited, so book early.{" "}
+        Bikes for the whole of your break, and {sessionLengthWords(activities)} Forest
+        Spa sessions by day and start time. Both are limited, so book early.{" "}
         {booking.status === "deposit_paid"
           ? "Anything you add joins your outstanding balance."
           : "Anything you add is charged to your booking straight away."}
@@ -331,7 +334,7 @@ export function ActivitiesCard({
                           <tbody>
                             {activities.nights.map((date) => (
                               <tr key={date} className="border-t border-line">
-                                <td className="py-2 pr-3 text-ink">{shortDay(date)}</td>
+                                <td className="py-2 pr-3 text-ink">{formatShortDate(date)}</td>
                                 {sessions.map((resource) => {
                                   const cell = resource.sessions?.find((s) => s.date === date);
                                   const free = cell?.free ?? 0;
@@ -351,7 +354,7 @@ export function ActivitiesCard({
                                         <span className="text-xs text-foreground/50">One session a day</span>
                                       ) : price !== null && max > 0 ? (
                                         <div className="flex items-center gap-2">
-                                          {stepper(lodge.slot, resource, date, max, `${resource.name} on ${shortDay(date)}`)}
+                                          {stepper(lodge.slot, resource, date, max, `${resource.name} on ${formatShortDate(date)}`)}
                                           {free <= LOW_STOCK_THRESHOLD && (
                                             <span className="text-xs font-semibold text-bronze">{free} left</span>
                                           )}

@@ -6,12 +6,14 @@ import {
   capFor,
   freeCount,
   freeForStay,
+  ownedStockCount,
   resourceWindow,
   stayNights,
   type LodgeParty,
   type OwnedLine,
   type ResourceFacts,
 } from "@/lib/inventory";
+import { RETIRED_SERVICE_CODES } from "../apaleo/units";
 import type {
   ActivitiesDto,
   ActivityLodgeDto,
@@ -33,6 +35,20 @@ export type RecordForActivities = BookingRecord & {
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+/**
+ * Every Apaleo service code that is governed by inventory or retired: the
+ * set nothing may sell as a plain extra, anywhere. Deliberately includes
+ * inactive resources (they are not offered, but their service is still
+ * stock) and the retired codes (their service may still be on the rate
+ * plan if the Apaleo retirement failed).
+ */
+export async function governedServiceCodes(): Promise<Set<string>> {
+  const rows = await prisma.inventoryResource.findMany({
+    select: { apaleoServiceCode: true },
+  });
+  return new Set([...rows.map((r) => r.apaleoServiceCode), ...RETIRED_SERVICE_CODES]);
 }
 
 /** Every active resource, in the shape the pure helpers take. */
@@ -200,7 +216,7 @@ export async function activitiesForRecord(
       }
       return {
         ...base,
-        owned: Math.max(0, ...mine.map((o) => o.qty)),
+        owned: ownedStockCount(mine),
         free: freeForStay({ capacity: resource.capacity, nights, takenByDate }),
         sessions: null,
       };

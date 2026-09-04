@@ -35,6 +35,9 @@ export type DriftInput = {
   orders: Array<{ id: string; recordId: string; slot: number; status: string }>;
   records: Array<{ id: string; status: string }>;
   apaleoCounts: Array<{ recordId: string; slot: number; serviceCode: string; count: number }>;
+  /** "recordId|slot" keys whose Apaleo read failed this run: no verdict
+   *  on invariant 3 for them, rather than a false "Apaleo has 0". */
+  unreadable?: ReadonlySet<string>;
 };
 
 export type Drift =
@@ -153,6 +156,7 @@ export function findDrift(input: DriftInput): Drift[] {
   }
   for (const key of lodgeKeys) {
     const [recordId, slotText, serviceCode] = key.split("|");
+    if (input.unreadable?.has(`${recordId}|${slotText}`)) continue;
     const apaleo = apaleoByKey.get(key) ?? 0;
     const ours = ledgerFor(key);
     if (apaleo !== ours) {
