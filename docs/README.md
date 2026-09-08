@@ -15,6 +15,8 @@ handbook.
 - [How referrals work](guides/how-referrals-work.md)
 - [How the repeat-guest offer works](guides/how-the-repeat-guest-offer-works.md): also explains that there are no typed promo codes today
 - [How the systems fit together](guides/how-the-systems-fit-together.md)
+- [How we build software](guides/how-we-build-software.md): the process
+  every feature follows, from a Linear issue to a merged pull request
 
 Rule: a feature is not done until its guide exists, and a guide may only say
 what the code actually does. Found something wrong or missing? Open a pull
