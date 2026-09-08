@@ -131,9 +131,15 @@ the thing exists.
 
 | Code | Replaces | Pricing unit | Mode | Placeholder price |
 |---|---|---|---|---|
-| `CYCLE-ADULT` | `CYCLE` | Person | Arrival | KES 3,000 per break |
-| `CYCLE-CHILD` | new | Person | Arrival | KES 2,000 per break |
-| `SPA-SESSION` | `SPA` | Person | Arrival | KES 2,500 per place |
+| `CYCLEADULT` | `CYCLE` | Person | Arrival | KES 3,000 per break |
+| `CYCLECHILD` | new | Person | Arrival | KES 2,000 per break |
+| `SPASESSION` | `SPA` | Person | Arrival | KES 2,500 per place |
+
+Apaleo service codes are at most 10 characters of `[a-zA-Z0-9_]` (the
+sandbox refused `CYCLE-ADULT` on the first provisioning run, 4 Sep), so
+the service codes carry no hyphen. Our own resource codes (`CYCLE-ADULT`,
+`SPA-1000`) are ours and keep theirs; the resource's `apaleoServiceCode`
+column is the link.
 
 `Arrival` posts once, `Person` charges per rider or per place. `count` on
 the reservation is the number of riders (bikes) or the total number of spa
@@ -166,7 +172,7 @@ Three tables, `prisma db push` as always. Dates are property-local ISO
 | `capacity` Int | flat, every date |
 | `sessionStart` String? | "HH:MM", sessions only |
 | `sessionMinutes` Int? | 180, display only |
-| `apaleoServiceCode` String | which service prices it; both spa sessions point at `SPA-SESSION` |
+| `apaleoServiceCode` String | which service prices it; both spa sessions point at `SPASESSION` |
 | `openDaysBefore` Int? | 56 for spa sessions; null means bookable from confirmation (bikes) |
 | `capRule` String | `adults` or `children`: which head count of the lodge caps this resource (section 5.6). Data, so a new activity needs no code |
 | `sellAtCheckout` Boolean | default false; honoured only once UNP-25 lands |

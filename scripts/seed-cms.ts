@@ -409,7 +409,7 @@ const EXTRAS: Array<{
   // Activities (UNP-6): booked from the account with real availability.
   // At checkout these render as teaser cards, price shown, no stepper.
   {
-    serviceCode: "CYCLE-ADULT",
+    serviceCode: "CYCLEADULT",
     photo: "activity-cycle.jpg",
     noun: "bike",
     more: [
@@ -429,7 +429,7 @@ const EXTRAS: Array<{
     displayOrder: 5,
   },
   {
-    serviceCode: "CYCLE-CHILD",
+    serviceCode: "CYCLECHILD",
     photo: "activity-cycle.jpg",
     noun: "bike",
     more: [
@@ -445,7 +445,7 @@ const EXTRAS: Array<{
     displayOrder: 6,
   },
   {
-    serviceCode: "SPA-SESSION",
+    serviceCode: "SPASESSION",
     photo: "activity-spa.jpg",
     noun: "place",
     more: [

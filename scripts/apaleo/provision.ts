@@ -180,8 +180,10 @@ const SERVICES = [
   // Activities (UNP-6). Priced once per break or per place (Arrival mode,
   // per person), the Center Parcs shape. Stock and session capacity live in
   // our own InventoryResource table; Apaleo only ever sees "3 places".
+  // Apaleo service codes are at most 10 characters of [a-zA-Z0-9_], which
+  // is why these have no hyphen while our own resource codes do.
   {
-    code: "CYCLE-ADULT",
+    code: "CYCLEADULT",
     name: "Adult cycle hire",
     description:
       "A quality mountain bike with helmet and lock for the whole of your break. Our Cycle Centre team fits every rider on arrival. Explore 15 km of dedicated trails through the forest.",
@@ -191,7 +193,7 @@ const SERVICES = [
     serviceType: "Other" as const,
   },
   {
-    code: "CYCLE-CHILD",
+    code: "CYCLECHILD",
     name: "Child's cycle hire",
     description:
       "A child's bike with helmet and lock for the whole of your break, fitted at the Cycle Centre on arrival. Tag-alongs and child seats are available at the centre too.",
@@ -201,7 +203,7 @@ const SERVICES = [
     serviceType: "Other" as const,
   },
   {
-    code: "SPA-SESSION",
+    code: "SPASESSION",
     name: "Forest Spa session",
     description:
       "A three-hour session at The Forest Spa: hot pools, sauna, steam room and relaxation lounge, ten minutes uphill from the square. Choose your day and start time from your account. Towels provided.",
