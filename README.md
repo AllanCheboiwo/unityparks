@@ -58,10 +58,13 @@ Tests: `npx vitest run` (pure-logic suites over `lib/` and `server/`).
   (`npm run apaleo:provision`, `npm run apaleo:migrate`), moved in from the
   old untracked sibling project. Rate writes are budgeted at 8 calls per
   20 minutes; the script headers say what each run spends.
-- `docs/` the real documentation. Start with `FEATURES-REPORT.md` (what is
-  built and what is not), `DESIGN.md` (the visual system), and the three
-  money engines: `deposit-and-cancellation-plan.md`,
-  `referral-system-plan.md`, `post-booking-extras.md`.
+- `docs/` the real documentation. Start with `docs/README.md`, the index.
+  Non-developers read `docs/guides/` (plain language, one guide per flow).
+  Developers read `FEATURES-REPORT.md` (what is built and what is not),
+  `DESIGN.md` (the visual system), and the three money engines:
+  `deposit-and-cancellation-plan.md`, `referral-system-plan.md`,
+  `post-booking-extras.md`. `docs/lean-operations.md` is the register of
+  open operational decisions.
 
 ## House rules
 

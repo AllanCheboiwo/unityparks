@@ -1,0 +1,384 @@
+# Lean operations: running Unity Parks with one to three people
+
+Status: LIVING REFERENCE. Started 8 Sep 2026 from Allan's notes after the
+contractor conversation of Fri 4 Sep 2026. Update it whenever a concern is
+added, a decision is made, or an item ships. Every concern has an id (LO-n)
+so chat, Linear issues, and commits can point at it.
+
+## Purpose
+
+The client wants the platform to run with the smallest possible team:
+roughly one technologist (changes, patches), one support person, and one
+accounts person who is not on our team but works through our screens. At the
+scale discussed (about 200 units, 25k to 50k bookings a year, 100k to 200k
+guests) that is only possible if nothing needs a person to notice it.
+
+This document is the register of every process that could pull a person in,
+what the system does about it today, what we propose, and what a human is
+left doing afterwards. It also holds the decisions Allan still has to make.
+
+## The demo test
+
+The platform is being shown to investors alongside the financial model. The
+test for every item below is not "how many features" but: can one person
+demonstrate a booking, a payment, a cancellation with a refund, an overdue
+reminder, and the ops inbox in ten minutes, and does every step look
+finished. Streamline first, then add features. Anything that cannot be
+shown in that walkthrough is a lower priority than anything that can.
+
+## The one design rule
+
+Every money, date, or guest event ends in exactly one of three places:
+
+1. Done automatically, with a trail.
+2. In the ops inbox, with a reason and a button.
+3. In a message to the guest asking them to self-serve from a link.
+
+Nothing else exists. No process may end as a console error, an email to the
+technologist, or a note someone has to remember.
+
+Corollaries that follow from it:
+
+- Automation is only allowed where the action is idempotent and reversible
+  or policy-defined. Cancelling money a guest still intends to pay is a
+  policy decision, written once, not a human decision per booking.
+- Every automated process reports its exceptions to the same place
+  (OpsAlert). One inbox, not one page per subsystem.
+- Every alert carries a kind, a booking id, and an allowed set of actions.
+  That shape lets a person work it today and an AI agent work parts of it
+  later without a redesign.
+- Scale does not create ops work. Exceptions without a trail do. At 50k
+  bookings a year (about 140 a day) even a 3% exception rate is four or five
+  inbox items a day, cleared in minutes if each is a click.
+
+## Staffing target, stated honestly
+
+One person is realistic for the digital side only if:
+
+- the inbox is the only daily task, and
+- money movement (refunds, payouts) is executed by the app and merely
+  checked by a person, and
+- guests self-serve every common change (pay balance, cancel, move dates).
+
+Two people is the safe target: one technologist who also works the inbox,
+one accounts person checking reconciliation and payouts. Support becomes a
+shared inbox plus a chatbot for lookups, not a headcount.
+
+## Concern register
+
+Each row: what could pull a person in, what happens today, the proposal,
+and what a human still does afterwards. "Human touch" is the target.
+
+### Money
+
+**LO-1 Refunds on cancellation do not move money.**
+Today: cancellation computes the refund by tier, posts a refund line to the
+Apaleo folio, marks the record cancelled, emails the guest. Nothing sends
+money back to the guest. The folio says refunded; the card or M-Pesa wallet
+is untouched. This is an unrecorded manual step. Worse, the cancellation
+email already tells the guest "we have refunded X to your original payment
+method". Filed as UNP-30 (High) on 8 Sep 2026.
+Proposal: every cancellation with a refund above zero creates a refund row
+(amount, Pesapal tracking id, state). The app calls the Pesapal refund API
+itself. Failure or amount mismatch files an OpsAlert.
+Human touch: none on success. Reviews only Pesapal rejections.
+Decision needed: D-2 (app-initiated vs person presses send).
+
+**LO-2 Overdue deposit balances.**
+Today: guest pays from Manage my booking, no stored cards, no auto-charge.
+Reminder emails exist ("due soon" inside 14 days, "overdue" after) but only
+run when an admin presses a button or an external scheduler calls the run
+endpoint. Auto-cancel deliberately unbuilt.
+Proposal: a fixed ladder, all automatic once cron runs daily:
+  due in 14 days, due in 3 days, overdue day 1, overdue day 7, final notice
+  "your dates will be released on <date>", then auto-release at the grace
+  limit. Release is treated as a guest cancellation on that day, so the
+  existing tier rule applies (deposit kept; at 14 days overdue that is the
+  half-refund tier for any money beyond the deposit). Add SMS or WhatsApp
+  alongside email with the pay link, because that is the device the guest
+  pays from (M-Pesa via Pesapal). Optional small incentive in the final
+  notice if the client wants one.
+Human touch: one daily list of bookings entering the final 48 hours, with a
+"hold 7 more days" button for guests who have been in touch. No outbound
+calls. Measure the paid-before-release rate; add a single human call for
+high-value bookings only if the data says the final notice is not enough.
+Decision needed: D-1 (grace period), D-5 (SMS provider), D-6 (incentive).
+
+**LO-3 Chargebacks and reversals on deposit or balance payments.**
+Today: the reversal detector runs only for fully paid records. A Pesapal
+REVERSED on a settled deposit is not detected (documented limitation in
+deposit-and-cancellation-plan.md).
+Proposal: extend the detector to deposit_paid records; a reversal files an
+OpsAlert with the booking and amount, and the booking goes to a "payment
+reversed" state that blocks check-in until resolved.
+Human touch: reviews each reversal (rare, and always needs judgment).
+
+**LO-4 Reconciliation for the accounts person.**
+Today: inventory reconcile exists (files inventory_drift alerts). Folio
+drift alerts fire on two paths. No daily money reconciliation across
+Pesapal, folios, booking records, and the Zoho outbox.
+Proposal: a daily reconcile run that compares Pesapal transactions, folio
+postings, BookingRecord paid amounts, and ZohoExport rows, and files one
+OpsAlert per difference. Reports, never fixes.
+Note for the demo: simulated payments settle onto the Apaleo folio like
+real ones but never reach the Zoho outbox (it is keyed on a Pesapal
+tracking id). Reconciliation must treat them as expected differences.
+Human touch: the accounts person reads one list. Zero items means the books
+are right.
+
+**LO-5 Zoho export failures.**
+Today: outbox with inline retries; rows past MAX_ATTEMPTS wait for an admin
+to press the drain button on /ops/zoho.
+Proposal: cron drains daily; a row still failed after the drain files an
+OpsAlert. Fold the page into the inbox.
+Human touch: only rows Zoho keeps rejecting.
+
+**LO-6 Referral and influencer payouts.**
+Today: admin downloads a payout CSV, hand-runs M-Pesa or bank transfers,
+marks the batch paid. KRA PIN collected by the accountant by hand.
+Proposal, in two steps. First, collect KRA PIN and M-Pesa number at referrer
+onboarding so the CSV is complete. Second, when the client is ready, pay
+batches through Pesapal or M-Pesa B2C from the app, with the mark-paid
+becoming automatic on provider confirmation. Until then the CSV and mark-
+paid stay, but the batch appears in the inbox on a monthly schedule so
+nobody has to remember.
+Human touch: approves a batch once a month. Later, only reviews failed
+transfers.
+Decision needed: D-7 (automated payouts, and when).
+
+**LO-7 Post-checkout extras and activities refunds.**
+Today: extras and activity charges sit on the folio and follow the booking
+cancellation. Not verified: what a guest gets back when they cancel one
+extra or activity while keeping the stay.
+Proposal: covered by the failure catalogue (LO-14). Policy to write: extras
+cancellable free until N days before arrival, activities follow their own
+slot rules.
+Human touch: none if the policy is coded.
+
+### Dates and guest changes
+
+**LO-8 Changing dates, including the "booked 2027 by mistake" case.**
+Today: no date-change feature. The guest's only route is cancel and rebook,
+which loses the deposit.
+Proposal: rebook and transfer, not a true amendment. Guest picks new dates
+in Manage my booking. We create the new booking and cancel the old one with
+the paid amount carried as credit instead of the tier refund. Inside a grace
+window after the original booking (48 hours proposed) the carry-over is in
+full. Outside it, the deposit follows the guest to the new booking and the
+normal tiers apply only to the difference. Extras and activities are
+re-offered on the new booking and re-checked against date-bound inventory;
+anything unavailable is refunded inside the same transfer.
+Human touch: only transfers where money must go back and Pesapal refuses.
+Decision needed: D-3 (model and grace window), D-10 (cooling-off).
+
+**LO-9 Guest data corrections (name, email, party size).**
+Today: email normalisation script exists; no guest self-serve for details.
+Proposal: editable fields in Manage my booking for anything that does not
+change price. Anything that changes price goes through LO-8.
+Human touch: none.
+
+**LO-10 No-shows and same-day cancellations.**
+Today: the policy says "not cancellable online, call the team" at 0 days.
+Proposal: keep it. Same-day is rare and always needs a person. Give the
+support person a one-click "record no-show" that closes the booking and
+posts nothing, so the folio and record agree.
+Human touch: one click per case.
+
+**LO-11 Invite-a-guest and party changes.**
+Today: shipped (UNP-20). Verify in the failure catalogue that an invitee who
+never accepts does not block anything at check-in.
+Human touch: none expected.
+
+### Support and communication
+
+**LO-12 Tickets and inbound support.**
+Today: OpsAlert plus per-subsystem pages; no guest-facing ticket path;
+support would arrive as email.
+Proposal: the inbox first, inside the app. Every alert kind carries allowed
+actions. Start with a human working it; then let an AI agent handle kinds
+that are pure lookups ("where is my receipt", "how much do I owe") from the
+booking record, escalating everything else. Zoho Desk becomes a bridge
+later if the client wants email support in a familiar tool. Never two
+queues.
+Human touch: works the residue the agent escalates.
+Decision needed: D-4.
+
+**LO-13 Reminder and support channel.**
+Today: email only.
+Proposal: SMS first (Africa's Talking or Twilio), WhatsApp Business later.
+An inbound WhatsApp chatbot answering from the booking record is the
+highest-value automation for support once LO-12's shape exists.
+Decision needed: D-5.
+
+**LO-23 Help chatbot, grounded in our own documentation.**
+Today: nothing. Support questions would arrive as email.
+How these work (Cloudbeds and similar): retrieval-augmented generation.
+A knowledge base of articles, each with a title and URL; a retrieval step
+that picks the relevant articles for a question; and a prompt built as
+instruction + retrieved articles (labelled with their URLs) + the question.
+The model answers only from what it was given and cites the URL. If
+nothing matches it says so. Links come from the labels, not from browsing.
+Proposal: our guides (LO-22) are small enough to send whole with every
+question, so no search index is needed at first; prompt caching keeps the
+repeated guide text cheap. Build in two stages:
+  1. Public, pre-sales chatbot on the site. Answers from the guides and
+     site content only. No login, no guest data. Also a completeness test
+     for the guides: every unanswerable question is a missing guide.
+  2. Signed-in, booking-aware chatbot. Reads the guest's own booking record
+     through narrowly scoped tools, answers "how much do I owe", offers the
+     pay link or the date-change flow. The inbound half of LO-12. Only
+     after the inbox and guides exist.
+Human touch: none for questions the guides cover. Unanswered questions
+become an OpsAlert (kind: support_question) for a person, and a note for
+the guide author.
+Cost and abuse: the price per question against cached guides on a small
+hosted model is a fraction of a cent; the risk is volume. Controls: a
+per-visitor hourly limit, a daily spend ceiling that switches the bot off
+and shows a contact form, short answers. Self-hosting an open-source model
+is not worth it: it would be a fourth job for the technologist for no
+saving at this volume.
+Depends on: LO-22 guides written first.
+
+### Platform and engineering
+
+**LO-14 Failure catalogue for the core money path.**
+Booking, Pesapal, IPN, folio post, confirmation, Zoho. One row per failure:
+what breaks, what state is left, whether recovery is automatic, what the
+human does otherwise. Every row without an answer becomes a Linear issue.
+This is the "edge cases of core functionality" work and it decides which
+alerts, tests, and jobs matter. Do this before building anything above.
+
+**LO-15 Scheduling.**
+Today: five run endpoints (reminders, repeat offers, Zoho drain, inventory
+reconcile, inventory sweep), each idempotent, each triggered by a button.
+Four accept a bearer secret for an external scheduler; the Zoho drain is
+admin-session only and needs the secret added first.
+Proposal: Railway cron (or a GitHub Actions schedule) calling each endpoint
+daily with its secret. No queue, no jobs table. The endpoints already claim
+once-only stamps, so overlapping or repeated runs are free. A queue (SQS or
+similar) solves per-event delays at volume, a problem we do not have; add
+one only if a daily tick proves too coarse.
+Human touch: none. A failed run files an OpsAlert.
+
+**LO-20 Reminder emails do not deep-link to payment.**
+Today: the balance reminder links to /manage, which redirects to /account.
+The guest signs in, finds the booking, clicks pay, and is sent to Pesapal's
+hosted page. Four steps between the nudge and the money.
+Proposal: a signed, expiring link in every reminder (and SMS) that opens
+that booking's pay screen directly, asking for sign-in only when there is
+no session. Same link in the final notice. Pesapal's hosted page stays; we
+do not embed card entry.
+Human touch: none. This is the single biggest lever on the paid-before-
+release rate in LO-2.
+
+**LO-21 Ops entry and navigation.**
+Today: no ops home page. Each ops page checks the isAdmin flag on an
+ordinary guest account and 404s otherwise. Admins reach it by typing the
+URL. Deliberate for the demo; wrong for a support person.
+Proposal, in two steps. Now: one /ops home page with a menu (inbox first),
+and a visible "Operations" link in the account menu for admin accounts
+only. After the demo: a separate staff sign-in that is not a guest account,
+with roles (technologist, support, accounts) so the accounts person sees
+reconciliation and payouts and nothing else.
+Human touch: none; this is about not making the human's day worse.
+
+**LO-22 Documentation in two tiers, one home.**
+Today: docs/ is a flat folder mixing feature plans, analyses, four Word
+files, and walkthroughs. Everything is written for developers. The
+contractor has been writing separate notes elsewhere and emailing them.
+Proposal: two tiers by reader, both in this repo. Done 8 Sep 2026 as
+UNP-29.
+  docs/guides/       plain language, no code, for Allan, the contractor,
+                     and later support and accounts staff. One guide per
+                     flow (booking, payments, cancellation and refunds,
+                     referrals, the repeat-guest offer, how the
+                     systems fit together). Each ends with "what a person
+                     does". Doubles as the operations handbook.
+  docs/ (top level)  the engineering tier: plans, workflow, review
+                     records, this register. Detailed, for developers.
+                     Left at top level on purpose: about sixty code
+                     comments and the feature skill point at docs/<plan>.
+  docs/archive/      the old Word files and Center Parcs analyses.
+  docs/README.md     the index for both tiers.
+Rules: a feature is not done until its guide exists; a guide may only say
+what the code actually does; this register sits at docs/ top level and is
+the agenda for every contractor meeting (the open decisions table).
+Home: GitHub only. Add the contractor as a collaborator. No Google
+Workspace or emailed attachments; a second home means two versions of the
+truth. Notes from the contractor arrive as a pull request against docs/ or
+a Linear issue comment. A document that must reach someone without GitHub
+(an investor) is exported as a PDF from the guide, never maintained apart.
+Human touch: none; this reduces meeting time and stops the email trail.
+Decision needed: D-12.
+
+**LO-16 Observability, minimal.**
+Today: five files log with console.error; no health route; no error
+tracker; no alerting.
+Proposal: Sentry for exceptions; /api/health for Railway; booking record id
+on every log line; one email or Slack notification when a cron run fails or
+the unresolved alert count rises above zero. Not a monitoring platform;
+that would be a fourth person's job.
+Human touch: reads one notification.
+
+**LO-17 End-to-end tests on the golden paths.**
+Today: vitest unit tests cover the money math; nothing proves the whole
+path after a deploy.
+Proposal: Playwright on four or five paths (search, book, pay in sandbox,
+cancel, invite a guest, promo code), run on pull requests. Keep the number
+small and green.
+Human touch: none; a red run blocks merge.
+
+**LO-18 Deploy and database steps.**
+Today: Allan pushes Railway and runs db push by hand; Apaleo reprovision
+and seeds are manual after some merges.
+Proposal: keep manual for the demo (deliberate, see CLAUDE.md). Record each
+required post-merge step as a Linear issue comment so nothing is forgotten.
+Revisit after the demo.
+
+**LO-19 Activities layer.**
+Parked on purpose. UNP-6 merges as is; follow-ups stay in Backlog until the
+core path above is clean.
+
+## Decisions Allan has to make
+
+| Id | Decision | Recommendation | Status |
+|---|---|---|---|
+| D-1 | Grace period after balance due date before auto-release | 14 days overdue (that is 42 days before arrival, the half-refund tier) | open |
+| D-2 | Refunds sent by the app via Pesapal API, or a person presses send per refund | App sends; person reviews rejections only | open |
+| D-3 | Date change as rebook-and-transfer with a 48-hour full-credit window | Yes | open |
+| D-4 | Tickets inside the app first, Zoho Desk later | Yes | open |
+| D-5 | SMS provider for reminders (Africa's Talking or Twilio), WhatsApp later | Africa's Talking for Kenya | open |
+| D-6 | Incentive in the final reminder notice | Client's call; cheap extra or none | open |
+| D-7 | Automated referral payouts via M-Pesa B2C, and when | After the demo; onboarding fields first | open |
+| D-8 | Outbound reminder calls | No; measure first | open |
+| D-10 | Cooling-off period: full refund, deposit included, if the guest cancels within 24 or 48 hours of booking | 48 hours; also the cheapest fix for the "booked the wrong year" case | open |
+| D-11 | Separate staff sign-in with roles, or keep the admin flag on guest accounts | Admin flag plus /ops home page for the demo; staff sign-in after | open |
+| D-13 | Help chatbot: public pre-sales first, booking-aware second, both grounded only in our guides | Yes; after the guides exist | open |
+| D-14 | Chatbot cost controls: per-visitor limit, daily spend ceiling with a contact-form fallback, hosted small model, no self-hosting | Yes | open |
+| D-12 | Documentation home and structure: GitHub only, docs/guides + docs/archive, engineering plans stay at docs/ top level, contractor added as collaborator | Done 8 Sep 2026 (UNP-29); adding the contractor to the repo is Allan's step | decided |
+| D-9 | Order of work | LO-14 catalogue, then LO-15 cron, then LO-20, LO-1, LO-2, LO-16, LO-17, LO-21, then LO-8 | open |
+
+## Policy clarifications recorded from chat
+
+- The deposit is never refunded, at any point after booking, unless D-10
+  introduces a cooling-off period. The refund percentages apply only to
+  money paid beyond the deposit. A guest who paid only the deposit receives
+  nothing back at any tier.
+- Non-payers are never charged anything further. The deposit is the
+  cancellation fee and is already held. On auto-release the lodge returns to
+  sale, the deposit is kept, and nothing is chased. We never pursue money we
+  do not hold.
+- Sentry (or equivalent) is in scope; it is for the technologist, not the
+  guest, and it is what turns "a guest emailed" into "we saw it first".
+
+## Change log
+
+- 8 Sep 2026 (night): UNP-29 filed; guides and archive folders created;
+  D-12 decided; D-14 chatbot cost controls added.
+- 8 Sep 2026 (evening): added LO-23 help chatbot and D-13.
+- 8 Sep 2026 (later still): added the demo test, LO-22 documentation
+  tiers, D-12.
+- 8 Sep 2026 (later): added LO-20 deep pay links, LO-21 ops entry, D-10
+  cooling-off, D-11 staff sign-in, and the policy clarifications section.
+
+- 8 Sep 2026: created from the contractor feedback session.
