@@ -80,7 +80,16 @@ email already tells the guest "we have refunded X to your original payment
 method". Filed as UNP-30 (High) on 8 Sep 2026.
 Proposal: every cancellation with a refund above zero creates a refund row
 (amount, Pesapal tracking id, state). The app calls the Pesapal refund API
-itself. Failure or amount mismatch files an OpsAlert.
+itself. Failure or amount mismatch files an OpsAlert. The same
+cancellation pushes a credit note to Zoho Books against the booking's
+invoice, tagged with the Pesapal tracking id, so a reduced Pesapal payout
+can be matched to the booking. Money movement, in plain terms: Pesapal
+holds guest payments and pays the bank in batches minus fees; the bank is
+the only place money truly sits; Apaleo and Zoho are records. Zoho's bank
+feed is a setting, not code; our job is to make the Zoho side complete
+(invoice, payment, credit note per booking).
+First step: one call to the Pesapal sandbox refund endpoint to learn
+whether the sandbox completes refunds or leaves them pending.
 Human touch: none on success. Reviews only Pesapal rejections.
 Decision needed: D-2 (app-initiated vs person presses send).
 
