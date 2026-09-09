@@ -179,8 +179,13 @@ Human touch: only rows Zoho keeps rejecting.
 **LO-6 Referral and influencer payouts.**
 Today: admin downloads a payout CSV, hand-runs M-Pesa or bank transfers,
 marks the batch paid. KRA PIN collected by the accountant by hand.
-Proposal, in two steps. First, collect KRA PIN and M-Pesa number at referrer
-onboarding so the CSV is complete. Second, when the client is ready, pay
+Proposal, in two steps. First, collect the payout fields at onboarding
+so the CSV is complete. Collected today: name, email, phone, code, an
+unused per-person commission rate. Needed, all optional until payouts
+are real (D-7): legal name as on ID, national ID or passport number, KRA
+PIN (withholding tax on commission is deducted and remitted against it),
+M-Pesa number or bank name, branch and account, and a payout consent
+date. The accountant confirms the tax fields. Second, when the client is ready, pay
 batches through Pesapal or M-Pesa B2C from the app, with the mark-paid
 becoming automatic on provider confirmation. Until then the CSV and mark-
 paid stay, but the batch appears in the inbox on a monthly schedule so
@@ -218,7 +223,10 @@ dates or outcome, free text. It files an OpsAlert (kind: change_request)
 with the booking attached. A person reviews it against a short written
 policy (for example: full transfer to new dates for a first request on a
 booking above a threshold) and acts with the rebook-and-transfer flow from
-LO-8. Always human. This is the flexibility that keeps a high-value guest
+LO-8. Always human. The form must not become a side door for things the
+guest can do alone: the page first offers the buttons that apply (pay,
+cancel with the quote, move dates), and the form appears only after
+"none of these fits", with a reason category the guest must pick. This is the flexibility that keeps a high-value guest
 and it cannot be safely automated, because sincerity cannot be judged by
 a bot.
 Note on D-10: a 48-hour cooling-off does not catch the "wrong year" case.
@@ -431,25 +439,25 @@ Reviewed by a person, because judgment is involved or money disagrees:
 
 | Id | Decision | Recommendation | Status |
 |---|---|---|---|
-| D-1 | Grace period after balance due date before auto-release | 14 days overdue (that is 42 days before arrival, the half-refund tier) | open |
-| D-2 | Refunds sent by the app via Pesapal API, or a person presses send per refund | App sends; person reviews rejections only | open |
-| D-3 | Date change as rebook-and-transfer with a 48-hour full-credit window | Yes | open |
-| D-4 | Tickets inside the app first, Zoho Desk later | Yes | open |
-| D-5 | SMS provider for reminders (Africa's Talking or Twilio), WhatsApp later | Africa's Talking for Kenya | open |
-| D-6 | Incentive in the final reminder notice | Client's call; cheap extra or none | open |
-| D-7 | Automated referral payouts via M-Pesa B2C, and when | After the demo; onboarding fields first | open |
-| D-8 | Outbound reminder calls | No; measure first | open |
-| D-10 | Cooling-off period: full refund, deposit included, if the guest cancels within 24 or 48 hours of booking | 48 hours for next-day regret; the wrong-year case is caught by LO-25, not by this | open |
-| D-15 | Change-request form on Manage my booking, always human-reviewed, with a short written policy for transfers | Yes | open |
-| D-16 | Hosting: stay on Railway through the demo; revisit at launch (Railway is fine at this scale; moving is a day's work with agents) | Stay | open |
-| D-18 | Refund review threshold: refunds above this amount wait for a person even when the policy computed them | Client's call; suggest KES 100,000 | open |
-| D-19 | eTIMS through Zoho Books Kenya edition, with an optional KRA PIN field at checkout | Yes; accountant configures Zoho, we add the field | open |
-| D-17 | Error tracking: Sentry alongside Railway logs (logs are a scroll; Sentry groups errors, attaches the booking id, and notifies) | Yes, at deploy | open |
-| D-11 | Separate staff sign-in with roles, or keep the admin flag on guest accounts | Admin flag plus /ops home page for the demo; staff sign-in after | open |
-| D-13 | Help chatbot: public pre-sales first, booking-aware second, both grounded only in our guides | Yes; after the guides exist | open |
-| D-14 | Chatbot cost controls: per-visitor limit, daily spend ceiling with a contact-form fallback, hosted small model, no self-hosting | Yes | open |
+| D-1 | Grace period after balance due date before auto-release | 14 days overdue (that is 42 days before arrival, the half-refund tier) | decided (8 Sep) |
+| D-2 | Refunds sent by the app via Pesapal API, or a person presses send per refund | App sends; person reviews rejections only. Allan to confirm after reading the refund policy section | leaning yes |
+| D-3 | Date change as rebook-and-transfer with a 48-hour full-credit window | Yes. Allan wants more thought on the model and the window | open |
+| D-4 | Tickets inside the app first, Zoho Desk later | Yes | decided (8 Sep) |
+| D-5 | SMS provider for reminders (Africa's Talking or Twilio), WhatsApp later | Africa's Talking for Kenya | decided (8 Sep) |
+| D-6 | Incentive in the final reminder notice | Client's call; cheap extra or none. Ask the client whether they want an incentive at all | deferred |
+| D-7 | Automated referral payouts via M-Pesa B2C, and when | After the demo; onboarding fields first. Add the payout fields at onboarding now, optional, see LO-6 | decided (8 Sep) |
+| D-8 | Outbound reminder calls | No; measure first | decided (8 Sep) |
+| D-10 | Cooling-off period: full refund, deposit included, if the guest cancels within 24 or 48 hours of booking | 48 hours for next-day regret; the wrong-year case is caught by LO-25, not by this. Cooling-off is separate from the LO-8 transfer window | decided (8 Sep) |
+| D-15 | Change-request form on Manage my booking, always human-reviewed, with a short written policy for transfers | Yes. The form must not accept what the buttons already do, see LO-25 | decided (8 Sep) |
+| D-16 | Hosting: stay on Railway through the demo; revisit at launch (Railway is fine at this scale; moving is a day's work with agents) | Stay | decided (8 Sep) |
+| D-18 | Refund review threshold: refunds above this amount wait for a person even when the policy computed them | Client's call; suggest KES 100,000. Threshold changeable later | decided (8 Sep) |
+| D-19 | eTIMS through Zoho Books Kenya edition, with an optional KRA PIN field at checkout | Yes; accountant configures Zoho, we add the field | decided (8 Sep) |
+| D-17 | Error tracking: Sentry alongside Railway logs (logs are a scroll; Sentry groups errors, attaches the booking id, and notifies) | Yes, at deploy | decided (8 Sep) |
+| D-11 | Separate staff sign-in with roles, or keep the admin flag on guest accounts | Admin flag plus /ops home page for the demo; staff sign-in after | decided (8 Sep) |
+| D-13 | Help chatbot: public pre-sales first, booking-aware second, both grounded only in our guides | Yes; after the guides exist. Issue filed for stage 1 | decided (8 Sep) |
+| D-14 | Chatbot cost controls: per-visitor limit, daily spend ceiling with a contact-form fallback, hosted small model, no self-hosting | Yes | decided (8 Sep) |
 | D-12 | Documentation home and structure: GitHub only, docs/guides + docs/archive, engineering plans stay at docs/ top level, contractor added as collaborator | Done 8 Sep 2026 (UNP-29); adding the contractor to the repo is Allan's step | decided |
-| D-9 | Order of work | LO-14 catalogue, then LO-15 cron, then LO-20, LO-1, LO-2, LO-16, LO-17, LO-21, then LO-8 | open |
+| D-9 | Order of work | LO-14 catalogue, then LO-15 cron, then LO-20, LO-1, LO-2, LO-16, LO-17, LO-21, then LO-8 | decided (8 Sep) |
 
 ## Policy clarifications recorded from chat
 
@@ -466,6 +474,8 @@ Reviewed by a person, because judgment is involved or money disagrees:
 
 ## Change log
 
+- 8 Sep 2026 (decisions): Allan decided D-1, D-4, D-5, D-7 to D-11,
+  D-13 to D-19; D-2 leaning yes; D-3 open; D-6 deferred to the client.
 - 8 Sep 2026 (later): LO-26 eTIMS, D-19, reversal listening notes.
 - 8 Sep 2026 (late): LO-24 VAT on refunds, LO-25 change requests,
   D-15 to D-17; UNP-31 walkthrough project filed.
