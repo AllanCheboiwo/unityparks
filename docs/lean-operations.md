@@ -446,7 +446,7 @@ Reviewed by a person, because judgment is involved or money disagrees:
 | Id | Decision | Recommendation | Status |
 |---|---|---|---|
 | D-1 | Grace period after balance due date before auto-release | 14 days overdue (that is 42 days before arrival, the half-refund tier) | decided (8 Sep) |
-| D-2 | Refunds sent by the app via Pesapal API, or a person presses send per refund | App sends; person reviews rejections only. Allan to confirm after reading the refund policy section | leaning yes |
+| D-2 | Refunds sent by the app via Pesapal API, or a person presses send per refund | App sends; person reviews rejections, folio mismatches, and amounts above D-18 only | decided (8 Sep) |
 | D-3 | Date change as rebook-and-transfer with a 48-hour full-credit window | Yes. Button plus rule; the D-15 form catches the rest; four-line transfer summary before confirm | decided (8 Sep) |
 | D-4 | Tickets inside the app first, Zoho Desk later | Yes | decided (8 Sep) |
 | D-5 | SMS provider for reminders (Africa's Talking or Twilio), WhatsApp later | Africa's Talking for Kenya | decided (8 Sep) |
