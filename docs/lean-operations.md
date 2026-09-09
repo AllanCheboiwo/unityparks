@@ -117,6 +117,12 @@ Decision needed: D-1 (grace period), D-5 (SMS provider), D-6 (incentive).
 Today: the reversal detector runs only for fully paid records. A Pesapal
 REVERSED on a settled deposit is not detected (documented limitation in
 deposit-and-cancellation-plan.md).
+How we learn of a reversal: two ways, belt and braces. Pesapal already
+calls our registered IPN address when a transaction's status changes; we
+keep that listener and let it trigger a status re-check. Whether Pesapal
+fires it for reversals is unverified, so the daily cron also re-checks
+every settled payment inside the chargeback window. Neither path is
+trusted alone.
 Proposal: extend the detector to deposit_paid records. On any reversal
 the booking goes to a "payment reversed" hold: check-in blocked, no
 further automation runs on it, the Apaleo folio shows the reversal, and
@@ -150,6 +156,18 @@ real ones but never reach the Zoho outbox (it is keyed on a Pesapal
 tracking id). Reconciliation must treat them as expected differences.
 Human touch: the accounts person reads one list. Zero items means the books
 are right.
+
+**LO-26 eTIMS (KRA electronic tax invoices).**
+Today: nothing. Invoices are created in Zoho Books by our export; nothing
+sends them to KRA.
+Proposal: use Zoho Books' Kenya edition, which transmits invoices to eTIMS
+itself. Our job is to make each invoice eTIMS-ready: item lines with the
+right tax codes, VAT split, and the buyer's KRA PIN when the guest gives
+one (an optional field at checkout, most guests will not). Credit notes
+(LO-1, LO-24) go the same way. Nothing to build on our side beyond the
+fields; the accountant switches it on in Zoho.
+Human touch: none once configured.
+Decision needed: D-19.
 
 **LO-5 Zoho export failures.**
 Today: outbox with inline retries; rows past MAX_ATTEMPTS wait for an admin
@@ -425,6 +443,7 @@ Reviewed by a person, because judgment is involved or money disagrees:
 | D-15 | Change-request form on Manage my booking, always human-reviewed, with a short written policy for transfers | Yes | open |
 | D-16 | Hosting: stay on Railway through the demo; revisit at launch (Railway is fine at this scale; moving is a day's work with agents) | Stay | open |
 | D-18 | Refund review threshold: refunds above this amount wait for a person even when the policy computed them | Client's call; suggest KES 100,000 | open |
+| D-19 | eTIMS through Zoho Books Kenya edition, with an optional KRA PIN field at checkout | Yes; accountant configures Zoho, we add the field | open |
 | D-17 | Error tracking: Sentry alongside Railway logs (logs are a scroll; Sentry groups errors, attaches the booking id, and notifies) | Yes, at deploy | open |
 | D-11 | Separate staff sign-in with roles, or keep the admin flag on guest accounts | Admin flag plus /ops home page for the demo; staff sign-in after | open |
 | D-13 | Help chatbot: public pre-sales first, booking-aware second, both grounded only in our guides | Yes; after the guides exist | open |
@@ -447,6 +466,7 @@ Reviewed by a person, because judgment is involved or money disagrees:
 
 ## Change log
 
+- 8 Sep 2026 (later): LO-26 eTIMS, D-19, reversal listening notes.
 - 8 Sep 2026 (late): LO-24 VAT on refunds, LO-25 change requests,
   D-15 to D-17; UNP-31 walkthrough project filed.
 - 8 Sep 2026 (night): UNP-29 filed; guides and archive folders created;
