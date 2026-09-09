@@ -423,6 +423,28 @@ Revisit after the demo.
 Parked on purpose. UNP-6 merges as is; follow-ups stay in Backlog until the
 core path above is clean.
 
+## The tier flaw Allan found (8 Sep)
+
+Industry practice (Center Parcs UK, hotels): the cancellation fee is a
+percentage of the total stay, rising towards arrival, owed whether or not
+it has been paid; what is held is kept and the rest is billed or charged
+to a card. We store no cards and never chase, so our fee can only come
+out of money already held. That inverts the incentive: the deposit-only
+guest loses the least, the guest who paid early loses the most.
+
+Options:
+- Copy the industry fully and bill the shortfall. Fair on paper, but it
+  means invoicing guests who have walked away, which is the collecting
+  the client does not want.
+- Deposit is the only penalty until 21 days before arrival; everything
+  above it comes back in full on cancel or release. Inside 21 days, no
+  refund. Two tiers. Fair between guests, rewards early payment, one
+  sentence to explain. Costs little: inside 21 days everyone still
+  holding a booking is fully paid (balance due at 56 days, release at
+  42), so late-cancellation protection is unchanged. Recommended.
+
+Until D-20 is decided the four tiers in the deposit plan stand.
+
 ## Refund policy: what is automatic and what is reviewed
 
 Automatic, because the policy already decides it and the same rule applies
@@ -458,6 +480,7 @@ Reviewed by a person, because judgment is involved or money disagrees:
 | D-16 | Hosting: stay on Railway through the demo; revisit at launch (Railway is fine at this scale; moving is a day's work with agents) | Stay | decided (8 Sep) |
 | D-18 | Refund review threshold: refunds above this amount wait for a person even when the policy computed them | Client's call; suggest KES 100,000. Threshold changeable later | decided (8 Sep) |
 | D-19 | eTIMS through Zoho Books Kenya edition, with an optional KRA PIN field at checkout | Yes; accountant configures Zoho, we add the field | decided (8 Sep) |
+| D-20 | Cancellation tiers: keep the four tiers, or deposit-only penalty until 21 days then nothing | Two tiers; needs the client's agreement since it changes the published policy | open |
 | D-17 | Error tracking: Sentry alongside Railway logs (logs are a scroll; Sentry groups errors, attaches the booking id, and notifies) | Yes, at deploy | decided (8 Sep) |
 | D-11 | Separate staff sign-in with roles, or keep the admin flag on guest accounts | Admin flag plus /ops home page for the demo; staff sign-in after | decided (8 Sep) |
 | D-13 | Help chatbot: public pre-sales first, booking-aware second, both grounded only in our guides | Yes; after the guides exist. Issue filed for stage 1 | decided (8 Sep) |
@@ -480,6 +503,7 @@ Reviewed by a person, because judgment is involved or money disagrees:
 
 ## Change log
 
+- 8 Sep 2026 (tiers): the tier flaw section and D-20 added.
 - 8 Sep 2026 (decisions): Allan decided D-1, D-4, D-5, D-7 to D-11,
   D-13 to D-19; D-2 leaning yes; D-3 open; D-6 deferred to the client.
 - 8 Sep 2026 (later): LO-26 eTIMS, D-19, reversal listening notes.
