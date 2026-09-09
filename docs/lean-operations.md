@@ -246,8 +246,14 @@ full. Outside it, the deposit follows the guest to the new booking and the
 normal tiers apply only to the difference. Extras and activities are
 re-offered on the new booking and re-checked against date-bound inventory;
 anything unavailable is refunded inside the same transfer.
+Guest-facing requirement (Allan, 8 Sep): before confirming, the guest sees
+one plain summary and nothing moves until they accept it. Four lines: what
+you paid on the old booking; what carries over to the new one (and, after
+the 48-hour window, what the tiers keep); what the new stay costs; what
+you pay now, or what comes back to you. Same four lines in the
+confirmation email. The guest must never wonder why they paid more.
 Human touch: only transfers where money must go back and Pesapal refuses.
-Decision needed: D-3 (model and grace window), D-10 (cooling-off).
+Decided: D-3 (button plus rule, the D-15 form catches the rest), D-10.
 
 **LO-9 Guest data corrections (name, email, party size).**
 Today: email normalisation script exists; no guest self-serve for details.
@@ -441,7 +447,7 @@ Reviewed by a person, because judgment is involved or money disagrees:
 |---|---|---|---|
 | D-1 | Grace period after balance due date before auto-release | 14 days overdue (that is 42 days before arrival, the half-refund tier) | decided (8 Sep) |
 | D-2 | Refunds sent by the app via Pesapal API, or a person presses send per refund | App sends; person reviews rejections only. Allan to confirm after reading the refund policy section | leaning yes |
-| D-3 | Date change as rebook-and-transfer with a 48-hour full-credit window | Yes. Allan wants more thought on the model and the window | open |
+| D-3 | Date change as rebook-and-transfer with a 48-hour full-credit window | Yes. Button plus rule; the D-15 form catches the rest; four-line transfer summary before confirm | decided (8 Sep) |
 | D-4 | Tickets inside the app first, Zoho Desk later | Yes | decided (8 Sep) |
 | D-5 | SMS provider for reminders (Africa's Talking or Twilio), WhatsApp later | Africa's Talking for Kenya | decided (8 Sep) |
 | D-6 | Incentive in the final reminder notice | Client's call; cheap extra or none. Ask the client whether they want an incentive at all | deferred |
