@@ -117,12 +117,28 @@ Decision needed: D-1 (grace period), D-5 (SMS provider), D-6 (incentive).
 Today: the reversal detector runs only for fully paid records. A Pesapal
 REVERSED on a settled deposit is not detected (documented limitation in
 deposit-and-cancellation-plan.md).
-Proposal: extend the detector to deposit_paid records; a reversal files an
-OpsAlert with the booking and amount, and the booking goes to a "payment
-reversed" state that blocks check-in until resolved.
+Proposal: extend the detector to deposit_paid records. On any reversal
+the booking goes to a "payment reversed" hold: check-in blocked, no
+further automation runs on it, the Apaleo folio shows the reversal, and
+an OpsAlert carries the booking, the amount, and which payment it was.
+Cases, all handled by the same hold:
+  - fully paid, whole payment reversed: hold, nothing owed to the guest.
+  - fully paid, one balance part reversed: hold; paid state recomputed
+    from the folio, so the booking drops back to deposit_paid and the
+    memories counter no longer counts it.
+  - deposit only, reversed: hold; there is no money behind the lodge.
+  - refund already sent, then the original payment reversed: hold; the
+    guest has been paid twice; a person recovers it.
+Never auto-cancel on a reversal: chargebacks are disputes, and the
+business can win them. A person decides after the dispute window, using
+the ordinary cancel (deposit kept) or a "reversal upheld, release lodge"
+button.
 Human touch: reviews each reversal (rare, and always needs judgment).
 
 **LO-4 Reconciliation for the accounts person.**
+Who reviews: the accountant, in our ops inbox (needs the accounts role
+from D-11), for exceptions only. Zoho stays their book of record. Two
+screens is inherent: ours says what is missing, Zoho holds the books.
 Today: inventory reconcile exists (files inventory_drift alerts). Folio
 drift alerts fire on two paths. No daily money reconciliation across
 Pesapal, folios, booking records, and the Zoho outbox.
@@ -375,6 +391,24 @@ Revisit after the demo.
 Parked on purpose. UNP-6 merges as is; follow-ups stay in Backlog until the
 core path above is clean.
 
+## Refund policy: what is automatic and what is reviewed
+
+Automatic, because the policy already decides it and the same rule applies
+to everyone (that is what makes it fair):
+- self-service cancellation refunds by tier (LO-1);
+- cooling-off refunds if D-10 is adopted;
+- credit carried over in a rebook-and-transfer (LO-8), including refund
+  of the difference when the new stay is cheaper;
+- deposit kept on auto-release (LO-2), which is a refund of zero;
+- refunds of unavailable extras or activities inside a transfer.
+
+Reviewed by a person, because judgment is involved or money disagrees:
+- change requests outside the policy (LO-25);
+- chargebacks and reversals (LO-3);
+- any refund where Pesapal's answer or the folio does not match our
+  computed amount;
+- any refund above a threshold the client sets (D-18).
+
 ## Decisions Allan has to make
 
 | Id | Decision | Recommendation | Status |
@@ -390,6 +424,7 @@ core path above is clean.
 | D-10 | Cooling-off period: full refund, deposit included, if the guest cancels within 24 or 48 hours of booking | 48 hours for next-day regret; the wrong-year case is caught by LO-25, not by this | open |
 | D-15 | Change-request form on Manage my booking, always human-reviewed, with a short written policy for transfers | Yes | open |
 | D-16 | Hosting: stay on Railway through the demo; revisit at launch (Railway is fine at this scale; moving is a day's work with agents) | Stay | open |
+| D-18 | Refund review threshold: refunds above this amount wait for a person even when the policy computed them | Client's call; suggest KES 100,000 | open |
 | D-17 | Error tracking: Sentry alongside Railway logs (logs are a scroll; Sentry groups errors, attaches the booking id, and notifies) | Yes, at deploy | open |
 | D-11 | Separate staff sign-in with roles, or keep the admin flag on guest accounts | Admin flag plus /ops home page for the demo; staff sign-in after | open |
 | D-13 | Help chatbot: public pre-sales first, booking-aware second, both grounded only in our guides | Yes; after the guides exist | open |
