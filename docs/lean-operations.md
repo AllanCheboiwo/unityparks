@@ -443,7 +443,13 @@ Options:
   holding a booking is fully paid (balance due at 56 days, release at
   42), so late-cancellation protection is unchanged. Recommended.
 
-Until D-20 is decided the four tiers in the deposit plan stand.
+Allan's decision, 8 Sep: the two-tier shape, with 21 days as a changeable
+number. Reasoning recorded: 56 days is when money comes in (cash flow),
+21 is when a freed lodge stops being resellable (real loss). Taking more
+at 56 would be keeping payment for a lodge that is then resold. Whether
+21 is the right number depends on how far ahead guests book; measure the
+lead time after launch and adjust. Until the client agrees and the
+feature ships, the four tiers in the deposit plan stand.
 
 ## Refund policy: what is automatic and what is reviewed
 
@@ -480,7 +486,7 @@ Reviewed by a person, because judgment is involved or money disagrees:
 | D-16 | Hosting: stay on Railway through the demo; revisit at launch (Railway is fine at this scale; moving is a day's work with agents) | Stay | decided (8 Sep) |
 | D-18 | Refund review threshold: refunds above this amount wait for a person even when the policy computed them | Client's call; suggest KES 100,000. Threshold changeable later | decided (8 Sep) |
 | D-19 | eTIMS through Zoho Books Kenya edition, with an optional KRA PIN field at checkout | Yes; accountant configures Zoho, we add the field | decided (8 Sep) |
-| D-20 | Cancellation tiers: keep the four tiers, or deposit-only penalty until 21 days then nothing | Two tiers; needs the client's agreement since it changes the published policy | open |
+| D-20 | Cancellation policy: within 48 hours of booking everything back (D-10); more than 21 days before arrival, deposit lost and everything above it back in full; 21 days or less, nothing back. No scale in between. The 21 is a single changeable number, revisited with real booking lead-time data six months after launch | Allan agrees 8 Sep; needs the client's agreement since it changes the published policy, then a full-path feature (refund maths, terms page, emails) | agreed, pending client |
 | D-17 | Error tracking: Sentry alongside Railway logs (logs are a scroll; Sentry groups errors, attaches the booking id, and notifies) | Yes, at deploy | decided (8 Sep) |
 | D-11 | Separate staff sign-in with roles, or keep the admin flag on guest accounts | Admin flag plus /ops home page for the demo; staff sign-in after | decided (8 Sep) |
 | D-13 | Help chatbot: public pre-sales first, booking-aware second, both grounded only in our guides | Yes; after the guides exist. Issue filed for stage 1 | decided (8 Sep) |
