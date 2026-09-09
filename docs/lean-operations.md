@@ -164,7 +164,34 @@ cancellable free until N days before arrival, activities follow their own
 slot rules.
 Human touch: none if the policy is coded.
 
+**LO-24 VAT on refunds.**
+Today: the Zoho payload carries VAT on the invoice (commission config also
+notes 16% VAT). Nothing reverses VAT on a refund because nothing reaches
+Zoho on cancellation.
+Proposal: the credit note in LO-1 carries the same VAT split as the
+invoice, so the tax reverses with the money. No new rule, just the credit
+note done properly. The accountant checks the VAT return; the app does the
+arithmetic.
+Human touch: none beyond the normal VAT return.
+
 ### Dates and guest changes
+
+**LO-25 Change requests for high-value or unusual cases.**
+Today: nothing. A guest who paid in full and cannot attend has only the
+cancel button and the tiers.
+Proposal: a "request a change" form on Manage my booking: reason, wanted
+dates or outcome, free text. It files an OpsAlert (kind: change_request)
+with the booking attached. A person reviews it against a short written
+policy (for example: full transfer to new dates for a first request on a
+booking above a threshold) and acts with the rebook-and-transfer flow from
+LO-8. Always human. This is the flexibility that keeps a high-value guest
+and it cannot be safely automated, because sincerity cannot be judged by
+a bot.
+Note on D-10: a 48-hour cooling-off does not catch the "wrong year" case.
+A guest who typed 2027 for 2026 will not notice until reminders fail to
+arrive. The change-request form is the catch for that; cooling-off stays
+useful for the ordinary next-day regret.
+Human touch: one review per request. Expected volume: low.
 
 **LO-8 Changing dates, including the "booked 2027 by mistake" case.**
 Today: no date-change feature. The guest's only route is cancel and rebook,
@@ -360,7 +387,10 @@ core path above is clean.
 | D-6 | Incentive in the final reminder notice | Client's call; cheap extra or none | open |
 | D-7 | Automated referral payouts via M-Pesa B2C, and when | After the demo; onboarding fields first | open |
 | D-8 | Outbound reminder calls | No; measure first | open |
-| D-10 | Cooling-off period: full refund, deposit included, if the guest cancels within 24 or 48 hours of booking | 48 hours; also the cheapest fix for the "booked the wrong year" case | open |
+| D-10 | Cooling-off period: full refund, deposit included, if the guest cancels within 24 or 48 hours of booking | 48 hours for next-day regret; the wrong-year case is caught by LO-25, not by this | open |
+| D-15 | Change-request form on Manage my booking, always human-reviewed, with a short written policy for transfers | Yes | open |
+| D-16 | Hosting: stay on Railway through the demo; revisit at launch (Railway is fine at this scale; moving is a day's work with agents) | Stay | open |
+| D-17 | Error tracking: Sentry alongside Railway logs (logs are a scroll; Sentry groups errors, attaches the booking id, and notifies) | Yes, at deploy | open |
 | D-11 | Separate staff sign-in with roles, or keep the admin flag on guest accounts | Admin flag plus /ops home page for the demo; staff sign-in after | open |
 | D-13 | Help chatbot: public pre-sales first, booking-aware second, both grounded only in our guides | Yes; after the guides exist | open |
 | D-14 | Chatbot cost controls: per-visitor limit, daily spend ceiling with a contact-form fallback, hosted small model, no self-hosting | Yes | open |
@@ -382,6 +412,8 @@ core path above is clean.
 
 ## Change log
 
+- 8 Sep 2026 (late): LO-24 VAT on refunds, LO-25 change requests,
+  D-15 to D-17; UNP-31 walkthrough project filed.
 - 8 Sep 2026 (night): UNP-29 filed; guides and archive folders created;
   D-12 decided; D-14 chatbot cost controls added.
 - 8 Sep 2026 (evening): added LO-23 help chatbot and D-13.
