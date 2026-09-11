@@ -14,6 +14,7 @@ import { normalizeEmail } from "@/server/auth/normalize";
 import { claimByEmail } from "@/server/auth/claim";
 import { sendWelcomeEmail } from "@/server/email/welcome";
 import { handleRoute, jsonError } from "@/server/api-helpers";
+import { logError } from "@/lib/log";
 
 const DetailsBody = z.object({
   title: z.enum(["Mr", "Mrs", "Ms", "Miss", "Dr"]).optional(),
@@ -162,12 +163,13 @@ export async function POST(
         }
         throw err;
       }
-      await claimByEmail(user.id, email);
+      const userId = user.id;
+      await claimByEmail(userId, email);
       // Signs the response: the guest reaches the pay step already signed in.
-      await createAuthSession(user.id, remember ?? false);
+      await createAuthSession(userId, remember ?? false);
       // Fire-and-forget: the account exists whether or not the mail lands.
       void sendWelcomeEmail({ to: user.email, firstName: user.firstName }).catch(
-        (err) => console.error(`[email] welcome to ${email} failed:`, err),
+        (err) => logError("Welcome email failed", err, { userId, route: "session/details" }),
       );
       accountCreated = true;
     } else {

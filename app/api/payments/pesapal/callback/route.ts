@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/server/db";
 import { confirmPesapalPayment } from "@/server/booking/checkout";
+import { logError } from "@/lib/log";
 
 /**
  * Where Pesapal's hosted page sends the guest's browser after a payment
@@ -43,7 +44,7 @@ export async function GET(req: NextRequest) {
       new URL(`/checkout/pay?session=${record.sessionId}&payment=${outcome}`, base),
     );
   } catch (err) {
-    console.error("Pesapal callback failed", err);
+    logError("Pesapal callback failed", err, { route: "pesapal/callback" });
     // Even on an error we try to land the guest back on their own page
     // (Manage for balance payments, the pay page for checkout), where a
     // retry resumes the attempt. Home is the last resort.
