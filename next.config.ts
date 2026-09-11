@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import { withPayload } from "@payloadcms/next/withPayload";
+import { withSentryConfig } from "@sentry/nextjs/config";
 
 const nextConfig: NextConfig = {
   images: {
@@ -15,4 +16,11 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default withPayload(nextConfig);
+// Source maps upload only when SENTRY_AUTH_TOKEN is set (Railway). Without
+// it the build still succeeds and Sentry shows minified frames.
+export default withSentryConfig(withPayload(nextConfig), {
+  org: "unity-parks",
+  project: "unity-parks",
+  silent: !process.env.CI,
+  widenClientFileUpload: true,
+});
