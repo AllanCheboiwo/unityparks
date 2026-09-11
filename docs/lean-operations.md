@@ -493,6 +493,7 @@ Reviewed by a person, because judgment is involved or money disagrees:
 | D-14 | Chatbot cost controls: per-visitor limit, daily spend ceiling with a contact-form fallback, hosted small model, no self-hosting | Yes | decided (8 Sep) |
 | D-12 | Documentation home and structure: GitHub only, docs/guides + docs/archive, engineering plans stay at docs/ top level, contractor added as collaborator | Done 8 Sep 2026 (UNP-29); adding the contractor to the repo is Allan's step | decided |
 | D-9 | Order of work | LO-14 catalogue, then LO-15 cron, then LO-20, LO-1, LO-2, LO-16, LO-17, LO-21, then LO-8 | decided (8 Sep) |
+| D-9a | LO-16 pulled to the front of the D-9 order on 10 Sep 2026 (UNP-33). It depends on nothing and catches the failures LO-14, LO-15 and LO-1 will introduce. The rest of the order stands | Allan, 10 Sep | decided |
 
 ## Policy clarifications recorded from chat
 
