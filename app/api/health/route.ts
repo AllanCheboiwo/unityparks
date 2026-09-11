@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/server/db";
 
-// Railway polls this route and restarts the app when it stops answering
-// 200. Only our own database is checked on purpose: an Apaleo or Pesapal
-// outage must not turn into a restart loop on our side (LO-16).
+// Railway calls this route at the start of each deploy and only routes
+// traffic to the new container once it answers 2xx. It is not polled after
+// that and never triggers restarts. Only our own database is checked on
+// purpose: an Apaleo or Pesapal outage must not block our deploys (LO-16).
 export const dynamic = "force-dynamic";
 
 export async function GET() {

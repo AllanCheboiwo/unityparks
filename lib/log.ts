@@ -19,8 +19,21 @@ export function logError(message: string, err: unknown, context: LogContext = {}
   const error = err instanceof Error ? err : new Error(String(err));
   Sentry.captureException(error, {
     tags: tagsFrom(context),
-    extra: { message },
+    extra: { message, ...ownProps(error) },
   });
+}
+
+// ApaleoError and PesapalError carry status and body as own fields. Sentry
+// drops those unless handed over explicitly; the console line keeps them
+// because Node prints own props.
+function ownProps(error: Error): Record<string, unknown> {
+  const props: Record<string, unknown> = {};
+  for (const key of Object.keys(error)) {
+    if (key !== "name" && key !== "message" && key !== "stack") {
+      props[key] = (error as unknown as Record<string, unknown>)[key];
+    }
+  }
+  return props;
 }
 
 function tagsFrom(context: LogContext): Record<string, string> {

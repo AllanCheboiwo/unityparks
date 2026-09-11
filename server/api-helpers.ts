@@ -34,13 +34,15 @@ export async function handleRoute(
       return NextResponse.json({ error: err.message }, { status: err.status });
     }
     if (err instanceof ApaleoError) {
-      logError("Apaleo error", err, { route: "handleRoute" });
       if (err.status === 422) {
+        // Expected: another guest won the unit. Console only, never Sentry.
+        console.warn("Apaleo 422, sold-out race", JSON.stringify(err.body)?.slice(0, 300));
         return NextResponse.json(
           { error: "That lodge is no longer available for these dates.", soldOut: true },
           { status: 409 },
         );
       }
+      logError("Apaleo error", err, { route: "handleRoute" });
       return NextResponse.json(
         { error: "The booking system couldn't process that request." },
         { status: 502 },

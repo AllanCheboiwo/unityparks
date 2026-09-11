@@ -187,11 +187,11 @@ export async function POST(
           });
         } catch (rollbackErr) {
           rollbackFailed = true;
-          logError("Amend rollback failed", rollbackErr, { bookingId: record.id, reservationId: lodge.reservationId, route: "booking/amend" });
+          logError("Amend rollback failed", rollbackErr, { bookingId: record.apaleoBookingId, reservationId: lodge.reservationId, route: "booking/amend" });
         }
       }
       if (rollbackFailed) {
-        logError("Amend left a break part-moved", err, { bookingId: record.id, route: "booking/amend" });
+        logError("Amend left a break part-moved", err, { bookingId: record.apaleoBookingId, route: "booking/amend" });
         throw new PublicError(
           502,
           "We couldn't move every lodge and couldn't fully undo the change. Call our team on +254 700 000 000 and we'll put it right.",
@@ -206,7 +206,7 @@ export async function POST(
           { status: 409 },
         );
       }
-      logError("Amend failed, rolled back", err, { bookingId: record.id, route: "booking/amend" });
+      logError("Amend failed, rolled back", err, { bookingId: record.apaleoBookingId, route: "booking/amend" });
       throw new PublicError(
         502,
         "Moving your break failed, so it stays on its original dates. Please try again.",

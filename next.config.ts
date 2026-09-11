@@ -17,10 +17,9 @@ const nextConfig: NextConfig = {
 };
 
 // Source maps upload only when SENTRY_AUTH_TOKEN is set (Railway). Without
-// it the build still succeeds and Sentry shows minified frames.
+// it the build still succeeds and Sentry shows minified frames; the plugin
+// says so in the build log, which is why nothing here silences it.
 export default withSentryConfig(withPayload(nextConfig), {
   org: "unity-parks",
   project: "unity-parks",
-  silent: !process.env.CI,
-  widenClientFileUpload: true,
 });

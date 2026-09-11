@@ -21,7 +21,8 @@ and catches the failures LO-14, LO-15 and LO-1 will introduce.
 - Alert goes to Allan's email, on issue first seen.
 - The wizard's example page is deleted once the first event has landed.
 - No DSN in local .env. Local runs never send.
-- Environment tag comes from Railway's environment variable.
+- Environment tag comes from NEXT_PUBLIC_SENTRY_ENVIRONMENT, which Railway
+  fills from its own environment name.
 
 ## Checklist
 
@@ -31,7 +32,10 @@ and catches the failures LO-14, LO-15 and LO-1 will introduce.
       RAILWAY_ENVIRONMENT_NAME. Build verified with no DSN and no token.
 - [ ] Allan: create Sentry org "unity-parks" and Next.js project
       "unity-parks" (those slugs are in next.config.ts), copy the DSN.
-- [ ] Allan: add NEXT_PUBLIC_SENTRY_DSN and SENTRY_AUTH_TOKEN to Railway.
+- [ ] Allan: add to Railway: NEXT_PUBLIC_SENTRY_DSN, SENTRY_AUTH_TOKEN, and
+      NEXT_PUBLIC_SENTRY_ENVIRONMENT=${{RAILWAY_ENVIRONMENT_NAME}} (Railway
+      reference syntax, so the browser bundle gets the same environment tag
+      as the server).
 - [x] Claude: app/api/health/route.ts, 200 with a trivial Postgres query,
       503 otherwise. Tests.
 - [x] Claude: lib/log.ts, logError(message, err, { bookingId, route }).
