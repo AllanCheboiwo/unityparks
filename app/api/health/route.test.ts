@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * UNP-33 (docs/observability-plan.md): the route Railway polls. The
- * guarantee is 200 while Postgres answers and 503 the moment it does not,
- * with nothing cached in between. The fake is dumb storage for one
+ * UNP-33 (docs/observability-plan.md): the route Railway checks before
+ * routing traffic to a new deploy. The guarantee is 200 while Postgres
+ * answers and 503 the moment it does not, with nothing cached in between. The fake is dumb storage for one
  * outcome; the route decides the status.
  */
 
@@ -35,7 +35,7 @@ describe("GET /api/health", () => {
     expect(await res.json()).toEqual({ ok: false });
   });
 
-  it("is never cached, so a recovered database is seen on the next poll", async () => {
+  it("is never cached, so a recovered database is seen on the next check", async () => {
     const res = await GET();
     expect(res.headers.get("cache-control")).toBe("no-store");
   });
