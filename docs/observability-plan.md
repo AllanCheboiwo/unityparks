@@ -25,21 +25,26 @@ and catches the failures LO-14, LO-15 and LO-1 will introduce.
 
 ## Checklist
 
-- [ ] Allan: create Sentry org and Next.js project, run the wizard on this
-      branch, commit the result. Session Replay off, no CI config.
+- [x] Claude: SDK wired by hand instead of the wizard (the wizard needs an
+      interactive login). Three runtimes, errors only, DSN from
+      NEXT_PUBLIC_SENTRY_DSN, tracing and PII off, environment from
+      RAILWAY_ENVIRONMENT_NAME. Build verified with no DSN and no token.
+- [ ] Allan: create Sentry org "unity-parks" and Next.js project
+      "unity-parks" (those slugs are in next.config.ts), copy the DSN.
 - [ ] Allan: add NEXT_PUBLIC_SENTRY_DSN and SENTRY_AUTH_TOKEN to Railway.
-- [ ] Claude: move the DSN out of the init files into NEXT_PUBLIC_SENTRY_DSN;
-      tracing off; PII off; environment from Railway.
-- [ ] Claude: app/api/health/route.ts, 200 with a trivial Postgres query,
+- [x] Claude: app/api/health/route.ts, 200 with a trivial Postgres query,
       503 otherwise. Tests.
-- [ ] Claude: lib/log.ts, logError(err, { bookingId, route }). Console always,
-      Sentry when a DSN is set. Tests.
-- [ ] Claude: replace the five console.error sites (Pesapal IPN, Pesapal
-      callback, register, amend, session details).
-- [ ] Claude: note in docs/lean-operations.md that LO-16 was pulled forward.
+- [x] Claude: lib/log.ts, logError(message, err, { bookingId, route }).
+      Console always, Sentry when a DSN is set. Tests.
+- [x] Claude: replace the app/ console.error sites (Pesapal IPN, Pesapal
+      callback, register, amend, session details) plus handleRoute's
+      catch-all. The ~60 sites under server/ are UNP-34.
+- [x] Claude: note in docs/lean-operations.md that LO-16 was pulled forward
+      (D-9a, committed on the UNP-29 docs branch).
 - [ ] Allan: point Railway's health check at /api/health.
 - [ ] Allan: alert rule in Sentry, email on first seen.
-- [ ] Both: fire the example page on Railway, see the event, delete the page.
+- [ ] Both: throw a test error on Railway (temporary route or a deliberate
+      bad request), see the event with readable frames, remove the route.
 - [ ] One /code-review pass, PR with "Fixes UNP-33".
 
 ## Acceptance
