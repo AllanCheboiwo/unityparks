@@ -1,6 +1,6 @@
 # Failure catalogue for the core money path (LO-14)
 
-Status: in-review (batch path: docs only, no product code; interview and test freeze not applicable)
+Status: shipped (batch path: docs only, no product code; interview and test freeze not applicable; merged via PR #36, 12 Sep 2026)
 Linear: UNP-35
 Branch: unp-35-failure-catalogue
 
