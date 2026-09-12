@@ -592,7 +592,7 @@ end to end in the browser.
 
 - `docs/DESIGN.md`: already updated with the policy copy section (done in
   the same session that wrote this plan). Verify it matches what you built.
-- `docs/FEATURES-REPORT.md` and `docs/Center Parcs Parity Checklist.md`:
+- `docs/FEATURES-REPORT.md` and `docs/archive/Center Parcs Parity Checklist.md`:
   flip the deposit/balance rows to built once shipped, with a one-line
   description and date, following the style of the "Cancel my booking" row.
 - Grep for the old policy copy ("28 or more days", "8 to 27") across the
