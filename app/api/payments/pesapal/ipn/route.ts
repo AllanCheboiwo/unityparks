@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { confirmPesapalPayment } from "@/server/booking/checkout";
+import { logError } from "@/lib/log";
 
 /**
  * Pesapal's server-to-server notification: fires when a transaction changes,
@@ -29,7 +30,7 @@ async function acknowledge(params: IpnParams): Promise<NextResponse> {
       // nothing to record yet. Only a thrown error asks Pesapal to retry.
       ok = outcome === "completed" || outcome === "pending" || outcome === "failed";
     } catch (err) {
-      console.error("Pesapal IPN failed", err);
+      logError("Pesapal IPN failed", err, { route: "pesapal/ipn" });
     }
   }
   return NextResponse.json({

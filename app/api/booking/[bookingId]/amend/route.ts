@@ -16,6 +16,7 @@ import { recoverStaleExtrasOrder } from "@/server/booking/extras";
 import { hasConfirmedHolds } from "@/server/inventory/holds";
 import { getCurrentUser } from "@/server/auth/session";
 import { handleRoute, jsonError, PublicError } from "@/server/api-helpers";
+import { logError } from "@/lib/log";
 
 const AmendBody = z.object({
   arrival: z.string(),
@@ -186,11 +187,11 @@ export async function POST(
           });
         } catch (rollbackErr) {
           rollbackFailed = true;
-          console.error("Amend rollback failed", lodge.reservationId, rollbackErr);
+          logError("Amend rollback failed", rollbackErr, { bookingId: record.apaleoBookingId, reservationId: lodge.reservationId, route: "booking/amend" });
         }
       }
       if (rollbackFailed) {
-        console.error("Amend left a break part-moved", record.apaleoBookingId, err);
+        logError("Amend left a break part-moved", err, { bookingId: record.apaleoBookingId, route: "booking/amend" });
         throw new PublicError(
           502,
           "We couldn't move every lodge and couldn't fully undo the change. Call our team on +254 700 000 000 and we'll put it right.",
@@ -205,7 +206,7 @@ export async function POST(
           { status: 409 },
         );
       }
-      console.error("Amend failed, rolled back", record.apaleoBookingId, err);
+      logError("Amend failed, rolled back", err, { bookingId: record.apaleoBookingId, route: "booking/amend" });
       throw new PublicError(
         502,
         "Moving your break failed, so it stays on its original dates. Please try again.",

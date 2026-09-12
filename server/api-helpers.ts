@@ -2,6 +2,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { ApaleoError } from "./apaleo/client";
 import { PesapalError } from "./pesapal/client";
+import { logError } from "@/lib/log";
 
 /**
  * An error whose message is written for the guest, carrying its HTTP status.
@@ -33,13 +34,15 @@ export async function handleRoute(
       return NextResponse.json({ error: err.message }, { status: err.status });
     }
     if (err instanceof ApaleoError) {
-      console.error("Apaleo error", err.status, JSON.stringify(err.body)?.slice(0, 600));
       if (err.status === 422) {
+        // Expected: another guest won the unit. Console only, never Sentry.
+        console.warn("Apaleo 422, sold-out race", JSON.stringify(err.body)?.slice(0, 300));
         return NextResponse.json(
           { error: "That lodge is no longer available for these dates.", soldOut: true },
           { status: 409 },
         );
       }
+      logError("Apaleo error", err, { route: "handleRoute" });
       return NextResponse.json(
         { error: "The booking system couldn't process that request." },
         { status: 502 },
@@ -49,13 +52,13 @@ export async function handleRoute(
       // Reached only from the order-submission stage (Buy now): nothing has
       // been collected yet, so "try again" is the whole truth. The confirm
       // routes catch their own errors and redirect instead.
-      console.error("Pesapal error", err.status, JSON.stringify(err.body)?.slice(0, 600));
+      logError("Pesapal error", err, { route: "handleRoute" });
       return NextResponse.json(
         { error: "We couldn't reach the payment provider. Nothing was charged - please try again." },
         { status: 502 },
       );
     }
-    console.error("Unexpected error in route:", err);
+    logError("Unexpected error in route", err, { route: "handleRoute" });
     return NextResponse.json({ error: "Something went wrong on our side." }, { status: 500 });
   }
 }

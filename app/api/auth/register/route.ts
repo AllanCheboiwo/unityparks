@@ -9,6 +9,7 @@ import { createAuthSession } from "@/server/auth/session";
 import { claimByEmail } from "@/server/auth/claim";
 import { sendWelcomeEmail } from "@/server/email/welcome";
 import { adultAtArrival } from "@/lib/guestRules";
+import { logError } from "@/lib/log";
 
 const RegisterBody = z.object({
   firstName: z.string().min(1),
@@ -62,7 +63,7 @@ export async function POST(req: NextRequest) {
     await createAuthSession(user.id, parsed.data.remember ?? false);
     // Fire-and-forget: the account exists whether or not the mail lands.
     void sendWelcomeEmail({ to: user.email, firstName: user.firstName }).catch(
-      (err) => console.error(`[email] welcome to ${email} failed:`, err),
+      (err) => logError("Welcome email failed", err, { userId: user.id, route: "auth/register" }),
     );
     return NextResponse.json({ ok: true, firstName: user.firstName, email: user.email });
   });

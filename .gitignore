@@ -45,3 +45,6 @@ prisma/dev.db*
 
 # payload local media uploads (prod uses R2)
 /media
+
+# Sentry build plugin token, written by the wizard
+.env.sentry-build-plugin
