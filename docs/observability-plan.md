@@ -1,6 +1,6 @@
 # Observability, minimal (LO-16)
 
-Status: batch path (interview, grilling and test freeze skipped, Allan's call 10 Sep 2026)
+Status: shipped (PR #34 merged 11 Sep 2026; batch path, interview, grilling and test freeze skipped on Allan's call)
 Linear: UNP-33
 Branch: unp-33-observability
 
@@ -50,8 +50,9 @@ and catches the failures LO-14, LO-15 and LO-1 will introduce.
       (D-9a, committed on the UNP-29 docs branch).
 - [ ] Allan: point Railway's health check at /api/health.
 - [ ] Allan: alert rule in Sentry, email on first seen.
-- [ ] Both: open /sentry-example-page on Railway, click the button, see both
-      events with readable frames, then delete the page and its API route.
+- [x] Both: example page fired on Railway 11 Sep 2026; browser envelopes
+      accepted (200) and the API route threw its 500. Page and route removed
+      in the follow-up PR.
 - [ ] One /code-review pass, PR with "Fixes UNP-33".
 
 ## Acceptance
