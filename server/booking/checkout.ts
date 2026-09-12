@@ -7,11 +7,7 @@ import {
 } from "@prisma/client";
 import { prisma } from "../db";
 import { pushZohoAfterSettle } from "../zoho/wire";
-import {
-  createBooking,
-  getFolioForReservation,
-  type FolioSummary,
-} from "../apaleo/bookings";
+import { createBooking, getFolioForReservation, type FolioSummary } from "../apaleo/bookings";
 import {
   confirmRedemption,
   decideRepeatOfferAtCheckout,
@@ -32,21 +28,13 @@ import { getOrderStatus, submitOrder } from "../pesapal/orders";
 import { paymentMatchesOrder } from "../pesapal/status";
 import { PublicError } from "../api-helpers";
 import { paymentsProvider } from "./provider";
-import {
-  getSession,
-  parseChildrenAges,
-  parseExtras,
-  parseVehiclePlates,
-} from "./session";
+import { getSession, parseChildrenAges, parseExtras, parseVehiclePlates } from "./session";
 import { loadGuests, partyBands } from "./guests";
 import { sendBookingConfirmation } from "../email/bookingConfirmation";
 import { reconcileInvites } from "./invites";
 import { raiseOpsAlert } from "../ops/alerts";
 import { sendBalanceReceipt } from "../email/balanceReceipt";
-import {
-  applyReferralAtCheckout,
-  reconcileCreditFlags,
-} from "../referral/checkout";
+import { applyReferralAtCheckout, reconcileCreditFlags } from "../referral/checkout";
 import { sendReferralReward } from "../email/referralReward";
 import {
   balanceDueDateFor,
@@ -55,9 +43,7 @@ import {
   isDepositEligible,
 } from "@/lib/paymentPlan";
 
-type RecordWithReservations = BookingRecord & {
-  reservations: BookingReservation[];
-};
+type RecordWithReservations = BookingRecord & { reservations: BookingReservation[] };
 type SessionForCheckout = NonNullable<Awaited<ReturnType<typeof getSession>>>;
 
 /** Where the guest's browser (and Pesapal's IPN) finds us. */
@@ -115,9 +101,7 @@ export async function beginCheckout(
   // fail the config error here, BEFORE a reservation is created for nothing.
   const ipnId = process.env.PESAPAL_IPN_ID;
   if (provider === "pesapal" && !ipnId) {
-    throw new Error(
-      "PESAPAL_IPN_ID is not set. Run: node scripts/register-pesapal-ipn.mjs",
-    );
+    throw new Error("PESAPAL_IPN_ID is not set. Run: node scripts/register-pesapal-ipn.mjs");
   }
 
   const { record, session } = await ensureRecord(sessionId);
@@ -133,10 +117,7 @@ export async function beginCheckout(
   // manual refund while showing the guest a confirmation for a dead break.
   // The /pay route already gates on status; Buy now must too.
   if (record.status === "cancelled") {
-    throw new PublicError(
-      409,
-      "This break was cancelled and can't be paid for. Start a new search to book again.",
-    );
+    throw new PublicError(409, "This break was cancelled and can't be paid for. Start a new search to book again.");
   }
 
   // The deposit option only exists while the balance due date is still
@@ -144,19 +125,12 @@ export async function beginCheckout(
   // and braces against a hand-built request.
   const today = new Date().toISOString().slice(0, 10);
   const depositWanted =
-    paymentChoice === "deposit" &&
-    isDepositEligible(daysBetween(today, session.arrival));
+    paymentChoice === "deposit" && isDepositEligible(daysBetween(today, session.arrival));
   const amount = depositWanted
     ? (record.depositAmount ?? depositAmountFor(record.totalGrossAmount))
     : record.totalGrossAmount;
 
-  return runPaymentAttempt({
-    record,
-    session,
-    kind: "checkout",
-    amount,
-    ipnId: ipnId ?? null,
-  });
+  return runPaymentAttempt({ record, session, kind: "checkout", amount, ipnId: ipnId ?? null });
 }
 
 /** What a payment attempt needs from the session row. The full
@@ -221,9 +195,7 @@ export async function runPaymentAttempt(params: {
   }
 
   // A live order may already be out there: ask Pesapal what happened to it.
-  const open = transactions.find(
-    (t) => t.status === "pending" && t.orderTrackingId,
-  );
+  const open = transactions.find((t) => t.status === "pending" && t.orderTrackingId);
   if (open) {
     const status = await getOrderStatus(open.orderTrackingId!);
     if (status.outcome === "completed") {
@@ -277,9 +249,7 @@ async function submitFreshAttempt(params: {
   // beginCheckout guards this before creating a reservation; this covers
   // the balance-payment path, where the reservation long exists.
   if (!simulated && !params.ipnId) {
-    throw new Error(
-      "PESAPAL_IPN_ID is not set. Run: node scripts/register-pesapal-ipn.mjs",
-    );
+    throw new Error("PESAPAL_IPN_ID is not set. Run: node scripts/register-pesapal-ipn.mjs");
   }
 
   let transaction: PesapalTransaction | null = null;
@@ -295,15 +265,12 @@ async function submitFreshAttempt(params: {
           // Simulated money is "collected" the moment the row exists, so a
           // crash before settle resumes through the same collected-but-
           // unrecorded path a real payment would.
-          ...(simulated
-            ? { status: "completed", paymentMethod: "Simulated" }
-            : {}),
+          ...(simulated ? { status: "completed", paymentMethod: "Simulated" } : {}),
         },
       });
     } catch (err) {
       const raced =
-        err instanceof Prisma.PrismaClientKnownRequestError &&
-        err.code === "P2002";
+        err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002";
       if (!raced) throw err;
 
       const winner = await prisma.pesapalTransaction.findUnique({
@@ -401,10 +368,7 @@ async function submitFreshAttempt(params: {
   // resolves through the excess machinery instead of "unknown reference".
   const stamped = await prisma.pesapalTransaction.updateMany({
     where: { id: transaction.id, status: "pending" },
-    data: {
-      orderTrackingId: order.orderTrackingId,
-      redirectUrl: order.redirectUrl,
-    },
+    data: { orderTrackingId: order.orderTrackingId, redirectUrl: order.redirectUrl },
   });
   if (stamped.count === 0) {
     await prisma.pesapalTransaction.updateMany({
@@ -438,9 +402,7 @@ export async function confirmPesapalPayment(
 ): Promise<PesapalConfirmation> {
   const transaction = await prisma.pesapalTransaction.findUnique({
     where: { orderTrackingId },
-    include: {
-      record: { include: { reservations: { orderBy: { slot: "asc" } } } },
-    },
+    include: { record: { include: { reservations: { orderBy: { slot: "asc" } } } } },
   });
   if (!transaction) throw new PublicError(404, "Unknown payment reference.");
 
@@ -547,10 +509,7 @@ async function confirmAgainstPaidRecord(
       }),
     );
     await prisma.pesapalTransaction.updateMany({
-      where: {
-        id: transaction.id,
-        status: { in: ["pending", "failed", "superseded"] },
-      },
+      where: { id: transaction.id, status: { in: ["pending", "failed", "superseded"] } },
       data: {
         status: "excess",
         confirmationCode: status.confirmationCode,
@@ -572,22 +531,14 @@ async function confirmAgainstPaidRecord(
  */
 async function confirmCollected(
   transaction: PesapalTransaction,
-  status: {
-    amount: number;
-    currency: string | null;
-    confirmationCode: string | null;
-    paymentMethod: string | null;
-  },
+  status: { amount: number; currency: string | null; confirmationCode: string | null; paymentMethod: string | null },
 ): Promise<boolean> {
   if (!paymentMatchesOrder(transaction, status)) {
     console.error(
       "Pesapal amount MISMATCH",
       JSON.stringify({
         transactionId: transaction.id,
-        expected: {
-          amount: transaction.amount,
-          currency: transaction.currency,
-        },
+        expected: { amount: transaction.amount, currency: transaction.currency },
         reported: { amount: status.amount, currency: status.currency },
       }),
     );
@@ -668,10 +619,7 @@ async function ensureRecord(sessionId: string): Promise<{
       })
     : await getSession(sessionId);
   if (!session) {
-    throw new PublicError(
-      410,
-      "Your booking session has expired. Please search again.",
-    );
+    throw new PublicError(410, "Your booking session has expired. Please search again.");
   }
   if (existing) {
     // The record's totals are frozen. Make the funnel's advisory credit
@@ -691,11 +639,7 @@ async function ensureRecord(sessionId: string): Promise<{
   ) {
     throw new PublicError(400, "Choose a lodge for every part of your break.");
   }
-  if (
-    !session.guestFirstName ||
-    !session.guestLastName ||
-    !session.guestEmail
-  ) {
+  if (!session.guestFirstName || !session.guestLastName || !session.guestEmail) {
     throw new PublicError(400, "Guest details are missing.");
   }
 
@@ -709,9 +653,7 @@ async function ensureRecord(sessionId: string): Promise<{
   // row dated, before a reservation exists.
   for (const lodge of session.lodges) {
     const complete = partyBands(lodge).every((band, position) => {
-      const row = manifest.find(
-        (g) => g.slot === lodge.slot && g.position === position,
-      );
+      const row = manifest.find((g) => g.slot === lodge.slot && g.position === position);
       if (!row?.firstName || !row.lastName) return false;
       return band === "adult" || !!row.dateOfBirth;
     });
@@ -734,12 +676,8 @@ async function ensureRecord(sessionId: string): Promise<{
       // prices it into the folio from birth like any extra. Each extra carries
       // the guest's chosen quantity so Apaleo books that many.
       services: [
-        ...parseExtras(lodge).map((e) => ({
-          serviceId: e.serviceId,
-          count: e.count,
-        })),
-        ...((lodge.locationChoice === "unit" ||
-          lodge.locationChoice === "together") &&
+        ...parseExtras(lodge).map((e) => ({ serviceId: e.serviceId, count: e.count })),
+        ...((lodge.locationChoice === "unit" || lodge.locationChoice === "together") &&
         lodge.locationServiceId
           ? [{ serviceId: lodge.locationServiceId, count: 1 }]
           : []),
@@ -796,8 +734,7 @@ async function ensureRecord(sessionId: string): Promise<{
     // The offer amount joins the referral module's KSh 500 floor guard and
     // its credit cap, so the two instruments can never jointly overdraw a
     // booking (invariant 4).
-    repeatOfferAmount:
-      repeatDecision.kind === "post" ? repeatDecision.amount : 0,
+    repeatOfferAmount: repeatDecision.kind === "post" ? repeatDecision.amount : 0,
   });
   // The second instrument's posts: same window in the booking's life, its
   // own idempotency keys, PENDING row confirmed with the record create.
@@ -861,8 +798,7 @@ async function ensureRecord(sessionId: string): Promise<{
     // Two tabs racing Buy now: the loser resumes the winner's record and
     // proceeds to payment instead of erroring.
     const raced =
-      err instanceof Prisma.PrismaClientKnownRequestError &&
-      err.code === "P2002"
+      err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002"
         ? await prisma.bookingRecord.findUnique({
             where: { sessionId: session.id },
             include: { reservations: { orderBy: { slot: "asc" } } },
@@ -957,22 +893,17 @@ async function assignUnits(
 
   // session.lodges is slot-ordered and reservations were created in that
   // order, so index N pairs lodge N with reservation N.
-  const entries = [...reservationIds.entries()].map(
-    ([index, reservationId]) => ({
-      index,
-      reservationId,
-      lodge: session.lodges[index],
-    }),
-  );
+  const entries = [...reservationIds.entries()].map(([index, reservationId]) => ({
+    index,
+    reservationId,
+    lodge: session.lodges[index],
+  }));
 
   // Pass 1: everyone who paid to pick gets their unit (or the fallback).
   for (const { index, reservationId, lodge } of entries) {
     if (!(lodge.locationChoice === "unit" && lodge.locationUnitId)) continue;
     try {
-      const unit = await assignSpecificUnit(
-        reservationId,
-        lodge.locationUnitId,
-      );
+      const unit = await assignSpecificUnit(reservationId, lodge.locationUnitId);
       outcomes[index] = {
         assignedUnitId: unit.id,
         assignedUnitName: unit.name,
@@ -1037,19 +968,13 @@ async function assignUnits(
         // closest lodges we can offer, but not the bill for neighbours.
         for (const { reservationId, lodge } of together) {
           if (lodge.locationServiceId) {
-            await removeReservationService(
-              reservationId,
-              lodge.locationServiceId,
-            );
+            await removeReservationService(reservationId, lodge.locationServiceId);
           }
         }
         feesRemoved = true;
       }
       for (const { index, reservationId } of together) {
-        const unit = await assignSpecificUnit(
-          reservationId,
-          plan.units.get(index)!.id,
-        );
+        const unit = await assignSpecificUnit(reservationId, plan.units.get(index)!.id);
         held.set(index, unit);
         outcomes[index] = {
           assignedUnitId: unit.id,
@@ -1076,8 +1001,7 @@ async function assignUnits(
       try {
         placed = await attemptPlacement();
       } catch (retryErr) {
-        if (!(retryErr instanceof ApaleoError && retryErr.status === 422))
-          throw retryErr;
+        if (!(retryErr instanceof ApaleoError && retryErr.status === 422)) throw retryErr;
         placed = false;
       }
     }
@@ -1093,10 +1017,7 @@ async function assignUnits(
       if (!feesRemoved) {
         for (const { reservationId, lodge } of together) {
           if (lodge.locationServiceId) {
-            await removeReservationService(
-              reservationId,
-              lodge.locationServiceId,
-            );
+            await removeReservationService(reservationId, lodge.locationServiceId);
           }
         }
         feesRemoved = true;
@@ -1150,9 +1071,7 @@ function planTogetherUnits(
   if (!plan) return null;
   return {
     units: new Map(
-      group.map(
-        ({ index }, i) => [index, plan.units[i] as UnitOption] as const,
-      ),
+      group.map(({ index }, i) => [index, plan.units[i] as UnitOption] as const),
     ),
     adjacent: plan.adjacent,
   };
@@ -1162,9 +1081,7 @@ function planTogetherUnits(
  * Auto-assignment is a nicety, never worth failing a checkout over: with no
  * unit assigned, Apaleo simply picks one at check-in.
  */
-async function autoAssignSafely(
-  reservationId: string,
-): Promise<UnitOption | null> {
+async function autoAssignSafely(reservationId: string): Promise<UnitOption | null> {
   try {
     return await autoAssignUnit(reservationId);
   } catch (err) {
@@ -1217,13 +1134,9 @@ async function settlePayment(
   // the nothing-owed branch below would relabel the booking's own legitimate
   // payment as "excess". Treat it as the done deal it is.
   const transaction =
-    (await prisma.pesapalTransaction.findUnique({
-      where: { id: callerTransaction.id },
-    })) ?? callerTransaction;
-  if (
-    transaction.status === "completed" &&
-    transaction.liveForRecordId === null
-  ) {
+    (await prisma.pesapalTransaction.findUnique({ where: { id: callerTransaction.id } })) ??
+    callerTransaction;
+  if (transaction.status === "completed" && transaction.liveForRecordId === null) {
     return record;
   }
 
@@ -1241,11 +1154,7 @@ async function settlePayment(
       }),
     );
     await prisma.pesapalTransaction.updateMany({
-      where: {
-        id: transaction.id,
-        status: "completed",
-        liveForRecordId: { not: null },
-      },
+      where: { id: transaction.id, status: "completed", liveForRecordId: { not: null } },
       data: { status: "excess", liveForRecordId: null },
     });
     return record;
@@ -1282,9 +1191,7 @@ async function settlePayment(
   }));
 
   // The split basis: what our own books say each folio still needs.
-  const remaining = children.map((c) =>
-    Math.max(0, c.grossAmount - c.paidAmount),
-  );
+  const remaining = children.map((c) => Math.max(0, c.grossAmount - c.paidAmount));
   const totalRemaining = remaining.reduce((a, b) => a + b, 0);
 
   // Nothing owed: this payment arrived for an already-settled booking (a
@@ -1305,11 +1212,7 @@ async function settlePayment(
     // retired here means a twin settled it and this is the same money on the
     // folios - flipping it to excess would invite a refund of real revenue.
     await prisma.pesapalTransaction.updateMany({
-      where: {
-        id: transaction.id,
-        status: "completed",
-        liveForRecordId: { not: null },
-      },
+      where: { id: transaction.id, status: "completed", liveForRecordId: { not: null } },
       data: { status: "excess", liveForRecordId: null },
     });
     return record;
@@ -1375,10 +1278,7 @@ async function settlePayment(
         remaining: remaining[i],
         share: shares[i],
       };
-      console.error(
-        "Folio drifted from local bookkeeping",
-        JSON.stringify(detail),
-      );
+      console.error("Folio drifted from local bookkeeping", JSON.stringify(detail));
       // Durable alert before the throw: the guest is told to contact us,
       // so ops must already know when they do.
       await raiseOpsAlert({
@@ -1422,11 +1322,7 @@ async function settlePayment(
       // reservations are held. Tell the guest to simply retry; the resume
       // path picks up from the collected transaction.
       if (err instanceof ApaleoError) {
-        console.error(
-          "Folio payment failed",
-          err.status,
-          JSON.stringify(err.body)?.slice(0, 600),
-        );
+        console.error("Folio payment failed", err.status, JSON.stringify(err.body)?.slice(0, 600));
         throw new PublicError(
           502,
           transaction.kind === "balance"
@@ -1443,13 +1339,7 @@ async function settlePayment(
   // honest: a crash before this block leaves the basis untouched (the
   // replay recomputes the identical shares), a crash after leaves
   // everything consistent. Partial child updates would poison the basis.
-  const updates: {
-    childId: string;
-    paidAmount: number;
-    paymentId: string | null;
-    settled: boolean;
-    folioId: string;
-  }[] = [];
+  const updates: { childId: string; paidAmount: number; paymentId: string | null; settled: boolean; folioId: string }[] = [];
   for (const i of owing) {
     if (shares[i] <= 0) continue;
     const child = children[i];
@@ -1482,10 +1372,7 @@ async function settlePayment(
         status: fullyPaid ? "paid" : "deposit_paid",
         ...(fullyPaid ? { paidAt: new Date() } : {}),
         // Legacy mirror for the record-level payment column: slot 0's payment.
-        paymentId:
-          children.find((c) => c.slot === 0)?.paymentId ??
-          record.paymentId ??
-          undefined,
+        paymentId: children.find((c) => c.slot === 0)?.paymentId ?? record.paymentId ?? undefined,
         // A record created on an earlier attempt (before the guest signed in
         // mid-funnel) picks the stamp up here. undefined (not null) when both
         // are empty: never overwrite a claim adoption that landed on the row
