@@ -27,6 +27,9 @@ request against the guide, or comment on the Linear issue.
 - [Lean operations](lean-operations.md): every process that could need a
   person, what the system does today, the proposal, and the open decisions.
   This is the agenda for contractor meetings.
+- [Failure catalogue](failure-catalogue.md): every way the money path can
+  fail, what state it leaves, who finds out, and what a person does. Rows
+  without an answer are Linear issues.
 
 ## Engineering (for developers)
 
