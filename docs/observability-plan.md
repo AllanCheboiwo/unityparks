@@ -19,15 +19,18 @@ and catches the failures LO-14, LO-15 and LO-1 will introduce.
   Sentry send-default-PII stays off.
 - Tracing off. Errors only.
 - Alert goes to Allan's email, on issue first seen.
-- The wizard's example page is deleted once the first event has landed.
+
 - No DSN in local .env. Local runs never send.
 - Environment tag comes from NEXT_PUBLIC_SENTRY_ENVIRONMENT, which Railway
   fills from its own environment name.
 
 ## Checklist
 
-- [x] Claude: SDK wired by hand instead of the wizard (the wizard needs an
-      interactive login). Three runtimes, errors only, DSN from
+- [x] Claude: SDK wired by hand; Allan then ran the wizard on a scratch
+      branch on 11 Sep and we kept its global-error.tsx, example page and
+      .gitignore line. Its root app/layout.tsx was dropped (breaks the
+      route-group layouts) and its hardcoded DSN, tracing and replay were not
+      taken. Three runtimes, errors only, DSN from
       NEXT_PUBLIC_SENTRY_DSN, tracing and PII off, environment from
       RAILWAY_ENVIRONMENT_NAME. Build verified with no DSN and no token.
 - [ ] Allan: create Sentry org "unity-parks" and Next.js project
@@ -47,8 +50,8 @@ and catches the failures LO-14, LO-15 and LO-1 will introduce.
       (D-9a, committed on the UNP-29 docs branch).
 - [ ] Allan: point Railway's health check at /api/health.
 - [ ] Allan: alert rule in Sentry, email on first seen.
-- [ ] Both: throw a test error on Railway (temporary route or a deliberate
-      bad request), see the event with readable frames, remove the route.
+- [ ] Both: open /sentry-example-page on Railway, click the button, see both
+      events with readable frames, then delete the page and its API route.
 - [ ] One /code-review pass, PR with "Fixes UNP-33".
 
 ## Acceptance
