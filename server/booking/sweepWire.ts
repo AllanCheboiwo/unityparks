@@ -20,13 +20,13 @@ export function sweepDeps(): SweepDeps {
         orderBy: { createdAt: "asc" },
       }),
 
-    confirm: async (orderTrackingId) => {
-      const result = await confirmPesapalPayment(orderTrackingId);
-      return { outcome: result.outcome };
-    },
+    confirm: confirmPesapalPayment,
 
-    // Same guard as submitFreshAttempt's own retire: a stamp landing this
-    // instant flips orderTrackingId first, and this update then misses.
+    // Guarded on the reference column itself: a stamp landing this instant
+    // writes orderTrackingId first, and this update then misses. (The
+    // checkout's own retire guards on redirectUrl instead, because it is
+    // reclaiming a crashed attempt for a new order, not judging whether a
+    // Pesapal reference exists.)
     retireUnlinked: async (transactionId) => {
       const result = await prisma.pesapalTransaction.updateMany({
         where: { id: transactionId, status: "pending", orderTrackingId: null },
@@ -35,7 +35,7 @@ export function sweepDeps(): SweepDeps {
       return result.count === 1;
     },
 
-    alert: (input) => raiseOpsAlert(input),
+    alert: raiseOpsAlert,
 
     listLiveExtrasOrders: () =>
       prisma.extrasOrder.findMany({
@@ -58,15 +58,18 @@ export function sweepDeps(): SweepDeps {
       await recoverStaleExtrasOrder(record);
     },
 
-    // The log helper tags Sentry with ids only; the extra ids ride in the
-    // message so they stay searchable without widening the tag set.
+    // The message stays constant so Sentry groups one outage into one
+    // issue; the record id is the tag, and it identifies the row because
+    // a record has at most one live attempt and one live extras order.
     logError: (message, err, context) => {
-      const { route, recordId, ...rest } = context;
-      logError(`${message} ${JSON.stringify(rest)}`, err, {
+      const { route, recordId } = context;
+      logError(message, err, {
         route: typeof route === "string" ? route : undefined,
         bookingId: typeof recordId === "string" ? recordId : null,
       });
     },
+
+    now: () => new Date(),
   };
 }
 

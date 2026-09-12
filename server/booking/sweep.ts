@@ -14,13 +14,17 @@
  * database; sweepWire.ts binds them to Prisma, checkout and extras.
  */
 
+import { EXTRAS_IN_FLIGHT_GRACE_MS } from "@/lib/extras";
+
 /** Younger than this and the guest may still be on Pesapal's page. */
 export const SWEEP_MIN_AGE_MS = 15 * 60_000;
-/** Older than this and the order is abandoned; stop polling it. */
+/** A PENDING order older than this is abandoned; stop polling it. Never
+ *  applied to completed rows: that is collected money whose settle has
+ *  not landed, and it stays in the sweep until it does. */
 export const SWEEP_MAX_AGE_MS = 7 * 24 * 60 * 60_000;
-/** Comfortably past the extras engine's own in-flight grace (5 minutes),
- *  so recovery never meets an order genuinely mid-flight. */
-export const EXTRAS_MIN_AGE_MS = 10 * 60_000;
+/** Twice the extras engine's own in-flight grace, so recovery never meets
+ *  an order genuinely mid-flight even if the grace is raised. */
+export const EXTRAS_MIN_AGE_MS = 2 * EXTRAS_IN_FLIGHT_GRACE_MS;
 
 export const UNLINKED_ALERT_KIND = "payment_unlinked";
 
@@ -57,23 +61,29 @@ export type SweepDeps = {
   /** recoverStaleExtrasOrder for that record. */
   recoverExtras(recordId: string): Promise<void>;
   logError(message: string, error: unknown, context: Record<string, unknown>): void;
-  now?: () => Date;
+  now: () => Date;
 };
 
 export type SweepSummary = {
   /** Live payment rows old enough to look at. */
   checked: number;
+  /** Confirm answered completed: the money is recorded, on the folios or,
+   *  for a cancelled or already-paid booking, as excess for a human. */
   settled: number;
+  /** Confirm answered failed: the row was retired (failed, reversed or excess). */
   retired: number;
   stillPending: number;
+  /** Pending rows with no Pesapal reference, retired and alerted. */
   unlinked: number;
+  /** Recovery attempts that returned without throwing; the engine decides
+   *  whether that meant settling, rolling back, or nothing to do. */
   extrasRecovered: number;
   /** Rows (payment or extras) whose handling threw; each is logged. */
   errored: number;
 };
 
 export async function runPaymentSweep(deps: SweepDeps): Promise<SweepSummary> {
-  const now = (deps.now ?? (() => new Date()))().getTime();
+  const now = deps.now().getTime();
   const summary: SweepSummary = {
     checked: 0,
     settled: 0,
@@ -86,7 +96,8 @@ export async function runPaymentSweep(deps: SweepDeps): Promise<SweepSummary> {
 
   for (const txn of await deps.listLiveTransactions()) {
     const age = now - txn.createdAt.getTime();
-    if (age < SWEEP_MIN_AGE_MS || age > SWEEP_MAX_AGE_MS) continue;
+    if (age < SWEEP_MIN_AGE_MS) continue;
+    if (txn.status === "pending" && age > SWEEP_MAX_AGE_MS) continue;
     summary.checked += 1;
     try {
       if (txn.orderTrackingId) {
@@ -101,6 +112,10 @@ export async function runPaymentSweep(deps: SweepDeps): Promise<SweepSummary> {
       // resumes it through runPaymentAttempt's collected path.
       if (txn.status !== "pending") continue;
 
+      // Retire first, then alert: the status flip is what stops the next
+      // tick alerting again, and a stamp landing this instant makes the
+      // retire miss, in which case there is nothing to report. The alert
+      // helper never throws; a failed alert write is logged there.
       if (await deps.retireUnlinked(txn.id)) {
         summary.unlinked += 1;
         await deps.alert({
