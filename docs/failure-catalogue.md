@@ -83,7 +83,7 @@ Entry: `runPaymentAttempt` (`checkout.ts:160`) -> `submitFreshAttempt` (`:240`).
 | # | Failure | State left | Signal | Recovery | Human |
 |---|---|---|---|---|---|
 | 2.1 | Pesapal submitOrder fails | Pending row exists without a tracking id (`:258` before `:332`); for two minutes the next Buy now gets a 409 "give it a moment" (`:299`), after that it retires the row and starts fresh (`:313`) | sentry (502) | auto on retry | None. |
-| 2.2 | Process dies after submitOrder replies, before the stamp (`:332` to `:355`) | Tracking id never stored anywhere. If the guest pays on that page, the IPN and callback find no row and throw 404 (`:393`); the IPN answers 500-in-body so Pesapal retries forever. Money collected, unlinkable to any row, never marked excess | sentry, repeating | manual | Match the Pesapal confirmation to the booking by merchant reference (the row id) and record it by hand. GAP-5. |
+| 2.2 | Process dies after submitOrder replies, before the stamp (`:332` to `:355`) | Tracking id never stored anywhere. If the guest pays on that page, the IPN and callback find no row and throw 404 (`:393`); the IPN answers 500-in-body so Pesapal retries forever. Money collected, unlinkable to any row, never marked excess | alert `payment_unlinked` (sweep) | auto (retire + alert, UNP-46) | Look up the merchant reference (the row id, in the alert) on Pesapal's side and record the payment by hand. |
 | 2.3 | Row superseded while submitOrder was slow | Guarded stamp misses; tracking id stored alone (`:360`) so a late payment lands as excess (row 3.7), guest gets a 409 | none now, console when the dead order pays | auto | Refund the excess if the guest paid on the dead page. |
 | 2.4 | Guest opens two payment pages | `liveForRecordId` unique mutex; same amount joins, different amount 409 (`:286`) | none | auto | None. |
 | 2.5 | Guest returns with an open pending row | Re-checked against Pesapal (`:200`); settled, re-offered or retired | none | auto | None. |
@@ -99,7 +99,7 @@ Entries: `app/api/payments/pesapal/callback/route.ts:13`,
 | # | Failure | State left | Signal | Recovery | Human |
 |---|---|---|---|---|---|
 | 3.1 | Guest closes the browser on Pesapal's page | IPN confirms; if no IPN, the next Buy now re-checks (row 2.5) | none | auto | None. |
-| 3.2 | IPN delivery fails or is never registered | Payment recorded only when the guest returns | none | auto on guest return, else none | Nobody is told a payment is unrecorded. GAP-5. |
+| 3.2 | IPN delivery fails or is never registered | Payment recorded only when the guest returns | none | auto within 30 min (sweep, UNP-46) | None. |
 | 3.3 | Callback throws | logError, guest redirected to `?payment=error` (`callback/route.ts:47`) | sentry | auto on retry | None. |
 | 3.4 | IPN throws | logError, reply body status 500 so Pesapal retries (`ipn/route.ts:33`) | sentry | auto | None. HTTP status is still 200, so an uptime monitor sees nothing. |
 | 3.5 | IPN called by anyone with a guessed tracking id | No auth check. Unknown ids throw 404 (`:393`), one logError per request. Known ids re-ask Pesapal for truth; downstream guarded | sentry, one event per probe | auto | None for money. Abuse is Sentry noise and Pesapal calls, not theft. GAP-4. |
@@ -183,7 +183,7 @@ pay route (`pay/route.ts:56`) and the amend route (`amend/route.ts:77`).
 | 8.5 | bookReservationService fails mid-apply | Catch (`:524`) -> `resolveOrder` rolls back (`:817`) -> 502 "nothing was charged". If resolution itself throws (`:542`) the order stays live for 8.8 | console | auto | None. |
 | 8.6 | Folio delta differs from the quote | Rollback, `verifyFolioRestored` logs if off baseline (`:589`), 409 | console | auto | Check the folio if the log fires. GAP-2. |
 | 8.7 | payFolio response lost (charge now) | Catch -> `resolveOrder` finds the folio settled and counts at target (`:797`) and completes the order | console | auto | None. |
-| 8.8 | Process dies between payFolio and settleExtrasOrder | Order live, folio charged, record totals stale. Recovery runs only on the next extras visit, balance payment or amend. A paid booking whose guest never reopens extras keeps a folio charge the books do not know; the cancellation refund basis ignores it | none | auto on visit, else none | GAP-5 (the sweep should also run recovery). |
+| 8.8 | Process dies between payFolio and settleExtrasOrder | Order live, folio charged, record totals stale. Recovery runs only on the next extras visit, balance payment or amend. A paid booking whose guest never reopens extras keeps a folio charge the books do not know; the cancellation refund basis ignores it | none | auto within 30 min (sweep runs recovery, UNP-46) | None. |
 | 8.9 | Record left the payable states mid-order | Row 7.5 | console | partial | GAP-2. |
 | 8.10 | Charge-now extras never reach Zoho | `extras.ts` imports nothing from `server/zoho`; `pushZohoAfterSettle` is called only from settlePayment (`checkout.ts:1479`). A charge-now extra on a paid booking adds folio revenue and a folio payment that no invoice reflects. On-balance extras reach Zoho only through a later balance payment's push-time folio read (`wire.ts:92`) | none | manual | Add to the Zoho invoice by hand. GAP-10. |
 
@@ -213,7 +213,7 @@ Entries: `pushZohoAfterSettle` (`server/zoho/wire.ts:168`),
 | 10.5 | Row stuck in pushing after a crash | Reclaimed after 5 minutes (`STALE_PUSHING_MS`), but only when a later drain runs (`:119`) | none | auto if there is traffic | Press the drain if the queue is quiet. |
 | 10.6 | Outbox INSERT itself lost | Alert `zoho_export_lost` (`:296`) | alert | manual | Create the invoice by hand. |
 | 10.7 | Balance row pushed before its deposit invoice exists | Oldest-first drain plus `blockedBookings` (`:148`) prevents a second invoice | none | auto | None. |
-| 10.8 | Nobody presses the drain | Failed rows never retry; the run route has no scheduler secret (`zoho/run/route.ts:14`) unlike the other four | none | rerun | GAP-7, then LO-15. |
+| 10.8 | Nobody presses the drain | Failed rows never retry; the run route has no scheduler secret (`zoho/run/route.ts:14`) unlike the other four | none | auto daily (scheduled drain, UNP-46) | None. |
 | 10.9 | Simulated demo payment | Never queued by design (`wire.ts:175`) | none | n/a | None. |
 
 ## 11. Alert inbox and runs
@@ -239,9 +239,9 @@ cross-referenced, not duplicated.
 | GAP-2 | 2.7, 3.6, 3.7, 3.8, 4.1, 4.2, 4.3, 4.7, 7.4, 7.5, 8.2, 8.6, 8.9, 9.2, 9.3 | UNP-37 | Money states that need a human (mismatch, excess, reversed, over-collection, extras drift, part-moved amend) are console or Sentry only. Raise an OpsAlert for each so the inbox shows them. |
 | GAP-3 | 3.9 | UNP-38 | Chargeback on a deposit-only booking is undetected. |
 | GAP-4 | 3.5 | UNP-39 | IPN route accepts any caller. Pre-check the tracking id before calling Pesapal or Sentry, and rate limit. |
-| GAP-5 | 2.2, 3.2, 4.5, 8.8 | UNP-40 | Collected but unrecorded payments have no sweep. Pending rows with a tracking id can be re-checked; a payment whose tracking id was never stored (2.2) can only be found from Pesapal's side by merchant reference. The same sweep should run extras recovery for live orders. |
+| GAP-5 | 2.2, 3.2, 4.5, 8.8 | UNP-40, closed by UNP-46 | Collected but unrecorded payments have no sweep. Pending rows with a tracking id can be re-checked; a payment whose tracking id was never stored (2.2) can only be found from Pesapal's side by merchant reference. The same sweep should run extras recovery for live orders. |
 | GAP-6 | 1.4 | none | Accepted and documented in code. Revisit only if a real case appears. |
-| GAP-7 | 10.8 | UNP-41 | Zoho run route needs the same bearer-secret path as the other run routes so LO-15 can schedule it. |
+| GAP-7 | 10.8 | UNP-41, closed by UNP-46 | Zoho run route needs the same bearer-secret path as the other run routes so LO-15 can schedule it. |
 | GAP-8 | 1.5, 1.6 | UNP-42 | Apaleo reservations with no BookingRecord hold inventory forever once the session expires. Needs a sweep, or a cancel in the failure path. |
 | GAP-9 | 7.1 | UNP-43 | Cancel re-run after 24 hours can refund a slot twice, and an Apaleo 422 on cancel shows the sold-out message. LO-1 should absorb this. |
 | GAP-10 | 8.10 | UNP-44 | Charge-now extras never reach Zoho. |

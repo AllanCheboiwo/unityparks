@@ -53,6 +53,7 @@ comments cite them by path, so they stay here:
 - [Post-booking extras](post-booking-extras.md)
 - [Activity inventory](activity-inventory-plan.md)
 - [Zoho accounting export](zoho-accounting-plan.md)
+- [Scheduling](scheduling-plan.md)
 - [Payload CMS](payload-cms-plan.md)
 - [Mount Kenya sweep](mount-kenya-sweep.md)
 

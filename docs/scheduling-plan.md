@@ -5,6 +5,7 @@ Linear: UNP-46
 Branch: unp-46-scheduling
 
 Tests approved: 12 Sep 2026, commit bce61ed, Allan wrote "can you execute thisworflow assuming i approve evry stage! i ma tired and i want to get this done!" (walkthrough of the tests skipped on the same instruction; the suite is described in the PR).
+Test change approved: 12 Sep 2026, commit fda1a04, reason: tsc rejected the untyped alert fake in sweep.test.ts (mock.calls typed as an empty tuple); the fake's parameter is now typed from SweepDeps. No assertion changed. Approved under Allan's blanket instruction quoted below.
 Plan approved: 12 Sep 2026, Allan wrote "can you execute thisworflow assuming i approve evry stage! i ma tired and i want to get this done!" (grilling cut short on Allan's call: his answers to the four questions were recorded in chat, two unknown, one right, one corrected; gate treated as approved on his instruction).
 
 Interview done in chat on 12 Sep 2026 (four questions, answers recorded
