@@ -262,7 +262,7 @@ OpsAlert kind is a string, as the model intends.
 
 1. The sweep retires an unlinked pending row (no tracking id) to
    superseded after alerting, rather than only alerting. Reason: alerting
-   every 15 minutes needs a dedupe mechanism; the status flip is the
+   on every tick needs a dedupe mechanism; the status flip is the
    dedupe, and it is the same flip the guest's next Buy now performs.
 2. Check-ins come from the workflow, not from the app. Reason: one
    monitor instead of five, the app stays unaware of Sentry crons, and a
