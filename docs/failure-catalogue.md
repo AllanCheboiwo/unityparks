@@ -82,7 +82,7 @@ Entry: `runPaymentAttempt` (`checkout.ts:160`) -> `submitFreshAttempt` (`:240`).
 
 | # | Failure | State left | Signal | Recovery | Human |
 |---|---|---|---|---|---|
-| 2.1 | Pesapal submitOrder fails | Pending row exists without a tracking id (`:258` before `:332`); for two minutes the next Buy now gets a 409 "give it a moment" (`:299`), after that it retires the row and starts fresh (`:313`) | sentry (502) | auto on retry | None. |
+| 2.1 | Pesapal submitOrder fails | The attempt is retired at once (failed, serializer released) before the error propagates (`checkout.ts` submitFreshAttempt catch, UNP-46); 502 to guest | sentry (502) | auto on retry | None. |
 | 2.2 | Process dies after submitOrder replies, before the stamp (`:332` to `:355`) | Tracking id never stored anywhere. If the guest pays on that page, the IPN and callback find no row and throw 404 (`:393`); the IPN answers 500-in-body so Pesapal retries forever. Money collected, unlinkable to any row, never marked excess | alert `payment_unlinked` (sweep) | auto (retire + alert, UNP-46) | Look up the merchant reference (the row id, in the alert) on Pesapal's side and record the payment by hand. |
 | 2.3 | Row superseded while submitOrder was slow | Guarded stamp misses; tracking id stored alone (`:360`) so a late payment lands as excess (row 3.7), guest gets a 409 | none now, console when the dead order pays | auto | Refund the excess if the guest paid on the dead page. |
 | 2.4 | Guest opens two payment pages | `liveForRecordId` unique mutex; same amount joins, different amount 409 (`:286`) | none | auto | None. |
@@ -118,7 +118,7 @@ Entry: `settlePayment` (`checkout.ts:1104`).
 | 4.2 | Money lands with nothing outstanding | Row -> excess (`:1186`) | console | manual | Refund. GAP-2. |
 | 4.3 | Amount exceeds what is owed | 502, row stays completed, nothing posted (`:1207`) | console, sentry via callback/IPN | manual | Investigate and refund the difference. GAP-2. |
 | 4.4 | Folio changed behind our back | 502, alert `folio_drift` (`:1270`) | alert | manual | Reconcile the folio, then let the guest retry or post by hand. |
-| 4.5 | Apaleo payFolio fails on one slot | Completed slots keyed `up-pay-<txn>-<slot>` (`:1303`), and the folio re-read (`:1256`) skips them on retry even past 24 hours; 502 to guest | console for ApaleoError, sentry via callback/IPN; a plain fetch error is rethrown (`:1319`) and reaches Sentry on every path | auto on retry (guest, callback or IPN) | None, unless the guest never returns and no IPN arrives (row 3.2). |
+| 4.5 | Apaleo payFolio fails on one slot | Completed slots keyed `up-pay-<txn>-<slot>` (`:1303`), and the folio re-read (`:1256`) skips them on retry even past 24 hours; 502 to guest | console for ApaleoError, sentry via callback/IPN; a plain fetch error is rethrown (`:1319`) and reaches Sentry on every path | auto on retry (guest, callback or IPN) | None. The sweep (UNP-46) resumes the settle every 30 minutes until it lands; a completed row never ages out of it. |
 | 4.6 | Postgres transaction fails after the folio post | Folios paid, record still unpaid; retry re-reads folios as already-posted and writes the record | sentry | auto on retry | None. |
 | 4.7 | Booking cancelled between folio post and record write | Record stays cancelled, row -> excess (`:1373`, console at `:1444`) | console | manual | Refund the posted money from the cancelled folio. GAP-2. |
 | 4.8 | Referral earn flip races with a twin settle | `skipDuplicates` ledger insert, guarded flip (`:1407`) | none | auto | None. |
@@ -213,7 +213,7 @@ Entries: `pushZohoAfterSettle` (`server/zoho/wire.ts:168`),
 | 10.5 | Row stuck in pushing after a crash | Reclaimed after 5 minutes (`STALE_PUSHING_MS`), but only when a later drain runs (`:119`) | none | auto if there is traffic | Press the drain if the queue is quiet. |
 | 10.6 | Outbox INSERT itself lost | Alert `zoho_export_lost` (`:296`) | alert | manual | Create the invoice by hand. |
 | 10.7 | Balance row pushed before its deposit invoice exists | Oldest-first drain plus `blockedBookings` (`:148`) prevents a second invoice | none | auto | None. |
-| 10.8 | Nobody presses the drain | Failed rows never retry; the run route has no scheduler secret (`zoho/run/route.ts:14`) unlike the other four | none | auto daily (scheduled drain, UNP-46) | None. |
+| 10.8 | Nobody presses the drain | Failed rows wait for the daily drain; the run route accepts `ZOHO_RUN_SECRET` like the other five (`zoho/run/route.ts:16`, UNP-46) | none | auto daily (scheduled drain, UNP-46) | None. |
 | 10.9 | Simulated demo payment | Never queued by design (`wire.ts:175`) | none | n/a | None. |
 
 ## 11. Alert inbox and runs

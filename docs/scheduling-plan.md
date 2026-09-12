@@ -70,15 +70,18 @@ mid-payment, and does one of three things:
 | status completed, tracking id set | `confirmPesapalPayment(orderTrackingId)` | Money collected, settle crashed (rows 4.5, 4.6). The function resumes settle for a live completed row (checkout.ts:425). |
 | status pending, tracking id null | Retire to superseded (guarded on status pending AND tracking id null) and raise an OpsAlert `payment_unlinked` | Row 2.2: the process died between Pesapal's reply and our stamp. Nothing on our side can find that order; Pesapal's dashboard can, by merchant reference, which is the row id. The guard mirrors submitFreshAttempt's own retire (checkout.ts:315) so a stamp landing at the same instant wins. Retiring is what the guest's next Buy now would do anyway. The alert is the whole point: a human checks Pesapal for that reference. |
 
-Age window: rows created more than 15 minutes ago and less than 7 days
-ago. The lower bound keeps the sweep off orders a guest is paying right
-now (harmless if it hit them, but each check is a call to a shared
-sandbox merchant that rate-limits). The upper bound stops the sweep
-polling abandoned orders forever; a 7-day-old pending order is abandoned.
-Both are constants in the module.
+Age window: rows created more than 15 minutes ago, and, for PENDING rows
+only, less than 7 days ago. The lower bound keeps the sweep off orders a
+guest is paying right now (harmless if it hit them, but each check is a
+call to a shared sandbox merchant that rate-limits). The upper bound stops
+the sweep polling abandoned orders forever; a 7-day-old pending order is
+abandoned. A completed row is collected money whose settle has not landed
+and never ages out (changed in review, see below). Both are constants in
+the module.
 
-Then extras: every live ExtrasOrder (`liveForRecordId` set) older than the
-engine's own in-flight grace (5 minutes, extras.ts:99) gets
+Then extras: every live ExtrasOrder (`liveForRecordId` set) older than
+twice the engine's own in-flight grace (the constant now lives in
+lib/extras.ts so both sides read the same number) gets
 `recoverStaleExtrasOrder(record)` with the record loaded the way the pay
 route loads it (session with lodges, reservations). Row 8.8: a paid
 booking whose guest never reopens extras otherwise keeps a folio charge
@@ -100,23 +103,27 @@ failed or reversed outcomes, `unlinked` counts the alerted rows.
 
 ### 3. The workflow
 
-`.github/workflows/scheduled-runs.yml`, two jobs, plus `workflow_dispatch`
-so either job can be run by hand from the Actions tab.
+Two files, one job each, both with `workflow_dispatch` so a job can be
+run by hand from the Actions tab. One file per job means a cadence edit
+is one line and no job can be skipped by a schedule string that no longer
+matches (changed in review).
 
-**payment-sweep**, cron `*/30 * * * *`:
+**`.github/workflows/payment-sweep.yml`**, cron `*/30 * * * *`:
 1. POST `$APP_BASE_URL/api/ops/payments/sweep` with the bearer.
 
-**daily**, cron `0 3 * * *` (06:00 Nairobi), steps in this order, each
-step runs even if an earlier one failed, the job fails if any did:
+**`.github/workflows/daily-runs.yml`**, cron `0 3 * * *` (06:00 Nairobi),
+steps in this order, each step runs even if an earlier one failed, the
+job fails if any did:
 1. POST inventory/sweep
 2. POST inventory/reconcile
 3. POST reminders/run
 4. POST repeat-offers/run
 5. POST zoho/run
 
-Each step is one `curl --fail --silent --show-error --max-time 300` with
-the Authorization header, printing the JSON summary so the Actions log is
-the run history. A non-2xx answer fails the step.
+Each step is one `curl --fail-with-body --silent --show-error --max-time
+300` with the Authorization header, printing the JSON summary (or the
+error body) so the Actions log is the run history. A non-2xx answer fails
+the step.
 
 GitHub variables and secrets (Allan sets these once in the repo settings):
 
@@ -159,7 +166,9 @@ month) can be added later if that ever proves too thin.
 
 The workflow does the check-in, not the app: a step at the start of the
 sweep job sends `status=in_progress`, a final step sends `status=ok` or
-`status=error` depending on the job's result. That way one missing signal
+`status=error` depending on the job's result. Any query string pasted
+along with the URL is stripped first, so the status appended is the one
+Sentry reads. That way one missing signal
 means any of "cron did not fire", "workflow disabled", "app unreachable"
 or "endpoint failed", which is exactly the list a person needs to check.
 The app stays unaware of cron monitors, and the ops buttons never touch
@@ -191,11 +200,15 @@ OpsAlert kind is a string, as the model intends.
 ## Files touched
 
 - `app/api/ops/zoho/run/route.ts` (bearer check)
-- `server/booking/sweep.ts` (new)
+- `server/booking/sweep.ts` (new, the decisions) and
+  `server/booking/sweepWire.ts` (new, the Prisma and checkout bindings)
 - `app/api/ops/payments/sweep/route.ts` (new)
-- `.github/workflows/scheduled-runs.yml` (new)
-- `docs/lean-operations.md`, `docs/failure-catalogue.md`, `README.md`,
-  `docs/guides/...` (docs)
+- `.github/workflows/payment-sweep.yml`, `.github/workflows/daily-runs.yml` (new)
+- `server/ops/alerts.ts` (one open alert per kind and booking)
+- `server/booking/checkout.ts` (retire the attempt when submitOrder throws)
+- `lib/extras.ts`, `server/booking/extras.ts` (the in-flight grace constant moves to the lib)
+- `docs/lean-operations.md`, `docs/failure-catalogue.md`, `docs/README.md`,
+  `README.md`, `docs/guides/how-payments-work.md` (docs)
 - Tests: `server/booking/sweep.test.ts`, `app/api/ops/zoho/run/route.test.ts`,
   `app/api/ops/payments/sweep/route.test.ts`
 
@@ -257,7 +270,10 @@ OpsAlert kind is a string, as the model intends.
    on Pesapal's sandbox page, then close the tab without returning. Wait
    for the next half hour. The booking flips to paid and the
    confirmation email arrives with no guest action. The sweep summary in
-   the Actions log shows `settled: 1`.
+   the Actions log shows `settled: 1`. (`settled` means confirm answered
+   completed and the money is recorded; for a cancelled or already-paid
+   booking that recording is the excess row for a human, not a folio
+   post.)
 5. Prove the dead-cron alarm: disable the workflow in the Actions tab.
    Within one window plus margin Sentry opens a missed check-in issue and
    emails. Re-enable the workflow; the next run resolves it.
@@ -281,6 +297,45 @@ OpsAlert kind is a string, as the model intends.
 6. The daily job runs all five steps even when one fails, and goes red at
    the end. Reason: a reminders failure must not stop the Zoho drain.
 7. No run-history table. The Actions log and Sentry are the history.
+
+## Decisions changed in review (12 Sep 2026)
+
+Nine review angles plus a security pass ran on the branch. What changed:
+
+1. Completed live rows never age out of the sweep. The 7-day bound is for
+   abandoned pending orders; a completed row is money Pesapal has and the
+   folio does not, and silence after a week would read as fixed.
+2. `raiseOpsAlert` now writes and emails once per kind and booking while
+   an alert is open. Without it a wedged settle would raise a fresh
+   folio_drift row and email every 30 minutes. A failed alert write now
+   reaches Sentry through logError instead of the console alone.
+3. `submitFreshAttempt` retires the attempt (failed, serializer released)
+   when Pesapal's submitOrder throws. Before, that row stayed pending with
+   no reference, wedged the next Buy now for two minutes, and would have
+   shown up to the sweep as a lost reference: a false `payment_unlinked`
+   alert on every sandbox rate-limit failure.
+4. One workflow file per job instead of two jobs matching their own cron
+   string; an edit to one place could otherwise skip a job silently.
+5. The extras age bound is derived from the engine's own grace constant
+   (moved to lib/extras.ts) rather than a copied number.
+6. Sentry check-in URL: any query string is stripped before the status is
+   appended.
+7. The sweep's log message is constant and the record id is the Sentry
+   tag, so one outage is one Sentry issue, not one per row.
+8. Route tests assert the door's outcome (200 or 401), not whether the
+   admin gate was called.
+
+Findings left for later, as Backlog issues: UNP-47 (heal a lost tracking
+id from the merchant reference Pesapal's IPN and callback already carry;
+would make the unlinked branch unnecessary), UNP-48 (one shared
+bearer-or-admin helper for the six run routes), UNP-49 (Pesapal client
+timeout and a per-run row cap), UNP-50 (a live extras order whose
+recovery keeps failing has no terminal state).
+
+Accepted as is: the unlinked row is retired before the alert is raised,
+because the retire is the dedupe and a stamp landing at that instant
+makes the retire miss, in which case there is nothing to report. The
+alert helper never throws and a failed write is logged to Sentry.
 
 ## Open questions
 
