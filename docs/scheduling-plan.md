@@ -28,8 +28,8 @@ way to notice when the scheduler itself stops.
 |---|---|---|
 | Scheduler | GitHub Actions, so the schedule survives a move off Railway | Workflow file in the repo, secrets in GitHub |
 | Scope | Build UNP-41 and UNP-40 inside this feature | Zoho bearer secret; new payment sweep route |
-| Cadence | Payment sweep every 15 minutes, the rest daily | Two jobs in one workflow |
-| Dead cron | Help me understand; Sentry? | Sentry Cron Monitors, check-in from the workflow |
+| Cadence | Payment sweep every 30 minutes (15 first, changed to 30 on 12 Sep), the rest daily | Two jobs in one workflow |
+| Dead cron | Help me understand; Sentry? | One free Sentry Cron Monitor on the sweep, check-in from the workflow |
 
 ## Out of scope
 
@@ -99,7 +99,7 @@ failed or reversed outcomes, `unlinked` counts the alerted rows.
 `.github/workflows/scheduled-runs.yml`, two jobs, plus `workflow_dispatch`
 so either job can be run by hand from the Actions tab.
 
-**payment-sweep**, cron `*/15 * * * *`:
+**payment-sweep**, cron `*/30 * * * *`:
 1. POST `$APP_BASE_URL/api/ops/payments/sweep` with the bearer.
 
 **daily**, cron `0 3 * * *` (06:00 Nairobi), steps in this order, each
@@ -125,7 +125,6 @@ GitHub variables and secrets (Allan sets these once in the repo settings):
 | ZOHO_RUN_SECRET | secret | new, also set on Railway |
 | PAYMENTS_RUN_SECRET | secret | new, also set on Railway |
 | SENTRY_CRON_SWEEP_URL | secret | check-in URL of the sweep monitor |
-| SENTRY_CRON_DAILY_URL | secret | check-in URL of the daily monitor |
 
 Two GitHub facts the design lives with:
 
@@ -145,14 +144,17 @@ issue (and emails, same alert rule as errors) when a check-in is missed,
 reports an error, or runs too long. Every Sentry plan includes one monitor
 free; extra monitors are USD 0.78 per month each.
 
-Two monitors, created in the Sentry UI by Allan, with schedules matching
-the two jobs and a check-in margin of 10 minutes (covers GitHub's drift):
+One monitor, the free one, created in the Sentry UI by Allan:
+`payment-sweep`, every 30 minutes, check-in margin 10 minutes (covers
+GitHub's drift). The daily job has no monitor. Both jobs live in one
+workflow file, so everything that stops a cron silently (workflow
+disabled, the 60-day rule, a GitHub outage) stops both, and the sweep
+monitor reports it. A daily job that fires and fails is emailed by GitHub
+itself, to whoever last edited the workflow. A second monitor (USD 0.78 a
+month) can be added later if that ever proves too thin.
 
-- `payment-sweep`, every 15 minutes
-- `daily-runs`, daily at 03:00 UTC
-
-The workflow does the check-in, not the app: a step at the start of each
-job sends `status=in_progress`, a final step sends `status=ok` or
+The workflow does the check-in, not the app: a step at the start of the
+sweep job sends `status=in_progress`, a final step sends `status=ok` or
 `status=error` depending on the job's result. That way one missing signal
 means any of "cron did not fire", "workflow disabled", "app unreachable"
 or "endpoint failed", which is exactly the list a person needs to check.
@@ -225,32 +227,31 @@ OpsAlert kind is a string, as the model intends.
 - The daily job and the sweep overlap on a slow day: every endpoint is
   idempotent, overlap is free (the register already promises this).
 - Repo turned private: Actions minutes are billed, 2,000 free per month on
-  the Free plan, each job rounded up to a whole minute. The 15-minute
-  sweep alone is about 2,900 job-minutes a month. If that happens, change
-  the sweep cron to every 30 minutes (about 1,450) or pay roughly USD 7
-  a month. One line in the YAML either way.
+  the Free plan, each job rounded up to a whole minute. The 30-minute
+  sweep is about 1,450 job-minutes a month plus 30 for the daily job, so
+  it stays free. (At 15 minutes it would be about 2,900; that is why 30.)
 
 ## Failure modes
 
 | Failure | What happens | Who finds out |
 |---|---|---|
-| Workflow does not fire (disabled, GitHub outage) | No check-in | Sentry missed check-in, email |
-| App unreachable | curl fails, job fails | Sentry error check-in, email; Actions email too |
-| One endpoint 500s | Step fails, others still run, job red | Sentry: the route's own logError plus the error check-in |
+| Workflow does not fire (disabled, GitHub outage) | No sweep check-in | Sentry missed check-in, email |
+| App unreachable | curl fails, job fails | Sweep: Sentry error check-in. Daily: GitHub failure email |
+| One endpoint 500s | Step fails, others still run, job red | The route's own logError in Sentry, plus the error check-in (sweep) or GitHub's failure email (daily) |
 | Sweep hits Pesapal outage | Every row errors, summary errored: N | Sentry events per row |
-| Secret rotated on Railway but not GitHub | 401, step fails | Error check-in |
+| Secret rotated on Railway but not GitHub | 401, step fails | Error check-in (sweep) or GitHub failure email (daily) |
 | Sentry check-in URL wrong | Monitor sees nothing | Missed check-in on the first window after setup, which the acceptance check exercises on purpose |
 
 ## Acceptance check (after merge and Railway deploy)
 
 1. Railway: set ZOHO_RUN_SECRET and PAYMENTS_RUN_SECRET. GitHub: set the
-   variables and secrets in the table. Sentry: create the two monitors.
+   variables and secrets in the table. Sentry: create the sweep monitor.
 2. Actions tab: run `daily` by hand. Every step green, each prints a JSON
-   summary. Sentry shows an ok check-in on `daily-runs`.
+   summary.
 3. Run `payment-sweep` by hand. Green, summary printed, ok check-in.
 4. Prove the sweep does work: on the Railway app, start a checkout, pay
    on Pesapal's sandbox page, then close the tab without returning. Wait
-   for the next quarter hour. The booking flips to paid and the
+   for the next half hour. The booking flips to paid and the
    confirmation email arrives with no guest action. The sweep summary in
    the Actions log shows `settled: 1`.
 5. Prove the dead-cron alarm: disable the workflow in the Actions tab.
@@ -263,14 +264,15 @@ OpsAlert kind is a string, as the model intends.
    superseded after alerting, rather than only alerting. Reason: alerting
    every 15 minutes needs a dedupe mechanism; the status flip is the
    dedupe, and it is the same flip the guest's next Buy now performs.
-2. Check-ins come from the workflow, not from the app. Reason: fewer
-   monitors (two, not five), the app stays unaware of Sentry crons, and a
+2. Check-ins come from the workflow, not from the app. Reason: one
+   monitor instead of five, the app stays unaware of Sentry crons, and a
    missing check-in covers "app down" as well as "cron dead".
-3. Two monitors, USD 0.78 a month for the second. The alternative is one
-   monitor on the sweep only and no alarm on the daily job.
+3. One monitor, the free one, on the sweep only (Allan, 12 Sep: no paid
+   monitor). The daily job relies on the shared workflow file plus
+   GitHub's own failure email.
 4. Sweep window 15 minutes to 7 days, both constants. Not configurable
    through env.
-5. Daily at 03:00 UTC (06:00 Nairobi) so reminder emails land in the
+5. Sweep every 30 minutes (Allan, 12 Sep), daily at 03:00 UTC (06:00 Nairobi) so reminder emails land in the
    morning and the Zoho drain runs before anyone looks at the books.
 6. The daily job runs all five steps even when one fails, and goes red at
    the end. Reason: a reminders failure must not stop the Zoho drain.
