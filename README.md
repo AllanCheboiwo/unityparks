@@ -36,8 +36,9 @@ boot, not just `/admin`), `CLIENT_ID`/`CLIENT_SECRET` (Apaleo),
 `APP_BASE_URL`, and optionally `RESEND_API_KEY`/`EMAIL_FROM` (absent =
 emails logged, never sent), `PAYMENTS_PROVIDER=simulated` (folio-post
 payments with no processor, useful locally), `OPS_ALERT_EMAIL`,
-`REMINDERS_RUN_SECRET` (lets an external scheduler trigger balance
-reminders).
+`REMINDERS_RUN_SECRET`, `REPEAT_OFFERS_RUN_SECRET`, `INVENTORY_RUN_SECRET`,
+`ZOHO_RUN_SECRET`, `PAYMENTS_RUN_SECRET` (each lets the scheduled workflows
+in `.github/workflows/` trigger that run route; unset means admin-only).
 
 Tests: `npx vitest run` (pure-logic suites over `lib/` and `server/`).
 

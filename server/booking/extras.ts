@@ -1,4 +1,5 @@
 import "server-only";
+import { EXTRAS_IN_FLIGHT_GRACE_MS } from "@/lib/extras";
 import type {
   BookingRecord,
   BookingReservation,
@@ -92,11 +93,9 @@ export type ManageExtrasQuote = {
   activityOffers: Record<string, { serviceId: string; unitPrice: number; currency: string }>;
 };
 
-/** How long a live order is assumed genuinely in flight before recovery may
- *  reclaim it. Generous on purpose: the Apaleo client retries 429s honouring
- *  Retry-After, so a slow original request must finish (or truly die) before
- *  a refresh may roll its work back under it. */
-const IN_FLIGHT_GRACE_MS = 5 * 60 * 1000;
+/** See lib/extras.ts for why the grace is generous; the sweep's bound is
+ *  derived from the same constant. */
+const IN_FLIGHT_GRACE_MS = EXTRAS_IN_FLIGHT_GRACE_MS;
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);

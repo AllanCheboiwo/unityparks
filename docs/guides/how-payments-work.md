@@ -30,8 +30,9 @@ A guest reaches the pay page and, if arrival is far enough away, chooses a 30% d
 
 ## What can go wrong, and what happens
 
-- The guest closes the browser on Pesapal's page. The IPN still records the payment; if it never arrives, pressing Buy now or Pay balance again resumes and re-checks the open attempt.
-- A crash between money collected and folio recorded. The attempt stays marked collected, and the next Buy now, callback or IPN finishes the recording without collecting again.
+- The guest closes the browser on Pesapal's page. The IPN still records the payment; if it never arrives, the payment sweep (every 30 minutes) asks Pesapal and records it, and pressing Buy now or Pay balance again does the same sooner.
+- A crash between money collected and folio recorded. The attempt stays marked collected, and the next sweep, Buy now, callback or IPN finishes the recording without collecting again.
+- A crash before Pesapal's reference was stored. Nothing on our side can find that order. The sweep retires the attempt and raises a `payment_unlinked` alert carrying the merchant reference.
 - Pesapal reports a different amount to what we asked. The attempt is marked mismatch, the booking refuses new payments, and the guest is told to contact us.
 - Money arrives for a booking already paid or cancelled, or on a stale payment page. It is marked excess and logged; nothing reaches the folios and a human must refund it. A chargeback after full payment is marked reversed; one on a deposit is not detected today.
 - A folio changed behind our back. Recording stops, an ops alert is raised, and the guest is told to contact us and not pay again.
@@ -42,7 +43,8 @@ A guest reaches the pay page and, if arrival is far enough away, chooses a 30% d
 
 - Watch the ops alerts and logs for mismatch, excess, reversed and folio drift. None fix themselves.
 - Refund excess money by hand.
-- Run the balance reminders from the ops page; none run on their own.
+- On a `payment_unlinked` alert, search Pesapal's merchant dashboard for the reference in the alert. If the guest paid, record it by hand and refund or contact them as the booking state requires.
+- Balance reminders, repeat offers, the Zoho drain and the inventory runs happen daily on their own; the ops buttons remain for running one early.
 - Decide whether to cancel an overdue booking. Nothing auto-cancels.
 - Handle a dropped confirmation or receipt by hand.
 

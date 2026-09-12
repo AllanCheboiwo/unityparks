@@ -2,6 +2,7 @@ import "server-only";
 import type { OpsAlert } from "@prisma/client";
 import { prisma } from "../db";
 import { sendEmail } from "../email/resend";
+import { logError } from "@/lib/log";
 
 /**
  * Ops alerts: the durable form of "console.error and hope someone reads
@@ -9,7 +10,10 @@ import { sendEmail } from "../email/resend";
  * fires one email; /ops/alerts lists the rows. Raising must never break
  * the flow that noticed the problem (a drift alert that 500s a settle
  * would hide the very money it is reporting), so raiseOpsAlert swallows
- * every failure after logging it.
+ * every failure after logging it. One open alert per kind and booking:
+ * while a human has not resolved it, raising the same thing again (a
+ * scheduled sweep retrying a wedged settle every half hour, UNP-46) writes
+ * nothing and sends nothing.
  */
 
 export async function raiseOpsAlert(input: {
@@ -20,6 +24,13 @@ export async function raiseOpsAlert(input: {
   detail: Record<string, unknown>;
 }): Promise<void> {
   try {
+    if (input.recordId) {
+      const open = await prisma.opsAlert.findFirst({
+        where: { kind: input.kind, recordId: input.recordId, resolvedAt: null },
+        select: { id: true },
+      });
+      if (open) return;
+    }
     await prisma.opsAlert.create({
       data: {
         kind: input.kind,
@@ -29,7 +40,7 @@ export async function raiseOpsAlert(input: {
       },
     });
   } catch (err) {
-    console.error("[ops] alert row write failed", input.kind, err);
+    logError("[ops] alert row write failed", err, { bookingId: input.recordId ?? null });
   }
 
   const opsEmail = process.env.OPS_ALERT_EMAIL;

@@ -10,6 +10,14 @@ import type { ExtraSnapshotDto } from "./types";
 /** Checkout's stepper cap, reused as the total-per-service cap post-booking. */
 export const MAX_EXTRA_QTY = 8;
 
+/** How long a live extras order is assumed genuinely in flight before
+ *  recovery may reclaim it. Generous on purpose: the Apaleo client retries
+ *  429s honouring Retry-After, so a slow original request must finish (or
+ *  truly die) before a refresh may roll its work back under it. Lives here,
+ *  not in the engine, so the payment sweep can derive its own bound from it
+ *  without importing server code. */
+export const EXTRAS_IN_FLIGHT_GRACE_MS = 5 * 60 * 1000;
+
 /** One line of a lodge's extras snapshot (session JSON) or an addition -
  *  the same shape the session stores and the API returns. */
 export type ExtraLine = ExtraSnapshotDto;

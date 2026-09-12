@@ -1,0 +1,61 @@
+# Daily runs at 03:00 UTC, 06:00 Nairobi (LO-15, UNP-46, docs/scheduling-plan.md).
+# Sibling: payment-sweep.yml. Every endpoint is idempotent, so a late or
+# doubled run costs nothing. The Actions log is the run history; a failed
+# run is emailed by GitHub to whoever last edited this file.
+#
+# Repo settings (Allan sets them once):
+#   variable APP_BASE_URL              the Railway URL, no trailing slash
+#   secret   INVENTORY_RUN_SECRET       same values as on Railway
+#   secret   REMINDERS_RUN_SECRET
+#   secret   REPEAT_OFFERS_RUN_SECRET
+#   secret   ZOHO_RUN_SECRET
+
+name: Daily runs
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+jobs:
+  daily:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      APP_BASE_URL: ${{ vars.APP_BASE_URL }}
+      INVENTORY_RUN_SECRET: ${{ secrets.INVENTORY_RUN_SECRET }}
+      REMINDERS_RUN_SECRET: ${{ secrets.REMINDERS_RUN_SECRET }}
+      REPEAT_OFFERS_RUN_SECRET: ${{ secrets.REPEAT_OFFERS_RUN_SECRET }}
+      ZOHO_RUN_SECRET: ${{ secrets.ZOHO_RUN_SECRET }}
+      CURL: curl --fail-with-body --silent --show-error --max-time 300 -X POST
+    # Every step runs even when an earlier one failed (a reminders failure
+    # must not stop the Zoho drain); the job goes red at the end if any did.
+    steps:
+      - name: Inventory sweep
+        run: |
+          $CURL "$APP_BASE_URL/api/ops/inventory/sweep" -H "Authorization: Bearer $INVENTORY_RUN_SECRET"
+          echo
+
+      - name: Inventory reconcile
+        if: ${{ !cancelled() }}
+        run: |
+          $CURL "$APP_BASE_URL/api/ops/inventory/reconcile" -H "Authorization: Bearer $INVENTORY_RUN_SECRET"
+          echo
+
+      - name: Balance reminders
+        if: ${{ !cancelled() }}
+        run: |
+          $CURL "$APP_BASE_URL/api/ops/reminders/run" -H "Authorization: Bearer $REMINDERS_RUN_SECRET"
+          echo
+
+      - name: Repeat offers
+        if: ${{ !cancelled() }}
+        run: |
+          $CURL "$APP_BASE_URL/api/ops/repeat-offers/run" -H "Authorization: Bearer $REPEAT_OFFERS_RUN_SECRET"
+          echo
+
+      - name: Zoho drain
+        if: ${{ !cancelled() }}
+        run: |
+          $CURL "$APP_BASE_URL/api/ops/zoho/run" -H "Authorization: Bearer $ZOHO_RUN_SECRET"
+          echo

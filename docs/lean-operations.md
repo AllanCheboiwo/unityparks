@@ -332,17 +332,18 @@ human does otherwise. Every row without an answer becomes a Linear issue.
 This is the "edge cases of core functionality" work and it decides which
 alerts, tests, and jobs matter. Do this before building anything above.
 
-**LO-15 Scheduling.**
-Today: five run endpoints (reminders, repeat offers, Zoho drain, inventory
-reconcile, inventory sweep), each idempotent, each triggered by a button.
-Four accept a bearer secret for an external scheduler; the Zoho drain is
-admin-session only and needs the secret added first.
-Proposal: Railway cron (or a GitHub Actions schedule) calling each endpoint
-daily with its secret. No queue, no jobs table. The endpoints already claim
-once-only stamps, so overlapping or repeated runs are free. A queue (SQS or
-similar) solves per-event delays at volume, a problem we do not have; add
-one only if a daily tick proves too coarse.
-Human touch: none. A failed run files an OpsAlert.
+**LO-15 Scheduling.** Shipped 12 Sep 2026 (UNP-46, docs/scheduling-plan.md).
+Today: six run endpoints (payment sweep, reminders, repeat offers, Zoho
+drain, inventory reconcile, inventory sweep), each idempotent, each with a
+bearer secret. A GitHub Actions workflow calls the payment sweep every 30
+minutes and the other five once a day at 06:00 Nairobi. No queue, no jobs
+table; the Actions log is the run history. The payment sweep (UNP-40) is
+new: it asks Pesapal about live attempts nobody told us about, retires and
+reports attempts that lost their reference, and runs recovery on stale
+extras orders. A Sentry cron monitor on the sweep reports a run that never
+happened; a daily run that fires and fails is emailed by GitHub.
+Human touch: a `payment_unlinked` alert means looking up the merchant
+reference on Pesapal's side and recording the payment by hand.
 
 **LO-20 Reminder emails do not deep-link to payment.**
 Today: the balance reminder links to /manage, which redirects to /account.
@@ -494,6 +495,8 @@ Reviewed by a person, because judgment is involved or money disagrees:
 | D-12 | Documentation home and structure: GitHub only, docs/guides + docs/archive, engineering plans stay at docs/ top level, contractor added as collaborator | Done 8 Sep 2026 (UNP-29); adding the contractor to the repo is Allan's step | decided |
 | D-9 | Order of work | LO-14 catalogue, then LO-15 cron, then LO-20, LO-1, LO-2, LO-16, LO-17, LO-21, then LO-8 | decided (8 Sep) |
 | D-9a | LO-16 pulled to the front of the D-9 order on 10 Sep 2026 (UNP-33). It depends on nothing and catches the failures LO-14, LO-15 and LO-1 will introduce. The rest of the order stands | Allan, 10 Sep | decided |
+| D-15 | Scheduler: GitHub Actions, not Railway cron, so the schedule survives a move off Railway. Payment sweep every 30 minutes, the rest daily | Allan, 12 Sep (UNP-46) | decided |
+| D-16 | A run that never happens is a Sentry cron monitor miss (one free monitor, on the sweep), not an OpsAlert. OpsAlert rows are for things a human acts on inside the business, not the scheduler's own health | Allan, 12 Sep (UNP-46) | decided |
 
 ## Policy clarifications recorded from chat
 

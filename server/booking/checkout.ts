@@ -329,23 +329,37 @@ async function submitFreshAttempt(params: {
     return { kind: "paid", record: paid };
   }
 
-  const order = await submitOrder({
-    merchantReference: transaction.id,
-    amount: transaction.amount,
-    currency: transaction.currency,
-    description:
-      kind === "balance"
-        ? `Unity Parks balance payment, break ${session.arrival} to ${session.departure}`
-        : `Unity Parks break ${session.arrival} to ${session.departure}`,
-    callbackUrl: `${appBaseUrl()}/api/payments/pesapal/callback`,
-    notificationId: params.ipnId!,
-    billing: {
-      firstName: session.guestFirstName!,
-      lastName: session.guestLastName!,
-      email: session.guestEmail!,
-      phone: session.guestPhone ?? undefined,
-    },
-  });
+  let order: Awaited<ReturnType<typeof submitOrder>>;
+  try {
+    order = await submitOrder({
+      merchantReference: transaction.id,
+      amount: transaction.amount,
+      currency: transaction.currency,
+      description:
+        kind === "balance"
+          ? `Unity Parks balance payment, break ${session.arrival} to ${session.departure}`
+          : `Unity Parks break ${session.arrival} to ${session.departure}`,
+      callbackUrl: `${appBaseUrl()}/api/payments/pesapal/callback`,
+      notificationId: params.ipnId!,
+      billing: {
+        firstName: session.guestFirstName!,
+        lastName: session.guestLastName!,
+        email: session.guestEmail!,
+        phone: session.guestPhone ?? undefined,
+      },
+    });
+  } catch (err) {
+    // Pesapal gave us no order (or its reply was lost before any guest saw
+    // a page, so nobody can pay it). Retire the attempt right away: it must
+    // not wedge the next Buy now behind the two-minute in-flight rule, and
+    // the payment sweep (UNP-46) must not report it as a lost reference.
+    // Guarded like every other retire in this file.
+    await prisma.pesapalTransaction.updateMany({
+      where: { id: transaction.id, status: "pending", orderTrackingId: null },
+      data: { status: "failed", liveForRecordId: null },
+    });
+    throw err;
+  }
   // Guarded stamp: if this row was superseded while submitOrder crawled
   // through sandbox rate-limit retries (a racing request decided nobody was
   // coming back for it), its payment page must never reach the guest - two
