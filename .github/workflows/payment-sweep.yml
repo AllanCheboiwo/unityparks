@@ -1,0 +1,51 @@
+# Payment sweep every 30 minutes (LO-15, UNP-46, docs/scheduling-plan.md).
+# Sibling: daily-runs.yml. One job per file so a cadence edit is one line
+# and a hand run is picking the file in the Actions tab.
+#
+# Repo settings (Allan sets them once):
+#   variable APP_BASE_URL            the Railway URL, no trailing slash
+#   secret   PAYMENTS_RUN_SECRET     same value as on Railway
+#   secret   SENTRY_CRON_SWEEP_URL   the sweep monitor's check-in URL (optional)
+#
+# GitHub disables schedules after 60 days without a commit on main and
+# emails first; the Sentry monitor reports it the day it happens.
+
+name: Payment sweep
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+jobs:
+  payment-sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      APP_BASE_URL: ${{ vars.APP_BASE_URL }}
+      PAYMENTS_RUN_SECRET: ${{ secrets.PAYMENTS_RUN_SECRET }}
+      # Any query string Sentry's UI shows on the URL is dropped below, so
+      # the status we append is the one Sentry reads.
+      SENTRY_CRON_SWEEP_URL: ${{ secrets.SENTRY_CRON_SWEEP_URL }}
+    steps:
+      - name: Sentry check-in, start
+        run: |
+          if [ -n "$SENTRY_CRON_SWEEP_URL" ]; then
+            curl --silent --show-error --max-time 30 "${SENTRY_CRON_SWEEP_URL%%\?*}?status=in_progress" > /dev/null
+          fi
+
+      - name: Payment sweep
+        run: |
+          curl --fail-with-body --silent --show-error --max-time 300 -X POST \
+            "$APP_BASE_URL/api/ops/payments/sweep" \
+            -H "Authorization: Bearer $PAYMENTS_RUN_SECRET"
+          echo
+
+      - name: Sentry check-in, finish
+        if: ${{ !cancelled() }}
+        run: |
+          if [ -n "$SENTRY_CRON_SWEEP_URL" ]; then
+            status=ok
+            [ "${{ job.status }}" = "success" ] || status=error
+            curl --silent --show-error --max-time 30 "${SENTRY_CRON_SWEEP_URL%%\?*}?status=$status" > /dev/null
+          fi
