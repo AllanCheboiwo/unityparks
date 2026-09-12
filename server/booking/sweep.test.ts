@@ -56,7 +56,7 @@ function fakes(input: {
     listLiveTransactions: vi.fn(async () => input.transactions ?? []),
     confirm: vi.fn(input.confirm ?? (async () => ({ outcome: "completed" as const }))),
     retireUnlinked: vi.fn(input.retireUnlinked ?? (async () => true)),
-    alert: vi.fn(async () => {}),
+    alert: vi.fn(async (_input: Parameters<SweepDeps["alert"]>[0]) => {}),
     listLiveExtrasOrders: vi.fn(async () => input.orders ?? []),
     recoverExtras: vi.fn(input.recoverExtras ?? (async () => {})),
     logError: vi.fn(),
