@@ -1,0 +1,117 @@
+# Scheduled runs (LO-15, UNP-46, docs/scheduling-plan.md).
+#
+# Two jobs, one file. Every endpoint is idempotent, so a late, doubled or
+# overlapping run costs nothing. The Actions log is the run history.
+#
+# Repo settings this needs (Allan sets them once):
+#   variable APP_BASE_URL              the Railway URL, no trailing slash
+#   secret   PAYMENTS_RUN_SECRET       same values as on Railway
+#   secret   INVENTORY_RUN_SECRET
+#   secret   REMINDERS_RUN_SECRET
+#   secret   REPEAT_OFFERS_RUN_SECRET
+#   secret   ZOHO_RUN_SECRET
+#   secret   SENTRY_CRON_SWEEP_URL     the sweep monitor's check-in URL (optional)
+#
+# GitHub disables schedules after 60 days without a commit on main and
+# emails first; the Sentry monitor on the sweep reports it the day it happens.
+
+name: Scheduled runs
+
+on:
+  schedule:
+    - cron: "*/30 * * * *" # payment sweep
+    - cron: "0 3 * * *" # daily runs, 06:00 Nairobi
+  workflow_dispatch:
+    inputs:
+      job:
+        description: Which job to run
+        type: choice
+        options:
+          - payment-sweep
+          - daily
+        default: payment-sweep
+
+jobs:
+  payment-sweep:
+    if: github.event.schedule == '*/30 * * * *' || (github.event_name == 'workflow_dispatch' && inputs.job == 'payment-sweep')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      APP_BASE_URL: ${{ vars.APP_BASE_URL }}
+      PAYMENTS_RUN_SECRET: ${{ secrets.PAYMENTS_RUN_SECRET }}
+      SENTRY_CRON_SWEEP_URL: ${{ secrets.SENTRY_CRON_SWEEP_URL }}
+    steps:
+      - name: Sentry check-in, start
+        run: |
+          if [ -n "$SENTRY_CRON_SWEEP_URL" ]; then
+            curl --silent --show-error --max-time 30 "${SENTRY_CRON_SWEEP_URL}?status=in_progress" > /dev/null
+          fi
+
+      - name: Payment sweep
+        run: |
+          curl --fail-with-body --silent --show-error --max-time 300 -X POST \
+            "$APP_BASE_URL/api/ops/payments/sweep" \
+            -H "Authorization: Bearer $PAYMENTS_RUN_SECRET"
+          echo
+
+      - name: Sentry check-in, finish
+        if: ${{ !cancelled() }}
+        run: |
+          if [ -n "$SENTRY_CRON_SWEEP_URL" ]; then
+            status=ok
+            [ "${{ job.status }}" = "success" ] || status=error
+            curl --silent --show-error --max-time 30 "${SENTRY_CRON_SWEEP_URL}?status=$status" > /dev/null
+          fi
+
+  daily:
+    if: github.event.schedule == '0 3 * * *' || (github.event_name == 'workflow_dispatch' && inputs.job == 'daily')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      APP_BASE_URL: ${{ vars.APP_BASE_URL }}
+    # Every step runs even when an earlier one failed (a reminders failure
+    # must not stop the Zoho drain); the job goes red at the end if any did.
+    steps:
+      - name: Inventory sweep
+        env:
+          SECRET: ${{ secrets.INVENTORY_RUN_SECRET }}
+        run: |
+          curl --fail-with-body --silent --show-error --max-time 300 -X POST \
+            "$APP_BASE_URL/api/ops/inventory/sweep" -H "Authorization: Bearer $SECRET"
+          echo
+
+      - name: Inventory reconcile
+        if: ${{ !cancelled() }}
+        env:
+          SECRET: ${{ secrets.INVENTORY_RUN_SECRET }}
+        run: |
+          curl --fail-with-body --silent --show-error --max-time 300 -X POST \
+            "$APP_BASE_URL/api/ops/inventory/reconcile" -H "Authorization: Bearer $SECRET"
+          echo
+
+      - name: Balance reminders
+        if: ${{ !cancelled() }}
+        env:
+          SECRET: ${{ secrets.REMINDERS_RUN_SECRET }}
+        run: |
+          curl --fail-with-body --silent --show-error --max-time 300 -X POST \
+            "$APP_BASE_URL/api/ops/reminders/run" -H "Authorization: Bearer $SECRET"
+          echo
+
+      - name: Repeat offers
+        if: ${{ !cancelled() }}
+        env:
+          SECRET: ${{ secrets.REPEAT_OFFERS_RUN_SECRET }}
+        run: |
+          curl --fail-with-body --silent --show-error --max-time 300 -X POST \
+            "$APP_BASE_URL/api/ops/repeat-offers/run" -H "Authorization: Bearer $SECRET"
+          echo
+
+      - name: Zoho drain
+        if: ${{ !cancelled() }}
+        env:
+          SECRET: ${{ secrets.ZOHO_RUN_SECRET }}
+        run: |
+          curl --fail-with-body --silent --show-error --max-time 300 -X POST \
+            "$APP_BASE_URL/api/ops/zoho/run" -H "Authorization: Bearer $SECRET"
+          echo
