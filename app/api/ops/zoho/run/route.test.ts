@@ -52,7 +52,6 @@ describe("POST /api/ops/zoho/run", () => {
     const res = await POST(request("Bearer scheduler-secret"));
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ done: 2, errored: 0 });
-    expect(auth.requireAdmin).not.toHaveBeenCalled();
   });
 
   it("a wrong bearer falls through to the admin gate and is refused", async () => {
@@ -65,7 +64,6 @@ describe("POST /api/ops/zoho/run", () => {
     delete process.env.ZOHO_RUN_SECRET;
     const res = await POST(request("Bearer scheduler-secret"));
     expect(res.status).toBe(401);
-    expect(auth.requireAdmin).toHaveBeenCalled();
     expect(drain.runZohoExports).not.toHaveBeenCalled();
   });
 

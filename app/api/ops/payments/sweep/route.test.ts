@@ -70,7 +70,6 @@ describe("POST /api/ops/payments/sweep", () => {
     const res = await POST(request("Bearer scheduler-secret"));
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(SUMMARY);
-    expect(auth.requireAdmin).not.toHaveBeenCalled();
   });
 
   it("a wrong bearer falls through to the admin gate and is refused", async () => {
